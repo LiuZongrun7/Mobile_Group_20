@@ -6,6 +6,10 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Android 15+ 强制 edge-to-edge，状态栏不再由 colorPrimaryDark 上色。
+             系统栏变透明后，浅色背景上需要把状态栏图标改成深色才看得清。 -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
 </resources>
