@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#3F51B5</color>
-    <color name="colorPrimaryDark">#303F9F</color>
-    <color name="colorAccent">#FF4081</color>
+    <!--
+      Unused for now: AppTheme is a Material3 theme, which brings its own colour
+      palette and derives the rest of the roles (containers, on-colours, ...)
+      from it. Overriding only colorPrimary here would give a palette that no
+      longer matches the derived roles.
+
+      To brand the app, either override the full set of Material3 roles in
+      AppTheme, or define a ThemeOverlay and apply it in AndroidManifest.xml.
+      See https://m3.material.io/styles/color/roles
+    -->
 </resources>

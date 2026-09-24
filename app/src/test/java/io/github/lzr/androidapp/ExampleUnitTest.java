@@ -1,4 +1,4 @@
-package com.example.helloandroid;
+package io.github.lzr.androidapp;
 
 import static org.junit.Assert.assertEquals;
 

@@ -1,0 +1,10 @@
+<resources>
+
+    <!-- Dark-mode override of AppTheme. Material3's DayNight parent already swaps
+         the colour palette; this only corrects the status bar icon colour, which
+         must be light now that the background is dark. -->
+    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+</resources>

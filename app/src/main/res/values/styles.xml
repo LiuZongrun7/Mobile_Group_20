@@ -1,14 +1,18 @@
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
+    <!-- Base application theme.
+         Material3 ships its own full colour palette (colorPrimary, colorSecondary,
+         surfaces, ...) and a matching dark palette, so nothing needs to be
+         overridden here to get a consistent look.
 
-        <!-- Android 15+ 强制 edge-to-edge，状态栏不再由 colorPrimaryDark 上色。
-             系统栏变透明后，浅色背景上需要把状态栏图标改成深色才看得清。 -->
+         NoActionBar: the app draws its own top area. To get a title bar back,
+         use Theme.Material3.DayNight with a MaterialToolbar in the layout. -->
+    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+
+        <!-- Android 15+ forces edge-to-edge, so the status bar is transparent and
+             is no longer tinted by colorPrimaryDark. On a light background the
+             icons must be dark to stay readable. The value is flipped back to
+             false in values-night/styles.xml. -->
         <item name="android:windowLightStatusBar">true</item>
     </style>
 

@@ -1,4 +1,4 @@
-package com.example.helloandroid;
+package io.github.lzr.androidapp;
 
 import static org.junit.Assert.assertEquals;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("com.example.helloandroid", appContext.getPackageName());
+        assertEquals("io.github.lzr.androidapp", appContext.getPackageName());
     }
 }

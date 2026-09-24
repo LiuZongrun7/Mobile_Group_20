@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.helloandroid"
+    namespace = "io.github.lzr.androidapp"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,7 +11,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.helloandroid"
+        applicationId = "io.github.lzr.androidapp"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -29,14 +29,22 @@ android {
             )
         }
     }
+
+    // Generates a typed binding class per layout file, so Activities/Fragments
+    // no longer call findViewById() and never risk a wrong-cast at runtime.
+    buildFeatures {
+        viewBinding = true
+    }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
 dependencies {
     implementation(libs.androidx.appcompat)
+    implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
