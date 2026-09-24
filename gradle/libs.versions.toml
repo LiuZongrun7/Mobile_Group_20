@@ -2,6 +2,8 @@
 agp = "9.1.0"
 appcompat = "1.7.0"
 material = "1.14.0"
+lifecycle = "2.11.0"
+desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
@@ -9,6 +11,11 @@ espressoCore = "3.5.1"
 [libraries]
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+# ViewModel/LiveData：Repository 向界面暴露状态用它，大纲 §8 也写的这套
+androidx-lifecycle-livedata = { group = "androidx.lifecycle", name = "lifecycle-livedata", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycle" }
+# java.time 脱糖：minSdk 24 上也能用 LocalDate/Instant，见 app/build.gradle.kts 的说明
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

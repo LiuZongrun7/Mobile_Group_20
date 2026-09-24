@@ -9,6 +9,10 @@ local.properties
 .cxx
 .kotlin
 
+# Editor / tooling caches
+.metals/
+.kotlin/
+
 # LaTeX build artifacts (the compiled .pdf is committed on purpose)
 *.aux
 *.log

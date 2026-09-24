@@ -1,0 +1,15 @@
+/**
+ * 登录与账号隔离。走 Firebase Auth。<b>负责人：数据侧（张莉）。</b>
+ *
+ * <p>这一层是<b>账号隔离的实现处</b>，也是验收要演示的东西：两个测试账号互相看不到
+ * 对方的用量。隔离不是靠界面藏起来，而是三处一起成立：
+ * <ol>
+ *   <li>Firestore 安全规则按 {@code request.auth.uid} 卡住读写；</li>
+ *   <li>服务端从 Firebase ID token 里取 uid，<b>不信任请求里传的 uid</b>；</li>
+ *   <li>本地 Room 的查询也都带 uid 条件，免得退出登录后残留上一个账号的缓存。</li>
+ * </ol>
+ *
+ * <p>{@code MainActivity} 目前直接进游戏（大纲 §7 的入口设计），登录态检查放在
+ * 启动时做：已登录直接进游戏，未登录才跳登录页。
+ */
+package com.mobilegroup20.tokentrail.ui.auth;
