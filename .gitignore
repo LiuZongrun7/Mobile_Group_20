@@ -8,3 +8,10 @@ local.properties
 .externalNativeBuild
 .cxx
 .kotlin
+
+# LaTeX build artifacts (the compiled .pdf is committed on purpose)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
