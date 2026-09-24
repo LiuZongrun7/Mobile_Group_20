@@ -1,0 +1,4 @@
+# per-figure XeLaTeX output; the trimmed PNG is what the deck embeds
+fig_*.pdf
+# raw pdftoppm pages, trimmed into fig_*.png
+*-[0-9].png

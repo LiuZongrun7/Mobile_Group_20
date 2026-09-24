@@ -1,0 +1,55 @@
+\documentclass{article}
+\usepackage[paperwidth=17cm,paperheight=8cm,margin=0pt]{geometry}
+\usepackage{fontspec,tikz}
+\usepackage[table]{xcolor}
+\IfFontExistsTF{Helvetica Neue}
+  {\setmainfont{Helvetica Neue}\setsansfont{Helvetica Neue}}
+  {\IfFontExistsTF{Arial}{\setmainfont{Arial}\setsansfont{Arial}}{}}
+\definecolor{navy}{HTML}{315E75}
+\definecolor{teal}{HTML}{2E766E}
+\definecolor{amber}{HTML}{A17431}
+\definecolor{lightblue}{HTML}{EAF3F7}
+\definecolor{lightteal}{HTML}{EDF6F2}
+\definecolor{lightamber}{HTML}{FAF3E5}
+\definecolor{lightrow}{HTML}{F7FAFB}
+\definecolor{hairline}{HTML}{BDD0D8}
+\pagestyle{empty}
+\begin{document}
+\noindent\begin{tikzpicture}[scale=1.1,transform shape,font=\scriptsize,every node/.style={text=black}]
+\foreach \x/\title/\border/\filltone in {0/Game/navy/lightblue,4.7/Dashboard/teal/lightteal,9.4/Forum/amber/lightamber}{
+  \draw[draw=\border,line width=1pt,rounded corners=5pt] (\x,0) rectangle (\x+4.25,5.6);
+  \fill[\filltone,rounded corners=4pt] (\x+.025,4.91) rectangle (\x+4.225,5.575);
+  \node[anchor=west,font=\small\bfseries] at (\x+.28,5.23) {\title};
+}
+\node[anchor=west,font=\scriptsize\bfseries] at (.3,4.49) {Season 3 · September};
+\node[anchor=west,font=\Large\bfseries] at (.3,3.92) {1.2M tokens};
+\fill[lightblue,rounded corners=2pt] (.3,3.42) rectangle (3.95,3.61);
+\fill[navy,rounded corners=2pt] (.3,3.42) rectangle (2.81,3.61);
+\node[anchor=west] at (.3,3.14) {120 resources · 100/1M tokens};
+\draw[hairline,line width=.5pt] (.3,2.82) -- (3.95,2.82);
+\node[anchor=west,font=\scriptsize\bfseries] at (.3,2.44) {4 towers · walls};
+\node[anchor=west] at (.3,2.04) {Start next wave};
+\node[anchor=west,font=\scriptsize\bfseries] at (.3,1.20) {Tap agent to ask};
+\node[anchor=west] at (.3,.84) {Evidence in panel};
+\fill[lightblue] (3.44,1.02) circle (.40);
+\draw[draw=navy,line width=.8pt] (3.44,1.02) circle (.40);
+\node[font=\scriptsize\bfseries] at (3.44,1.02) {AI};
+\node[anchor=west,font=\scriptsize\bfseries] at (5.0,4.49) {Daily activity · Logs};
+\foreach \col in {0,...,6}{\foreach \row in {0,...,3}{\fill[lightrow,rounded corners=1pt] ({5.15+0.48*\col},{2.75+0.35*\row}) rectangle ({5.51+0.48*\col},{3.05+0.35*\row});}}
+\foreach \col/\row/\tone in {1/0/lightteal,2/1/lightblue,4/0/teal,5/2/navy,6/1/lightteal,6/3/teal,3/2/lightblue}{\fill[\tone,rounded corners=1pt] ({5.15+0.48*\col},{2.75+0.35*\row}) rectangle ({5.51+0.48*\col},{3.05+0.35*\row});}
+\fill[lightteal,rounded corners=3pt] (5.0,1.1) rectangle (8.65,2.39);
+\node[anchor=west,font=\scriptsize\bfseries] at (5.18,2.05) {2.7k tool calls · 6h19m};
+\node[anchor=west] at (5.18,1.68) {866.9k logged tokens};
+\node[anchor=west] at (5.0,.67) {Filter: date / agent};
+\node[anchor=west,font=\scriptsize\bfseries] at (9.7,4.49) {Official + community};
+\draw[draw=hairline,fill=lightrow,rounded corners=3pt] (9.7,2.73) rectangle (13.34,4.16);
+\node[anchor=west,font=\scriptsize\bfseries] at (9.85,3.92) {New model release};
+\node[anchor=west] at (9.85,3.54) {Official · 214 views};
+\node[anchor=west] at (9.85,3.12) {Pricing table updated};
+\draw[draw=hairline,fill=lightrow,rounded corners=3pt] (9.7,1.12) rectangle (13.34,2.55);
+\node[anchor=west,font=\scriptsize\bfseries] at (9.85,2.31) {Cache hit tips};
+\node[anchor=west] at (9.85,1.93) {Community · 42 helpful};
+\node[anchor=west] at (9.85,1.51) {Reads top posts};
+\node[anchor=west] at (9.7,.67) {Hot posts feed the agent};
+\end{tikzpicture}
+\end{document}

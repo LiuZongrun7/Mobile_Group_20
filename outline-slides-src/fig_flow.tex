@@ -1,0 +1,24 @@
+\documentclass{article}
+\usepackage[paperwidth=18cm,paperheight=4cm,margin=0pt]{geometry}
+\usepackage{fontspec,tikz}
+\usepackage[table]{xcolor}
+\usetikzlibrary{arrows.meta}
+\IfFontExistsTF{Helvetica Neue}
+  {\setmainfont{Helvetica Neue}\setsansfont{Helvetica Neue}}
+  {\IfFontExistsTF{Arial}{\setmainfont{Arial}\setsansfont{Arial}}{}}
+\definecolor{navy}{HTML}{315E75}
+\definecolor{teal}{HTML}{2E766E}
+\definecolor{amber}{HTML}{A17431}
+\definecolor{lightblue}{HTML}{EAF3F7}
+\definecolor{lightteal}{HTML}{EDF6F2}
+\definecolor{lightamber}{HTML}{FAF3E5}
+\pagestyle{empty}
+\begin{document}
+\noindent\hspace*{2mm}\begin{tikzpicture}[font=\footnotesize,flow/.style={rounded corners=4pt,minimum width=3.45cm,minimum height=1.48cm,text width=3.05cm,align=center,line width=.9pt,inner sep=4pt}]
+\node[flow,draw=navy,fill=lightblue] (input) at (1.725,0) {\textbf{1  Input}\\Logs + questions};
+\node[flow,draw=teal,fill=lightteal] (process) at (5.725,0) {\textbf{2  Process}\\Price + compare};
+\node[flow,draw=navy,fill=lightblue] (storage) at (9.725,0) {\textbf{3  Store}\\Room + Firestore};
+\node[flow,draw=amber,fill=lightamber] (action) at (13.725,0) {\textbf{4  Output}\\Game + charts + forum};
+\foreach \a/\b in {input/process,process/storage,storage/action}{\draw[-{Stealth[length=2.5mm]},line width=.9pt,draw=navy] (\a.east) -- (\b.west);}
+\end{tikzpicture}
+\end{document}

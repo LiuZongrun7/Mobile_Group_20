@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+"""Build the TokenTrail outline presentation (.pptx).
+
+Content is taken from TokenTrail_Project_Outline.tex so the deck and the
+2-4 page summary tell the same story; the six numbered sections mirror the
+six bullet points the outline guidelines ask the slides to cover.
+"""
+import os
+
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml.ns import qn
+from pptx.oxml import parse_xml
+
+# ---------------------------------------------------------------- palette
+NAVY, TEAL, AMBER = '315E75', '2E766E', 'A17431'
+INK, MUTE = '2B3A42', '7A8C94'
+LIGHTBLUE, LIGHTTEAL, LIGHTAMBER = 'EAF3F7', 'EDF6F2', 'FAF3E5'
+LIGHTROW, HAIRLINE, WHITE = 'F7FAFB', 'BDD0D8', 'FFFFFF'
+FONT = 'Arial'
+GH = 'https://github.com/LiuZongrun7/Mobile_Group_20'
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+MARGIN, PAGE_W, PAGE_H = 0.72, 13.333, 7.5
+CW = PAGE_W - 2 * MARGIN          # content width = 11.893
+FOOT_Y = 7.02
+
+_prs = Presentation()
+_prs.slide_width, _prs.slide_height = Inches(PAGE_W), Inches(PAGE_H)
+BLANK = _prs.slide_layouts[6]
+_slide_no = [0]
+
+
+def rgb(h):
+    return RGBColor.from_string(h)
+
+
+def tb(slide, l, t, w, h, anchor=MSO_ANCHOR.TOP):
+    box = slide.shapes.add_textbox(Inches(l), Inches(t), Inches(w), Inches(h))
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = anchor
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    return tf
+
+
+def para(tf, first, parts, size=13, color=INK, align=PP_ALIGN.LEFT,
+         before=0, after=5, line=1.16, bold=False, italic=False):
+    """parts: str, or list of (text, bold, color, italic, href) tuples."""
+    p = tf.paragraphs[0] if first else tf.add_paragraph()
+    p.alignment = align
+    p.space_before, p.space_after = Pt(before), Pt(after)
+    p.line_spacing = line
+    if isinstance(parts, str):
+        parts = [(parts, bold, color, italic, None)]
+    for part in parts:
+        text, bold, col, italic, href = (list(part) + [None] * 5)[:5]
+        r = p.add_run()
+        r.text = text
+        f = r.font
+        f.name, f.size, f.bold, f.italic = FONT, Pt(size), bool(bold), bool(italic)
+        f.color.rgb = rgb(col or color)
+        if href:
+            r.hyperlink.address = href
+            f.underline = False
+    return p
+
+
+def shape(slide, kind, l, t, w, h, fill=None, line=None, lw=0.75, radius=0.08):
+    s = slide.shapes.add_shape(kind, Inches(l), Inches(t), Inches(w), Inches(h))
+    s.shadow.inherit = False
+    # Drop the theme shape style too: some renderers (LibreOffice, older WPS)
+    # still apply its effectRef and draw a drop shadow behind every card.
+    style = s._element.find(qn('p:style'))
+    if style is not None:
+        s._element.remove(style)
+    if fill:
+        s.fill.solid()
+        s.fill.fore_color.rgb = rgb(fill)
+    else:
+        s.fill.background()
+    if line:
+        s.line.color.rgb = rgb(line)
+        s.line.width = Pt(lw)
+    else:
+        s.line.fill.background()
+    if kind == MSO_SHAPE.ROUNDED_RECTANGLE:
+        s.adjustments[0] = radius
+    s.text_frame.word_wrap = True
+    return s
+
+
+def rule(slide, l, t, w, color=HAIRLINE, h=0.014):
+    return shape(slide, MSO_SHAPE.RECTANGLE, l, t, w, h, fill=color)
+
+
+def slide(eyebrow=None, title=None, num=True):
+    s = _prs.slides.add_slide(BLANK)
+    _slide_no[0] += 1
+    if num:
+        rule(s, MARGIN, 6.90, CW, HAIRLINE)
+        tf = tb(s, MARGIN, FOOT_Y, CW * 0.7, 0.3)
+        para(tf, True, 'TokenTrail · Group 20 · Android App Project Outline',
+             size=9, color=MUTE, after=0)
+        tf = tb(s, PAGE_W - MARGIN - 1.2, FOOT_Y, 1.2, 0.3)
+        para(tf, True, str(_slide_no[0]), size=9, color=MUTE,
+             align=PP_ALIGN.RIGHT, after=0)
+    if eyebrow:
+        tf = tb(s, MARGIN, 0.40, CW, 0.26)
+        para(tf, True, eyebrow.upper(), size=10, color=AMBER, after=0)
+    if title:
+        tf = tb(s, MARGIN, 0.66, CW, 0.55)
+        para(tf, True, title, size=26, color=NAVY, after=0)
+        rule(s, MARGIN, 1.34, CW, NAVY, h=0.025)
+    return s
+
+
+def card(slide, l, t, w, h, head=None, body=None, fill=LIGHTROW,
+         line=HAIRLINE, head_color=NAVY, size=11.5, head_size=12.5,
+         tag=None, tag_color=AMBER, pad=0.17, foot=None, foot_color=MUTE):
+    s = shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, l, t, w, h,
+              fill=fill, line=line, radius=0.06)
+    tf = s.text_frame
+    tf.margin_left = tf.margin_right = Inches(pad)
+    tf.margin_top = tf.margin_bottom = Inches(pad * 0.8)
+    tf.vertical_anchor = MSO_ANCHOR.TOP
+    first = True
+    if tag:
+        para(tf, True, tag.upper(), size=8.5, color=tag_color, after=3)
+        first = False
+    if head:
+        para(tf, first, head, size=head_size, bold=True, color=head_color, after=3)
+        first = False
+    if body:
+        lines = body if isinstance(body, list) else [body]
+        for i, text in enumerate(lines):
+            para(tf, first, text, size=size, after=0 if i == len(lines) - 1 else 5,
+                 line=1.14)
+            first = False
+    if foot:
+        para(tf, first, foot, size=size - 1.5, color=foot_color, before=6,
+             after=0, line=1.12)
+    return s
+
+
+# ------------------------------------------------------------------ tables
+CT_ORDER = ['a:lnL', 'a:lnR', 'a:lnT', 'a:lnB', 'a:lnTlToBr', 'a:lnBlToTr',
+            'a:cell3D', 'a:noFill', 'a:solidFill', 'a:gradFill', 'a:blipFill',
+            'a:pattFill', 'a:grpFill', 'a:headers', 'a:extLst']
+A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+NO_STYLE = '{2D5ABB26-0587-4C30-8999-92F81FD0307C}'
+
+
+def _ordered_insert(tcPr, el, tag):
+    idx = CT_ORDER.index(tag)
+    for child in tcPr:
+        ctag = 'a:' + child.tag.split('}')[-1]
+        if ctag in CT_ORDER and CT_ORDER.index(ctag) > idx:
+            child.addprevious(el)
+            return
+    tcPr.append(el)
+
+
+def cell_border(cell, color=HAIRLINE, width=0.75, edges='LRTB'):
+    tcPr = cell._tc.get_or_add_tcPr()
+    for e in edges:
+        tag = 'a:ln' + e
+        for old in tcPr.findall(qn(tag)):
+            tcPr.remove(old)
+        _ordered_insert(tcPr, parse_xml(
+            '<%s xmlns:a="%s" w="%d" cap="flat" cmpd="sng" algn="ctr">'
+            '<a:solidFill><a:srgbClr val="%s"/></a:solidFill>'
+            '<a:prstDash val="solid"/></%s>'
+            % (tag, A_NS, int(Pt(width)), color, tag)), tag)
+
+
+def table(slide, l, t, col_w, rows, row_h=0.42, size=10.5, head_size=11,
+          head_fill=NAVY, zebra=True, head_h=0.44):
+    nrows, ncols = len(rows), len(rows[0])
+    gf = slide.shapes.add_table(nrows, ncols, Inches(l), Inches(t),
+                                Inches(sum(col_w)),
+                                Inches(head_h + row_h * (nrows - 1)))
+    tbl = gf.table
+    tblPr = tbl._tbl.tblPr
+    tblPr.set('firstRow', '0')
+    tblPr.set('bandRow', '0')
+    st = tblPr.find(qn('a:tableStyleId'))
+    if st is None:
+        st = parse_xml('<a:tableStyleId xmlns:a="%s"/>' % A_NS)
+        tblPr.append(st)
+    st.text = NO_STYLE
+    for i, w in enumerate(col_w):
+        tbl.columns[i].width = Inches(w)
+    for ri, row in enumerate(rows):
+        tbl.rows[ri].height = Inches(head_h if ri == 0 else row_h)
+        for ci, val in enumerate(row):
+            opts = {}
+            if isinstance(val, tuple):
+                val, opts['href'] = val
+            elif isinstance(val, list):          # several runs, each optionally linked
+                opts['runs'] = val
+            c = tbl.cell(ri, ci)
+            c.margin_left, c.margin_right = Inches(0.10), Inches(0.09)
+            c.margin_top = c.margin_bottom = Inches(0.055)
+            c.vertical_anchor = MSO_ANCHOR.MIDDLE
+            c.fill.solid()
+            c.fill.fore_color.rgb = rgb(
+                head_fill if ri == 0 else
+                (WHITE if (ri % 2 or not zebra) else LIGHTROW))
+            cell_border(c, color=head_fill if ri == 0 else HAIRLINE,
+                        width=0.75, edges='TB')
+            if ci == 0:
+                cell_border(c, color=head_fill if ri == 0 else HAIRLINE,
+                            edges='L')
+            if ci == ncols - 1:
+                cell_border(c, color=head_fill if ri == 0 else HAIRLINE,
+                            edges='R')
+            tf = c.text_frame
+            tf.word_wrap = True
+            is_head = ri == 0
+            href = opts.get('href')
+            col = WHITE if is_head else (
+                NAVY if (ci == 0 and ncols > 2 and not is_head) else INK)
+            if 'runs' in opts:
+                parts = [(t, False, (c[0] if c else INK), False, h)
+                         for t, h, *c in [tuple(r) + (None,) * (3 - len(r))
+                                          for r in opts['runs']]]
+            else:
+                parts = [(str(val), True, col, False, href)] if (is_head or ci == 0 or href) \
+                    else [(str(val), False, col, False, None)]
+            para(tf, True, parts, size=head_size if is_head else size,
+                 color=col, after=0, line=1.08)
+    return tbl
+
+
+# ================================================================ 1. title
+s = slide(num=False)
+shape(s, MSO_SHAPE.RECTANGLE, 0, 0, PAGE_W, 0.16, fill=NAVY)
+tf = tb(s, MARGIN, 1.55, 8.6, 0.3)
+para(tf, True, 'MOBILE APP PROJECT · OUTLINE PRESENTATION', size=11, color=AMBER, after=0)
+tf = tb(s, MARGIN, 1.95, 8.6, 1.1)
+para(tf, True, 'TokenTrail', size=54, bold=True, color=NAVY, after=0)
+tf = tb(s, MARGIN, 3.10, 8.6, 0.7)
+para(tf, True, 'Track, price and compare what your coding agents really cost',
+     size=19, color=TEAL, after=0)
+rule(s, MARGIN, 3.85, 8.6, HAIRLINE)
+tf = tb(s, MARGIN, 4.05, 8.6, 1.5)
+para(tf, True, [('Category:  ', True, NAVY), ('Developer Productivity / API Cost Analytics', False, INK)],
+     size=13, after=6)
+para(tf, False, [('Target users:  ', True, NAVY),
+                 ('Students and independent developers who use API-key coding agents', False, INK)],
+     size=13, after=6)
+para(tf, False, [('Stack:  ', True, NAVY),
+                 ('Android · Java/XML · Firebase Auth + Firestore · Room · Java advice service',
+                  False, INK)], size=13, after=0)
+tf = tb(s, MARGIN, 5.75, 8.6, 0.9)
+para(tf, True, [('Group 20 ·  ', True, NAVY),
+                ('Zhang Li (24107757) · Wang Tingdong (24107759) · Liu Zongrun (24107745)',
+                 False, INK)], size=12.5, after=4)
+para(tf, False, [('Repository:  ', True, NAVY), (GH.replace('https://', ''), False, TEAL, False, GH)],
+     size=12.5, after=0)
+s.shapes.add_picture(os.path.join(BASE, 'fig_game.png'), Inches(9.85), Inches(1.55), height=Inches(4.95))
+
+# ================================================= 2. what the slides cover
+s = slide('How to read this deck', 'The six points the outline slides must cover')
+items = [
+    ('1', 'Brief app idea description', 'What TokenTrail is, who it is for, and what is out of scope', 'Slide 3'),
+    ('2', 'Discussion of similar / related apps', 'Codex, ZCode, dsh-context, LiteLLM and dsh-pet', 'Slide 5'),
+    ('3', 'Related apps: features and components', 'What each one covers, and the gap it leaves open', 'Slide 6'),
+    ('4', 'Open-source code available to reuse', 'Libraries, samples and licences we will record', 'Slide 7'),
+    ('5', 'Proposed features and uniqueness', 'Game, analytics, forum and the in-game advice agent', 'Slides 8-13'),
+    ('6', 'Approach and work plan to week 15', 'Alpha, Beta and Final checkpoints with acceptance tests', 'Slides 14-15'),
+]
+table(s, MARGIN, 1.62, [3.55, 6.45, 1.893],
+      [['Guideline point', 'What the slides cover', 'Where']]
+      + [['%s.  %s' % (n, head), body, where] for n, head, body, where in items],
+      row_h=0.70, head_h=0.46, size=11.5, head_size=11.5)
+tf = tb(s, MARGIN, 6.42, CW, 0.4)
+para(tf, True, 'The written outline covers the same six points in the same order; this deck is the visual version of it.',
+     size=10.5, color=MUTE, after=0)
+
+# ============================================================ 3. app idea
+s = slide('1 · App idea', 'An API-cost companion that makes agent spend visible')
+tf = tb(s, MARGIN, 1.62, CW, 0.75)
+para(tf, True, [('TokenTrail is an Android app for people who pay for coding agents with an API key. '
+                 'It prices the usage those agents already logged, turns that usage into a monthly '
+                 'tower-defence season, and answers cost questions with evidence.', False, INK)],
+     size=14, after=0, line=1.2)
+parts = [
+    ('Monthly tower-defence game', 'The home screen. Tokens you have already spent become building resources in a season that resets each month.', LIGHTBLUE, NAVY),
+    ('API-cost analytics', 'Prices logged calls from Codex, ZCode and a DeepSeek-side tool using dated official rates, and compares agents.', LIGHTTEAL, TEAL),
+    ('Community forum', 'Official model and pricing posts plus user tips; the hot posts feed the in-game advice agent.', LIGHTAMBER, AMBER),
+]
+cw, gap = (CW - 2 * 0.26) / 3, 0.26
+for i, (head, body, fill, hc) in enumerate(parts):
+    card(s, MARGIN + i * (cw + gap), 2.46, cw, 1.56, head=head, body=body,
+         fill=fill, head_color=hc, size=11.5, head_size=13.5)
+agent = shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 4.22, CW, 0.86, fill=NAVY, radius=0.06)
+tfa = agent.text_frame
+tfa.margin_left = tfa.margin_right = Inches(0.22)
+tfa.vertical_anchor = MSO_ANCHOR.MIDDLE
+para(tfa, True, [('And an advice agent inside the game.  ', True, WHITE),
+                 ('It reads your logged usage and recent forum posts, then answers questions with '
+                  'the evidence behind them. TokenTrail never runs, routes or controls the coding agents.',
+                  False, 'D6E4EB')], size=13, after=0, line=1.15)
+card(s, MARGIN, 5.32, CW, 1.30,
+     head='Scope: API usage priced at public API rates',
+     body='Out of scope: ChatGPT and GLM Coding Plan subscriptions, live cross-agent status and system-wide '
+          'overlays. A response reports tokens for one call, not the agent\'s whole history, so a call is priced '
+          'only when a saved rate snapshot covers its date. Every monetary value is an estimate, never an invoiced charge.',
+     fill=LIGHTROW, head_color=NAVY, size=11, head_size=12)
+
+# ============================================================== 4. problem
+s = slide('1 · App idea', 'Why this is worth building')
+probs = [
+    ('Each console sees one account', 'Codex, Z.ai and DeepSeek bill separately, in their own units, with no cross-provider total and no common price version. A user running three agents has three bills and no single monthly figure.'),
+    ('Tokens are not money', 'A response reports tokens for one call, not the agent\'s whole history. A call can only be priced when a saved rate snapshot covers its date, so some calls stay Unavailable rather than being guessed at.'),
+    ('Rating your own work is bad input', 'Asking users to score a task costs them extra effort and produces opinions, not measurements. It also makes the numbers depend on mood instead of on the data.'),
+    ('Spend leaves no trace', 'A day of agent work leaves nothing visible behind, so usage never turns into progress the user can see and nothing brings them back to the tools.'),
+]
+cw, ch, gap = (CW - 0.30) / 2, 1.80, 0.30
+for i, (head, body) in enumerate(probs):
+    card(s, MARGIN + (i % 2) * (cw + gap), 1.68 + (i // 2) * (ch + 0.22), cw, ch,
+         head=head, body=body, fill=LIGHTROW, size=11.5, head_size=13.5)
+card(s, MARGIN, 5.72, CW, 1.04, head='What TokenTrail does instead',
+     body='It computes only what the data supports — logged token counts, dated official rates, cache behaviour and '
+          'duration — and labels every figure Estimated, Partial estimate or Unavailable. It never asks the user to '
+          'judge how good an answer was.',
+     fill=LIGHTBLUE, head_color=NAVY, size=11.5, head_size=12.5)
+
+# ========================================================= 5. related apps
+s = slide('2 · Related apps', 'Five products we studied before writing a line of code')
+apps = [
+    ('FIRST-PARTY AGENT', 'Codex', 'OpenAI\'s coding agent. Can run with an OpenAI API key and be billed through the Platform account.'),
+    ('FIRST-PARTY AGENT', 'ZCode', 'Z.ai\'s coding client. Can use the general Z.ai API endpoint with a key, separate from the Coding Plan.'),
+    ('MONITORING PLUGIN', 'dsh-context', 'DeepSeek Harness plugin that shows local sessions, token use, cache behaviour, activity and estimated cost.'),
+    ('GATEWAY', 'LiteLLM', 'Open-source proxy with routing, spend tracking and budgets — but only for traffic that goes through it.'),
+    ('COMPANION', 'dsh-pet', 'Floating pet driven by DSH session events, with touch and feeding actions. Closest thing to a game.'),
+]
+feet = ['One of the three providers we track.',
+        'Tracked through its general API endpoint.',
+        'Its dashboard is our model for the analytics screen.',
+        'Teaches the vocabulary of spend tracking and budgets.',
+        'Its entry point inspires our in-game agent panel.']
+gap = 0.16
+cw = (CW - 4 * gap) / 5
+for i, (tag, name, body) in enumerate(apps):
+    card(s, MARGIN + i * (cw + gap), 1.74, cw, 2.42, head=name, body=body,
+         tag=tag, size=11, head_size=15, fill=LIGHTROW, pad=0.15, foot=feet[i])
+left, rw, rgap = CW * 0.60, CW * 0.40 - 0.24, 0.24
+card(s, MARGIN, 4.36, left, 2.06, head='What the review told us',
+     body=['Every product above is strong inside its own boundary: a first-party console prices one provider, a plugin '
+           'reads one harness, a gateway sees only proxied traffic. None of them prices three providers from records '
+           'the user already owns, and only dsh-pet treats usage as something to come back to.',
+           'The review also set our boundaries: no proxying, no subscription quotas, and no overlay on another app.'],
+     fill=LIGHTTEAL, head_color=TEAL, size=12, head_size=13)
+card(s, MARGIN + left + rgap, 4.36, rw, 2.06, head='The opportunity',
+     body=['Combining the three ideas is what is new:',
+           '▪  cross-provider costing from logs the user owns;',
+           '▪  a companion-style monthly progression driven by real spend;',
+           '▪  advice that cites its own evidence and admits missing data.'],
+     fill=LIGHTAMBER, head_color=AMBER, size=11.5, head_size=13)
+tf = tb(s, MARGIN, 6.54, CW, 0.3)
+para(tf, True, 'Section 2 of the written outline compares the same five products, with a link to each one.',
+     size=10.5, color=MUTE, after=0)
+
+# ================================================= 6. related apps: table
+s = slide('3 · Related apps in detail', 'Component by component: what they cover, what is left open')
+table(s, MARGIN, 1.62,
+      [1.75, 5.05, 5.093],
+      [['Product', 'Relevant capability', 'Gap addressed by TokenTrail'],
+       [('Codex', 'https://learn.chatgpt.com/docs/auth'),
+        'Can run with an OpenAI API key, billed through the Platform account.',
+        'Estimates only logged Codex API calls, using dated OpenAI prices.'],
+       [('ZCode', 'https://zcode.z.ai/en/docs/configuration'),
+        'Can use the general Z.ai API endpoint with an API key, separate from Coding Plan.',
+        'Prices logged general-API calls and excludes plan usage.'],
+       [('dsh-context', 'https://github.com/bowenliang123/dsh-context/blob/main/README.md'),
+        'Plugin showing local sessions, token use, cache, activity and estimated costs.',
+        'Spans API providers; session detail appears only when usable logs are imported.'],
+       [('LiteLLM', 'https://docs.litellm.ai/docs/simple_proxy'),
+        'Open-source gateway with routing, spend tracking and budgets for proxied calls.',
+        'Does not proxy traffic; tracks agent-associated API costs from permitted records.'],
+       [('dsh-pet', 'https://github.com/zhu1090093659/dsh-pet/blob/main/README.zh.md'),
+        'Interactive floating pet driven by session events, with touch and feeding actions.',
+        'Adds cross-provider, evidence-linked advice, and turns consumption into a visible monthly progression.']],
+      row_h=0.80, head_h=0.46, size=10.5, head_size=11.5)
+tf = tb(s, MARGIN, 6.20, CW, 0.45)
+para(tf, True, 'Names link to each product\'s own documentation or repository. The full comparison is section 2 of the written outline.',
+     size=10.5, color=MUTE, after=0)
+
+# =========================================================== 7. open source
+s = slide('4 · Open source and tools', 'What we reuse, and what we build ourselves')
+table(s, MARGIN, 1.62, [2.45, 9.443],
+      [['Layer', 'Planned tools and rationale'],
+       ['Android interface',
+        'Java/XML, Material Components and Navigation; ViewModel/LiveData for state; RecyclerView and MPAndroidChart for trends; a tower-defence game surface and the in-game agent panel.'],
+       ['Network and work',
+        'Retrofit/OkHttp for log import and a Java advice service. The service runs one model API and a bounded function-call loop over read-only usage, budget and comparison tools. WorkManager schedules price checks.'],
+       ['Persistence and security',
+        'Room plus UID-restricted Firestore; the Java service verifies Firebase ID tokens and holds its model key server-side. Coding-agent passwords and keys are never required.'],
+       ['Open-source reuse',
+        [('Room with a View', 'https://github.com/android/codelab-android-room-with-a-view', TEAL),
+         (' guides storage; ', None),
+         ('MPAndroidChart', 'https://github.com/PhilJay/MPAndroidChart', TEAL),
+         (' may supply charts; an open-source tower-defence sample may supply the wave and '
+          'placement loop; dsh-pet inspires the agent\'s entry point.', None)]]],
+      row_h=0.96, head_h=0.46, size=10.5)
+card(s, MARGIN, 6.02, CW, 0.68,
+     body='Original or properly licensed art only. Every reused file and its licence is recorded in the repository, '
+          'and this layer is revisited if a dependency changes the plan.',
+     fill=LIGHTAMBER, size=11.5, pad=0.16)
+
+# ========================================================= 8. contribution
+s = slide('5 · Proposed features', 'Four contributions, and the rule that keeps them honest')
+contrib = [
+    ('Unified view', ['Merges authorised API-call logs from Codex, ZCode and a DeepSeek-side tool, removes duplicate records, and shows source and coverage on every figure.',
+                      'Where the records do not support a session view, the app shows a provider-level estimate instead of inventing one.'], LIGHTBLUE, NAVY),
+    ('Reproducible costs', ['Java applies dated official rates by provider, model, token class and service tier, and keeps the price version behind each estimate.',
+                            'New rates apply prospectively; old estimates keep the version they were calculated with.'], LIGHTTEAL, TEAL),
+    ('Reflected progress', ['Tokens already spent on real work convert into building resources in a monthly tower-defence game — a visible result without asking anyone to spend differently.',
+                            'The season resets each month, matching the billing cycle AI subscriptions already follow.'], LIGHTAMBER, AMBER),
+    ('Decision support', ['Compares agents on computed measures only: logged token counts, dated rates, cache behaviour and duration. The advice agent supplies evidence, and states sample size and missing data.',
+                          'No task ratings anywhere — the analysis costs the user no extra input, and never judges how good an answer was.'], LIGHTBLUE, NAVY),
+]
+cw, ch, gap = (CW - 0.28) / 2, 1.80, 0.28
+for i, (head, body, fill, hc) in enumerate(contrib):
+    card(s, MARGIN + (i % 2) * (cw + gap), 1.68 + (i // 2) * (ch + 0.22), cw, ch,
+         head=head, body=body, fill=fill, head_color=hc, size=11.5, head_size=14)
+shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 5.72, CW, 0.82,
+      fill=LIGHTAMBER, line=AMBER, radius=0.06)
+tf = s.shapes[-1].text_frame
+tf.margin_left = tf.margin_right = Inches(0.20)
+tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+para(tf, True, [('Scope rule:  ', True, AMBER),
+                ('three core parts — the monthly tower-defence game, the API-cost analytics view and the community '
+                 'forum. The advice agent can recommend but cannot execute coding agents or enforce a hard cap.', False, INK)],
+     size=11.5, after=0, line=1.12)
+
+# ===================================================== 9. game (new feature)
+s = slide('5 · New feature A', 'A monthly tower-defence season built from tokens already spent')
+s.shapes.add_picture(os.path.join(BASE, 'fig_game.png'), Inches(MARGIN), Inches(1.62), height=Inches(5.05))
+l = 3.62
+tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
+bullets = [
+    ('The home screen is the game.', 'It is played in monthly seasons that match the billing cycle AI subscriptions already follow.'),
+    ('Tokens become resources.', 'Tokens already spent convert into building resources at a fixed rate per million tokens.'),
+    ('You plan the space yourself.', 'Defences and wall segments are placed and upgraded by hand on a build grid around the data-centre core, which expands in one direction.'),
+    ('Enemies arrive from one side.', 'A wave enters from a single edge, so where each tower stands and whether the walls close decide how the wave goes.'),
+    ('A wave starts when you start it.', 'Waves run in real time, so no offline simulation and no scheduled settlement is needed. The season resets each month.'),
+]
+first = True
+for head, body in bullets:
+    para(tf, first, [('▪  ', False, AMBER), (head + '  ', True, NAVY), (body, False, INK)],
+         size=12.5, after=7, line=1.14)
+    first = False
+para(tf, False, [('Why it matters.  ', True, TEAL),
+                 ('A day of agent work leaves a visible result without asking the user to spend differently, and the '
+                  'resource balance is unreachable without logged usage — so the game cannot be played on invented data.',
+                  False, INK)], size=12, after=0, before=6, line=1.16)
+
+# ==================================================== 10. agent (new feature)
+s = slide('5 · New feature B', 'An advice agent that answers from evidence, not opinion')
+s.shapes.add_picture(os.path.join(BASE, 'fig_agent.png'), Inches(MARGIN), Inches(1.62), height=Inches(5.05))
+tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
+bullets = [
+    ('It lives inside the game.', 'An expandable question panel, one tap from the home screen. It reads two sources: your logged usage and recent forum posts.'),
+    ('A Java service does the work.', 'It calls one selected external GPT, GLM or DeepSeek model, which may request read-only tools through function calling. Java executes and validates every call.'),
+    ('Four read-only tools.', 'getUsageSummary · getBudgetStatus · compareAgentCosts · getForumHighlights.'),
+    ('It admits what it does not know.', 'Replies state evidence and missing data; no logs means no cost-based answer. Its own tokens are tracked separately from coding-agent usage.'),
+    ('Cost, never quality.', 'It compares agents on cost and token use, and never on how good an answer was.'),
+]
+first = True
+for head, body in bullets:
+    para(tf, first, [('▪  ', False, AMBER), (head + '  ', True, NAVY), (body, False, INK)],
+         size=12.5, after=7, line=1.14)
+    first = False
+para(tf, False, [('Boundary.  ', True, TEAL),
+                 ('The agent can recommend but cannot run, route or interrupt a coding agent, and cannot enforce a '
+                  'hard spending cap.', False, INK)], size=12, after=0, before=6, line=1.16)
+
+# ============================================================ 11. data flow
+s = slide('5 · How it is implemented', 'One path from logs to game, and the four data aspects')
+s.shapes.add_picture(os.path.join(BASE, 'fig_flow.png'), Inches((PAGE_W - 9.9) / 2), Inches(1.70), width=Inches(9.9))
+aspects = [
+    ('Data input', 'Agent profile and key label, authorised usage logs, user questions, forum posts.', NAVY, LIGHTBLUE),
+    ('Data processing', 'Java prices dated usage, compares agents by cost and converts spent tokens into resources.', TEAL, LIGHTTEAL),
+    ('Data storage', 'Firebase Auth; UID-restricted Firestore; Room for usage, price versions, game state and advice history.', NAVY, LIGHTBLUE),
+    ('Data output', 'The game, cards, heatmap, sessions, budget alerts and the forum, with explicit unavailable states.', AMBER, LIGHTAMBER),
+]
+cw, gap = (CW - 3 * 0.20) / 4, 0.20
+for i, (head, body, hc, fill) in enumerate(aspects):
+    card(s, MARGIN + i * (cw + gap), 2.92, cw, 1.62, head=head, body=body,
+         fill=fill, head_color=hc, size=10.5, head_size=12.5, pad=0.14)
+card(s, MARGIN, 4.76, CW, 1.05, head='Where it stops',
+     body='Model responses report usage only for calls the caller observed, so imported agent logs are the primary '
+          'input and the agent cannot see a live coding session without a separate event feed. The external model '
+          'receives selected summaries — never API secrets or prompt text.',
+     fill=LIGHTROW, head_color=NAVY, size=11.5, head_size=12.5)
+tf = tb(s, MARGIN, 5.98, CW, 0.4)
+para(tf, True, 'The same four aspects (input, processing, storage, output) run through the written outline, the '
+               'implementation report, the code comments and the final demonstration.',
+     size=10.5, color=MUTE, after=0)
+
+# ============================================================ 12. proposed UI
+s = slide('5 · Proposed interface', 'Three screens, with the game as the entry point')
+s.shapes.add_picture(os.path.join(BASE, 'fig_ui.png'), Inches((PAGE_W - 11.1) / 2), Inches(1.52), width=Inches(11.1))
+tf = tb(s, MARGIN, 6.26, CW, 0.4)
+para(tf, True, 'The app opens into the game; a bottom bar reaches the forum and the dashboard (Activity, Sessions, '
+               'Compare, Budget). Inspired by dsh-context and dsh-pet. Log-dependent sections show an empty state '
+               'when records are unavailable.', size=10.5, color=MUTE, after=0)
+
+# ============================================= 13. functional requirements
+s = slide('5 · Proposed features', 'Functional requirements mapped to what already exists')
+table(s, MARGIN, 1.60, [0.45, 2.30, 7.55, 1.593],
+      [['Ser', 'Existing features', 'Proposed improvements / new features', 'Remarks'],
+       ['1', 'Cross-model cost dashboards',
+        'Three providers priced from dated official rates, de-duplicated, each figure carrying source and coverage', 'Improvement'],
+       ['2', 'Chat-history viewers',
+        'Per-call and per-session token-class breakdown, cache read and write split', 'Improvement'],
+       ['3', 'Desktop context dashboards',
+        'Android client with Firebase Auth and UID-scoped rules', 'Improvement'],
+       ['4', 'Provider billing consoles',
+        'One cross-provider monthly budget with threshold alerts and a per-session breakdown', 'Improvement'],
+       ['5', 'Community forums',
+        'Official model and pricing posts plus user tips, ranked for the in-game agent', 'Improvement'],
+       ['6', 'Interactive pet with feeding (dsh-pet)',
+        'Monthly tower-defence season in which tokens already spent convert into build resources, with one-direction base growth and a wave the user starts', 'New feature'],
+       ['7', 'General chat assistants',
+        'In-game advice agent with function calling over read-only tools, reading usage records and hot forum posts', 'New feature']],
+      row_h=0.62, head_h=0.48, size=10.5)
+
+# =============================================================== 14. plan
+s = slide('6 · Approach and work plan', 'Checkpoints from this week to the final submission')
+table(s, MARGIN, 1.60, [1.42, 6.55, 3.923],
+      [['Course weeks', 'Work', 'Checkpoint / acceptance'],
+       ['1-3', 'Confirm API-key agent use cases and UI; set up Firebase Auth and Firestore rules; document usage-log access and pricing dimensions.',
+        'Neither test account sees the other\'s records; token-source limits documented.'],
+       ['4-7', 'Implement agent profiles, usage-log import, Room/Firestore records, versioned pricing, CNY display and the dashboard.',
+        'Each provider\'s sample calls are priced at the correct dated rate and de-duplicated.'],
+       ['8-9 · Alpha', 'Deliver a working login → add agent → import log → estimated cost → analytics path; separate real logs from sample data.',
+        'Source, description, GitHub link and MP4 per submission guidance.'],
+       ['10-12 · Beta', 'Add budgets and sessions; build the tower-defence loop (season, token-to-resource conversion, user-started waves) and the agent panel; connect one model to three read-only tools.',
+        'The agent answers a usage question with evidence and admits missing data; a wave starts and resolves without blocking the UI.'],
+       ['13-15 · Final', 'Evaluate advice accuracy and API cost, balance the season, improve accessibility, verify account isolation and document estimation limits.',
+        'End-to-end demo, report and video; no agent answer invents usage or controls coding agents.']],
+      row_h=0.86, head_h=0.46, size=10.5)
+tf = tb(s, MARGIN, 6.48, CW, 0.4)
+para(tf, True, 'The team commits to GitHub throughout and adjusts scope based on tested progress.',
+     size=10.5, color=MUTE, after=0)
+
+# ============================================== 15. team, demo, validation
+s = slide('6 · Evidence of completion', 'Who builds what, and how we will know it works')
+team = [
+    ('Zhang Li · 24107757', 'The data side — authentication, usage-log import, Room/Firestore, versioned pricing, budgets and the dashboard.', LIGHTBLUE, NAVY),
+    ('Wang Tingdong · 24107759', 'The forum, including its post data and ranking.', LIGHTTEAL, TEAL),
+    ('Liu Zongrun · 24107745', 'The tower-defence game, the server-side agent service, its read-only tools and advice evaluation.', LIGHTAMBER, AMBER),
+]
+cw, gap = (CW - 2 * 0.24) / 3, 0.24
+for i, (head, body, fill, hc) in enumerate(team):
+    card(s, MARGIN + i * (cw + gap), 1.70, cw, 1.52, head=head, body=body,
+         fill=fill, head_color=hc, size=11, head_size=12.5, pad=0.15)
+card(s, MARGIN, 3.36, CW, 1.32, head='Demo path',
+     body='Account isolation → tracked Codex, ZCode and DeepSeek-side profiles → three provider estimates from dated '
+          'token logs → a season in which those tokens became build resources → heatmap and budget warning → an agent '
+          'question such as "Why did cost rise?", answered with a queried summary, evidence and its own estimated API cost.',
+     fill=LIGHTROW, size=11.5, head_size=12.5)
+card(s, MARGIN, 4.82, CW, 1.32, head='Validation',
+     body='Tests cover token accounting, price-version boundaries, missing usage, de-duplication and read-only tool '
+          'limits, with the Firebase Emulator verifying access. Agent replies are checked against tool data, and the '
+          'game is checked for a resource balance unreachable without logged usage. Published rates can differ from '
+          'paid amounts; all figures remain estimates.',
+     fill=LIGHTROW, size=11.5, head_size=12.5)
+tf = tb(s, MARGIN, 6.26, CW, 0.4)
+para(tf, True, [('Repository: ', True, NAVY), (GH, False, TEAL, False, GH),
+                ('   ·   UI/UX, accessibility and integration are shared across all three members.', False, MUTE)],
+     size=11, after=0)
+
+out = os.path.join(os.path.dirname(BASE), 'TokenTrail_Project_Outline_Slides.pptx')
+_prs.save(out)
+print('saved', out, 'slides:', len(_prs.slides._sldIdLst))
