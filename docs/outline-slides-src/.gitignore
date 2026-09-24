@@ -2,3 +2,6 @@
 fig_*.pdf
 # raw pdftoppm pages, trimmed into fig_*.png
 *-[0-9].png
+
+# python venv the README tells you to create here
+.venv/
