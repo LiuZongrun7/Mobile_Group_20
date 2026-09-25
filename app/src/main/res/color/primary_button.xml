@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主操作（Start wave）的底色。
+     这一页整页是固定的美术色（岩石 + 草地），所以主操作也不跟着系统深浅色翻
+     ——它是页面上唯一一块饱和填充色，是视觉重心，翻色会让人以为重点变了。
+     用它而不是主题的 colorPrimary：深色模式下 colorPrimary 会变成浅紫，
+     那一块浅紫会变成整页最亮的东西，抢掉战场。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/brand_pressed" android:state_pressed="true" />
+    <item android:color="@color/brand" />
+</selector>

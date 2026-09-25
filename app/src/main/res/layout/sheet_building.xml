@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  建筑详情（BottomSheetDialog 的内容）。点场上任意一座建筑都会弹这个。
+
+  **和商店同一套固定配色**，理由见 sheet_shop.xml：游戏页是固定美术，弹窗跟着
+  主题翻白会在深色战场上撕出一大块亮面。
+
+  结构自上而下：
+
+    名字 + 等级  —— "Tower · Level 2"。等级就写在这儿而不是单开一行：
+                    它是这一屏的主语，后面所有数值都是"在这个等级上"的。
+    占地         —— 2×2。放第二座之前得知道它还占得下不。
+    耐久         —— 还剩多少 / 满多少。**三种建筑都有**，所以这一行不会藏。
+    攻击范围     —— 只有会攻击的建筑（现在只有塔）才有这一行，
+                    不攻击的（墙、核心）整行 GONE。**"没有攻击"不写出来**：
+                    写一行"Attack range 0"会让人以为它能打、只是打不到人。
+    升级         —— 升到几级、多少钱、按钮。到顶了按钮换成"Max level"并且点不动。
+                    **三种建筑都能升**（墙和核心涨耐久），所以没有"不能升"那一支。
+    挪动 / 关闭  —— 两个次要操作并排。挪动只是"换个地方摆"，不花钱、不改等级，
+                    所以和关闭同一档、同一个样式（理由见下面 Move 按钮上面那段）。
+                    "能关"这件事得有个明说的出口，不然第一次用的人会以为面板粘住了。
+
+  为什么点建筑就该出这个面板、而不是接着放东西：见 BattlefieldView.Inspector
+  的注释——"想看一眼已有的塔，结果在旁边又冒出一座还扣了钱"。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:orientation="vertical"
+    android:paddingTop="16dp"
+    android:paddingBottom="20dp">
+
+    <!-- 名字 + 等级 -->
+    <TextView
+        android:id="@+id/bld_name"
+        style="@style/GameText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:textAppearance="?attr/textAppearanceHeadlineSmall"
+        android:textStyle="bold"
+        tools:text="Tower · Level 2" />
+
+    <!-- 占地。同样不写"共几格"，理由见 strings.xml 里 shop_size 那段。 -->
+    <TextView
+        android:id="@+id/bld_size"
+        style="@style/GameText.Dim"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:textAppearance="?attr/textAppearanceLabelSmall"
+        tools:text="2×2" />
+
+    <!-- 耐久。**三种建筑都有这一行**——塔、墙、核心都有血，所以它不像攻击范围
+         那样会整行 GONE。用血条那个绿（game_hp_good）而不是新挑一个色：
+         面板上的数字和战场上那条血条说的是同一件事，颜色一样才不用去猜。 -->
+    <LinearLayout
+        android:id="@+id/bld_hp_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_pill"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <View
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/bg_circle"
+            android:backgroundTint="@color/game_hp_good" />
+
+        <TextView
+            android:id="@+id/bld_hp"
+            style="@style/GameText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            tools:text="Durability 100 / 100" />
+    </LinearLayout>
+
+    <!-- 攻击范围。只有会攻击的建筑才显示（MainActivity.renderBuildingSheet 控制）。
+         用金子那个颜色，和战场上画出来的圈是同一个色——面板上的数字和地上的圈
+         对得上，才不用去想"这是不是同一个东西"。 -->
+    <LinearLayout
+        android:id="@+id/bld_range_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_pill"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <View
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/bg_circle"
+            android:backgroundTint="@color/game_range" />
+
+        <TextView
+            android:id="@+id/bld_range"
+            style="@style/GameText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            tools:text="Attack range 3.0 cells" />
+    </LinearLayout>
+
+    <!-- 升级 -->
+    <TextView
+        android:id="@+id/bld_upgrade_title"
+        style="@style/GameText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:textAppearance="?attr/textAppearanceTitleSmall"
+        tools:text="Upgrade to level 3" />
+
+    <TextView
+        android:id="@+id/bld_upgrade_cost"
+        style="@style/GameText.Dim"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        tools:text="Cache 35 + Output 15" />
+
+    <!-- 主操作：升级。**整行留给它**——详情面板里最常做的一件事就是升级，
+         和下面两个挤一行的话三个按钮都变窄，"Upgrade" 这种长词会换行。 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/bld_upgrade"
+        style="@style/Widget.Material3.Button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="20dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="@string/bld_upgrade_btn"
+        app:backgroundTint="@color/primary_button" />
+
+    <!-- 次要操作。挪动和关闭是同一档的事（都不改变这一座的数值），
+         所以同一个样式、同一行、一样宽。
+
+         挪动**不需要先选、也不需要花钱**：它只改坐标，等级和已经花掉的钱
+         都带得走（Battlefield.move）。所以它也没有"买得起吗"那套变暗逻辑。 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="20dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bld_move"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/bld_move_btn"
+            android:textColor="@color/on_mountain"
+            app:backgroundTint="@color/glass_button" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bld_close"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/bld_close"
+            android:textColor="@color/on_mountain"
+            app:backgroundTint="@color/glass_button" />
+    </LinearLayout>
+
+</LinearLayout>

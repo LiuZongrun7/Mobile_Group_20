@@ -9,11 +9,47 @@
          use Theme.Material3.DayNight with a MaterialToolbar in the layout. -->
     <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
 
-        <!-- Android 15+ forces edge-to-edge, so the status bar is transparent and
-             is no longer tinted by colorPrimaryDark. On a light background the
-             icons must be dark to stay readable. The value is flipped back to
-             false in values-night/styles.xml. -->
-        <item name="android:windowLightStatusBar">true</item>
+        <!-- 状态栏和手势条：现在**整页都是深岩石**（游戏页的底，见
+             game/view/MountainBackgroundView），所以图标一律用浅色。
+             这里不再跟随深浅色模式——背景是美术资源，不随主题翻色。
+
+             条本身设成透明，让岩石一直铺到屏幕最上/最下边：
+             MainActivity 里还有一句 WindowCompat.setDecorFitsSystemWindows(false)，
+             两句配一套（少一句，透明条后面就是黑的或者旧主题色）。
+             见 activity_main.xml 顶部注释第 0 层。
+
+             ★ 交接点：dashboard / forum 那几页将来会是正常的浅色 Material 页面，
+             那时候这两条不能全局写死，要按页面切
+             （WindowInsetsControllerCompat.setAppearanceLightStatusBars）。
+             现在只有游戏页，全局设成浅色是对的。 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <!-- ==================== 游戏页：压在岩石底上的文字 ====================
+         游戏页整页是岩石（MountainBackgroundView），不是主题的 surface，
+         所以压在它上面的文字不能用 ?attr/colorOnSurface——浅色模式下那是近黑色，
+         压在深岩石上等于看不见。
+
+         两个样式而不是一个：主要信息和次要信息分两档，颜色见 colors.xml
+         的 on_mountain / on_mountain_dim（对比度都过 WCAG AA）。
+         用了 Game.Text 的地方**不要再写 android:alpha**——颜色里已经调暗了，
+         再叠一层 alpha 会掉到对比度线以下。 -->
+    <style name="GameText">
+        <item name="android:textColor">@color/on_mountain</item>
+    </style>
+
+    <style name="GameText.Dim">
+        <item name="android:textColor">@color/on_mountain_dim</item>
+    </style>
+
+    <!-- 底部导航选中的那个：亮一档的玻璃胶囊，和选建筑按钮是同一套语言
+         （"选中的东西浮得更高"）。默认指示器是主题的 colorSecondaryContainer，
+         在岩石底上是一块突兀的浅紫。 -->
+    <style name="GameNavIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/glass_strong</item>
     </style>
 
 </resources>

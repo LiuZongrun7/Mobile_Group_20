@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HUD 上数字底下的小胶囊，也是战场左上角那行自查小字的底。
+     用"玻璃"色（半透明白）而不是主题的 surface：它压在岩石底上，
+     读起来该是浮在石头上的一层，不是画上去的色块。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/glass"/>
+    <corners android:radius="9dp"/>
+</shape>

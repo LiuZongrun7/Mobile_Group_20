@@ -1,4 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AndroidApp</string>
-    <string name="hello_world">Hello World!</string>
+    <string name="app_name">TokenTrail</string>
+
+    <!-- ============ 顶部 HUD ============ -->
+    <!-- 赛季名和剩余天数都按当前日历算，不写死：写死的话下个月截图就是错的。
+         %1$s 是月份，例如 September 2026。 -->
+    <string name="hud_season">Season · %1$s</string>
+    <!-- %1$d 是这个月还剩几天 -->
+    <string name="hud_days_left">%1$d days left</string>
+    <!-- 大数字和它的说明分两条：合起来"1.24M tokens this month"在手机宽度上排不下大字号。 -->
+    <string name="hud_tokens_label">tokens this month</string>
+
+    <!-- 三个桶，和三种资源一一对应（CONTRACTS.md §8 那张表），加起来正好等于
+         上面那个大数字。
+
+         **"Input" 后面必须挂着 "(uncached)"。** 这个数字只是提示词里既没命中缓存、
+         也没写进缓存的那一段（`TokenBundle.input` 的注释："按原价计费的那部分提示词"）。
+         提示词一共分三段，另外两段都在 "Cache" 那格里。写成光秃秃一个 "Input"，
+         别人（和读代码的 AI）会当成"输入总量"，然后发现它对不上账单。
+
+         数据里仍然是四个字段、分开计价（读 $0.30/1M 对写 $3.75/1M，差十几倍）；
+         **合并只发生在显示这一层**，而且合并的必须是这两个缓存桶——不是把缓存
+         并进 input。见 TokenBundle 的类注释。 -->
+    <string name="hud_tok_input">Input (uncached)</string>
+    <string name="hud_tok_cache">Cache (read + write)</string>
+    <string name="hud_tok_output">Output</string>
+
+    <!-- ============ 战场 ============ -->
+    <string name="game_start_wave">Start wave</string>
+    <string name="game_shop">Shop</string>
+    <!-- 1 总列数 2 行数 3 一格多少 dp 4 一屏看得见几列。后两个数的比值就是要拖几屏。
+         5/6/7 是敌人通道 / 可放置区 / 山区各占几列——这三段就是背景图的划分，
+         画地面贴图之前先拿它对一眼。 -->
+    <string name="game_grid_info">%1$d × %2$d cells · %3$.1f dp · %4$.0f on screen\nlane %5$d · build %6$d · rock %7$d</string>
+
+    <!-- ============ 战斗 ============ -->
+    <!-- 战况胶囊：核心还剩多少耐久、到现在漏了几只。
+         1 核心当前耐久 2 核心满耐久 3 漏掉的只数。
+         **"leaked" 不能省**：漏怪是这一局唯一的扣分项，也是"我明明守住了怎么还输"
+         的唯一解释。只写个数字在那儿，玩家不知道那是什么。 -->
+    <string name="game_status">Core %1$d/%2$d · %3$d leaked</string>
+
+    <!-- 发波按钮的四种文案。**波次进度写在按钮上**，不是另起一行：
+         "正在打第几波"就是"这个按钮现在管什么"，写在该按钮上最省高度
+         （战场每多让出 1dp，格子就大一档，见 activity_main.xml 顶部那段）。 -->
+    <!-- 1 这一波的序号 2 总共几波 3 场上还剩几只。一波在场上时按钮按下去没用，
+         所以文案从"开始"变成"读数"——按不动的时候也该是有信息量的。 -->
+    <string name="game_wave_running">Wave %1$d/%2$d · %3$d left</string>
+    <!-- 第 5 波（最后一波）下手之前换个说法，让玩家知道这一波打完就结束了。 -->
+    <string name="game_start_last_wave">Start final wave</string>
+    <string name="game_play_again">Play again</string>
+
+    <!-- 按了发波但发不出去：上一波还在场上。悄悄不响应的话，
+         玩家会以为按钮坏了或者游戏卡了。 -->
+    <string name="game_wave_pending">Clear this wave first</string>
+
+    <!-- 结果卡片。标题只有两种：守住了 / 核心被打掉。
+         **不用 "You win" / "Game over"**：这一局的位置是"这个赛季的一个月"，
+         守住和失守说的都是"这个月"的事，用赛季的话说更贴。
+         1 打完的波数 2 总共几波 3 漏了几只。两种结果共用这一句——
+         输了也是"打完了 N 波"，那个 N 就是玩家的成绩。 -->
+    <string name="game_result_defended">Defended</string>
+    <string name="game_result_overrun">Overrun</string>
+    <string name="game_result_note">%1$d/%2$d waves · %3$d leaked</string>
+
+    <!-- ============ 商店 ============ -->
+    <!-- 选建筑这件事现在整个搬进了商店弹窗（屏幕上只留"商店 / 开始波次"两个按钮），
+         所以下面这些字符串都归它。 -->
+    <string name="shop_title">Shop</string>
+    <!-- 换算率的唯一出处。原来是 HUD 底下那行小字（hud_rate），挪进来了：
+         它是"资源从哪来"的说明，和价格放在一起才读得懂。 -->
+    <string name="shop_rate">100 resources per 1M tokens · three kinds, not interchangeable</string>
+    <string name="shop_have">You have</string>
+    <!-- 1 资源名 2 余额 -->
+    <string name="shop_balance_part">%1$s %2$d</string>
+    <!-- 1 名称（Tower / Wall / Core） -->
+    <string name="shop_picked">%1$s selected · tap the field to place it</string>
+    <string name="shop_picked_core">Core selected · tap a new spot to move it</string>
+    <!-- 选中的那件放回货架，手上不留东西 -->
+    <string name="shop_look_only">Look only</string>
+    <!-- 1 原来的副标题（占地）。这件正拿在手上——放下一座之后引擎会自动收手
+         （BattlefieldView.handleTap），所以这个标记也会跟着消失。 -->
+    <string name="shop_in_hand">%1$s · in hand</string>
+    <!-- 1 名称 -->
+    <string name="shop_need_more">Not enough resources for %1$s</string>
+    <string name="shop_no_room">%1$s does not fit there</string>
+
+    <!-- 商品条：名称用 BuildingType.label（Core / Tower / Wall，代码里的唯一出处），
+         下面两条是"多大"和"多少钱"。 -->
+    <!-- 1 列 2 行。**故意不写"共几格"**，两个原因：
+         ① "2×2 · 4 cells" 里的 4 是 2×2 算出来的，重复；
+         ② 写成 "N cell(s)" 要处理单复数，而**这台机器上 plurals 是坏的**：
+            界面文案是英文，设备 locale 却是 zh-Hans-CN，中文在 CLDR 里没有
+            "one" 这个复数类别，所以 quantity="one" 永远选不中，
+            城墙那行一直显示 "1 cells"（真机上撞到过）。要写单复数就得先把
+            应用 locale 钉死成英文，那是另一个决定，先不做。 -->
+    <string name="shop_size">%1$d×%2$d</string>
+    <!-- 核心特有的后缀：商店里这一项是"挪"，不是买第二座。 -->
+    <string name="shop_size_core">%1$d×%2$d · move the one you have</string>
+    <string name="shop_cost_free">Free</string>
+    <!-- 1 资源名 2 数量 -->
+    <string name="shop_cost_part">%1$s %2$d</string>
+    <!-- 1 第一段 2 第二段。一件商品可以同时吃两种资源，用 + 连起来。 -->
+    <string name="shop_cost_join">%1$s + %2$s</string>
+
+    <!-- ============ 建筑详情 ============ -->
+    <!-- 点场上的建筑弹出来的那一屏。和商店是两个面板：商店回答"能买什么"，
+         这个回答"这一座现在是什么样、还能不能变强"。 -->
+    <!-- 1 名称（Tower / Wall / Core）2 等级 -->
+    <string name="bld_title">%1$s · Level %2$d</string>
+    <!-- 1 列 2 行。同样不写"共几格"，理由见上面 shop_size 那段。 -->
+    <string name="bld_size">%1$d×%2$d</string>
+    <!-- 耐久。**三种建筑都有这一行**（塔、墙、核心都有血），所以它不像攻击范围
+         那样会整行藏起来。1 还剩 2 满血 -->
+    <string name="bld_hp_label">Durability</string>
+    <string name="bld_hp_value">%1$.0f / %2$.0f</string>
+    <string name="bld_range_label">Attack range</string>
+    <!-- 1 格数。**这里写死复数是有意的**：范围只有 2.5 / 3.0 / 3.5 三档
+         （BuildingStats.rangeCells），永远到不了 1。哪天出现一格的范围，
+         这句就得重写——这台机器上 plurals 用不了，见 shop_size 那段。 -->
+    <string name="bld_range_value">%1$.1f cells</string>
+    <!-- 1 下一级的级数 -->
+    <string name="bld_upgrade_to">Upgrade to level %1$d</string>
+    <string name="bld_upgrade_btn">Upgrade</string>
+    <!-- 1 当前等级。到顶了按钮换成"Max level"并且点不动。 -->
+    <string name="bld_at_max">Level %1$d · fully upgraded</string>
+    <string name="bld_max_btn">Max level</string>
+    <string name="bld_close">Close</string>
+    <!-- 1 名称 2 新等级 -->
+    <string name="bld_upgraded">%1$s is now level %2$d</string>
+    <string name="bld_need_more">Not enough resources to upgrade</string>
+    <!-- 面板还开着、建筑却没了（比如这一局重开了）。 -->
+    <string name="bld_gone">That building is gone</string>
+
+    <!-- 挪动。**不花钱**，所以这一屏上没有价格那一行——写了价钱玩家会以为
+         挪一次要扣一次资源，就不敢摆了。参考部落冲突：摆错了随时能改。 -->
+    <string name="bld_move_btn">Move</string>
+    <!-- 1 名称。进了挪动模式之后的提示：这时候面板已经关了，
+         屏幕上没有任何东西告诉玩家"接下来该干什么"。 -->
+    <string name="bld_move_hint">Tap a new spot for the %1$s</string>
+    <!-- 1 名称。挪不过去：压着别的建筑、压在通道或山区上、或者出界了。 -->
+    <string name="bld_move_blocked">The %1$s cannot go there</string>
+
+    <!-- ============ 底部导航 ============ -->
+    <string name="nav_game">Game</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_forum">Forum</string>
+    <string name="nav_profile">Profile</string>
+    <!-- 底部导航还没做的三项被点到时提示。 -->
+    <string name="nav_not_built">%1$s is not built yet</string>
 </resources>

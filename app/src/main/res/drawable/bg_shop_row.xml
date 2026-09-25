@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 商店里每一行按下去时的水波纹。
+     只给 android:id/mask 不给内容：底色是行自己那层玻璃（@drawable/bg_pill），
+     这里只负责"按到了"的反馈，不该把行盖住。
+
+     为什么不用 ?attr/selectableItemBackground：那是主题的，浅色模式下会在
+     深色弹窗上刷出一层灰白，和整页的玻璃语言对不上。 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/glass_pressed">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/white" />
+            <!-- 和 bg_pill 的圆角一致，波纹才不会从行角上溢出去 -->
+            <corners android:radius="9dp" />
+        </shape>
+    </item>
+</ripple>

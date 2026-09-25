@@ -1,13 +1,126 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Unused for now: AppTheme is a Material3 theme, which brings its own colour
-      palette and derives the rest of the roles (containers, on-colours, ...)
-      from it. Overriding only colorPrimary here would give a palette that no
-      longer matches the derived roles.
+      Material3 主题自带整套配色，但**游戏页整页是地形**，不是主题的 surface：
+      底是岩石（game_mountain_deep），中间的战场是草/土/石。
+      所以游戏页上的文字和控件颜色都写成固定的浅色，不取 ?attr/colorOnSurface
+      ——浅色模式下那是近黑色，压在深岩石上等于看不见。
 
-      To brand the app, either override the full set of Material3 roles in
-      AppTheme, or define a ThemeOverlay and apply it in AndroidManifest.xml.
-      See https://m3.material.io/styles/color/roles
+      **这些颜色不跟随系统深浅色。** 游戏页的背景是美术资源，一张岩石贴图，
+      白天黑夜都是它；跟着主题翻色反而会让同一张图在两种模式下都难看。
+      这也是 values-night/ 下没有对应文件的原因（见下面"悬浮控件"那一段）。
     -->
+
+    <!-- ============ 整页背景与地形 ============
+         地形分三区，判据是"能不能放东西"（game/engine/Terrain.java）： -->
+
+    <!-- 整页的岩石底（远处那片山），界面浮在它上面。 -->
+    <color name="game_mountain_deep">#3F484E</color>
+    <!-- 远山斜纹。比底色**亮**才看得见（暗纹压在暗底上什么都看不出）。 -->
+    <color name="game_mountain_deep_shade">#4B555C</color>
+
+    <!-- 战场里的三种地面：可放置区绿（能建）、左边敌人通道土黄（不能建，
+         敌人从这儿来）、右边山区灰岩（不能建，就是石头）。
+         绿 / 土黄 / 灰是三个色相方向，缩略图大小也分得清；
+         通道和山区还额外靠"有没有斜纹"区分，不只靠颜色（见 drawRockHatch）。
+
+         注意这三条比整页的底**亮**：战场是"近处"，要能从背景里跳出来。 -->
+    <color name="game_ground_a">#5E8C4F</color>
+    <color name="game_ground_b">#558145</color>
+    <color name="game_entry_lane">#8C7A4E</color>
+    <color name="game_mountain">#6E767C</color>
+    <color name="game_mountain_shade">#596166</color>
+    <!-- 注意这儿**没有**"余量带"的颜色。战场上方那 1.5 格（放塔尖的地方）
+         不归战场画：它也是"不能放东西的地方"，所以由整页的岩石底铺，
+         和 HUD 背后的石头是同一片。这里再给一个颜色，屏幕上就会多出一条横带。 -->
+    <color name="game_grid_line">#33000000</color>
+
+    <!-- 建筑和敌人（纯色块占位，贴图到位后整组删掉） -->
+    <color name="game_core">#D98324</color>
+    <color name="game_tower">#2E8B84</color>
+    <color name="game_wall">#8A9199</color>
+
+    <!-- 三种敌人三种颜色。**颜色在说玩法，不是装饰**：杂兵是基准、快兵是"来不及打"、
+         重甲是"一座塔打不死"，玩家得在它进射程之前就认出是哪一种。
+         挑色时避开已经占用的色相——绿是"能放"、金黄是射程、青是塔、橙是核心、
+         灰是墙，所以敌人走红→黄→紫这一组，三个方向互相拉得开，
+         压在绿地（#5E8C4F）上也分得清。
+         **没有"卡住了"的第四个颜色**：那个状态是把这三条各自压暗画出来的
+         （见 BattlefieldView.drawEnemy），一换色就把"这是哪一种"丢了——
+         而敌人贴着你的墙啃的时候，恰恰是最需要看清种类的时候。 -->
+    <color name="game_enemy_grunt">#C0392B</color>
+    <color name="game_enemy_runner">#E4B03A</color>
+    <color name="game_enemy_brute">#7D4A9E</color>
+
+    <color name="game_sprite_line">#CC14201C</color>
+    <color name="game_label">#FFFFFFFF</color>
+
+    <!-- ============ 悬浮控件 ============
+         压在岩石底上的东西（HUD 胶囊、选建筑按钮、底部导航的选中态）
+         统一用半透明白：读起来是"浮在石头上的玻璃"，而不是画在石头上的色块。
+         三个透明度对应三种"浮起来的高度"，全页就这一套语言。
+
+         因为底色固定是深岩石，这三条在深浅色模式下**一样**，
+         所以 values-night/ 下没有覆盖文件。 -->
+    <!-- 15%：胶囊、按钮 -->
+    <color name="glass">#26FFFFFF</color>
+    <!-- 25%：选中的那一个，比别的亮一档 -->
+    <color name="glass_strong">#40FFFFFF</color>
+    <!-- 30%：按下时的反馈 -->
+    <color name="glass_pressed">#4DFFFFFF</color>
+
+    <!-- 压在岩石上的文字。分两档就够：主要信息 / 次要信息。
+         对比度（对 #3F484E）：on_mountain 约 8.3:1、on_mountain_dim 约 5.0:1，
+         都过 WCAG AA 的 4.5:1。改这两个值之前先量一下。 -->
+    <color name="on_mountain">#F2F5F6</color>
+    <color name="on_mountain_dim">#B8C2C7</color>
+    <!-- 进度条的槽 -->
+    <color name="on_mountain_track">#33FFFFFF</color>
+
+    <!-- 主操作（Start wave）的填充色。白字压在上面约 7.6:1，过 AA。
+         见 res/color/primary_button.xml 里为什么不用主题的 colorPrimary。 -->
+    <color name="brand">#6750A4</color>
+    <color name="brand_pressed">#7A63B8</color>
+
+    <!-- ============ 界面自己的提示色（和贴图无关，留着） ============ -->
+    <color name="game_ok">#3FBF52</color>
+    <color name="game_bad">#E53935</color>
+
+    <!-- 攻击范围圈。**故意不用 game_ok 那个绿**：绿在这个界面里已经固定表示
+         "这一下能放"，而范围圈是"这座塔打得到哪儿"，是常驻信息不是操作反馈，
+         两个意思共用一个颜色，玩家会以为圈里圈外是能不能建的区别。
+         挑的金黄在草地（#5E8C4F）和灰岩（#6E767C）上都拉得开。 -->
+    <color name="game_range">#F0C24B</color>
+
+    <!-- ============ 战斗：血条和弹道 ============
+         这一组画在建筑和敌人**上面**，所以颜色要能在它们身上也读得出来
+         （底可能是青色的塔、橙色的核心、暗红的敌人、绿的草）。 -->
+
+    <!-- 血条的槽。**自带透明度**：它是一条"这里还有多少余量"的底，
+         实心的话会在草地上刷出一道黑杠（见 BattlefieldView.drawBar 里
+         为什么不能对它再调 setAlpha）。 -->
+    <color name="game_hp_track">#8C1A2118</color>
+    <!-- 血条的三档：绿（>60%）→ 黄（>30%）→ 红。三档就够——
+         连续渐变在这么细的一条上反而看不出差别，而"还剩几成"是要一眼看出来的。 -->
+    <color name="game_hp_good">#4CD964</color>
+    <color name="game_hp_warn">#F2C14E</color>
+    <color name="game_hp_low">#E5433A</color>
+
+    <!-- 塔开火那条线。**用白色，不是某个色相**：这个界面上绿色已经表示
+         "能放"、金黄表示"射程/选中"、红表示"不行"，再塞一个色相进去就要打架了。
+         白线压在草地、灰岩、青塔上都读得出来，而且"白色 = 能量/光束"不用解释。 -->
+    <color name="game_beam">#FFF4F8E8</color>
+
+    <!-- 资源的标记色（HUD 上四个圆点、商店余额和价格）。
+         比"白底上好看"的那组**亮一档**：它们现在压在深岩石上（隔着一层
+         glass 胶囊），原来那组在这个底上偏暗、和石头糊在一起。
+         色相没变，将来放到浅色的面板页上也还能用。
+
+         一共三种，和三种资源一一对应：HUD 上那三格、商店里的余额和价格
+         用的都是这一组。**没有"缓存写"的专用色**——数据里缓存读和缓存写是
+         分开的两个桶（单价差十几倍），但屏幕上它们是同一个 "Cache" 格子
+         （合并的理由见 activity_main.xml 里那一段）。 -->
+    <color name="resource_input">#5B9BD5</color>
+    <color name="resource_cache">#45B3A8</color>
+    <color name="resource_output">#E08D52</color>
 </resources>

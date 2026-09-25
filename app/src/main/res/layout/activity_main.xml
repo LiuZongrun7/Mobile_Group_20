@@ -1,18 +1,572 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  主界面。**三层**：
+
+    0.   整页的岩石底 —— MountainBackgroundView，铺满整个屏幕（包括状态栏底下）。
+                         它不是"背景色"，是**地形**：和战场里那条山区同一个画法。
+    0.5  世界层       —— BattlefieldView，**也铺满全屏**。地形、网格、建筑、敌人
+                         全在这一层。铺满是必须的：放大到 2 倍时那片地（2898px）
+                         比整块屏幕（2844px）还高，只给它中间一条的话会被裁掉，
+                         于是放到多大都出不了那个框，屏幕上永远是"石头/绿地/石头"三段。
+    1.   界面         —— 浮在世界之上的东西：HUD、按钮行、底部导航，以及中间
+                         那个**只用来定战场位置**的空占位 @id/play_area。
+
+  为什么这么分：规则和战场那边是同一条——**不能放东西的地方就是山区**。
+  界面占的上下两条也是不能放东西的地方，所以它们不该是主题的浅色 surface，
+  而该是同一片山。整页读起来是"一张连续的背景图 + 浮在上面的控件"，
+  而不是"一个界面里嵌了一块游戏"。
+
+  界面这一层自上而下四段：
+
+    1. HUD      —— 赛季 / 本月 token 总量 / **四个 token 桶**。纯展示，数据来自仓库层。
+                   四个桶是 未命中缓存的输入 · 命中缓存 · 写入缓存 · 输出，
+                   加起来正好是上面那个大数字（口径见 TokenBundle 的类注释）。
+    2. 战场面板 —— 唯一的 weight=1，**它自己一个像素都不画**，只回答
+                   "战场是哪一块、在哪儿"。格子尺寸由它的宽高算出来
+                   （BoardGeometry.fit），不在这里写死。
+    3. 操作行   —— **只有两个按钮**：商店、开始波次。选建筑搬进了商店弹窗
+                   （见 layout/sheet_shop.xml）——底下一排"选塔/选墙/选核心/只看"
+                   已经删掉了，每加一种建筑就会多挤一格、把战场挤小。
+    4. 底部导航 —— 四个板块。这一版只有游戏页是真的，其余三项是占位。
+
+  **颜色**：压在岩石上的文字一律用 @style/GameText 或 Game.Text.Dim，
+  不要用 ?attr/textAppearanceXxx 自带的颜色（浅色模式下那是近黑，压深岩石上看不见），
+  也不要再叠 android:alpha（颜色里已经分好档，再叠会掉到对比度线以下）。
+  悬浮控件（胶囊、按钮、导航选中态）一律用 colors.xml 里那三个 glass 透明度。
+
+  **为什么上下都压得很紧**：战场固定 18 行，HUD 和按钮每多占 1dp，格子就小一点点
+  （真机上界面占掉 45% 屏高，格子只剩 23.9dp）。多一行文字 = 格子小一档。
+  这一次操作行从三行减到一行，HUD 只多了一行胶囊（同时删掉了原来那行换算率小字），
+  净下来战场反而多出几十 dp。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
-    android:paddingBottom="@dimen/activity_vertical_margin"
-    android:paddingLeft="@dimen/activity_horizontal_margin"
-    android:paddingRight="@dimen/activity_horizontal_margin"
-    android:paddingTop="@dimen/activity_vertical_margin"
     tools:context=".MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/hello_world" />
+    <!-- ==================== 0. 整页的岩石底 ====================
+         注意它**没有** fitsSystemWindows：要一直铺到状态栏和手势条底下，
+         这样屏幕四边都是地形，界面才像浮在场景里。
 
-</RelativeLayout>
+         它**跟着战场相机一起动**（MainActivity 里把 battlefield 接给它）：
+         拖动地图时上下两条石头也一起滚。不接的话它就是一整页钉死的纹理，
+         一眼看出石头是画在界面上的、不是世界里的。 -->
+    <com.mobilegroup20.tokentrail.game.view.MountainBackgroundView
+        android:id="@+id/background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- ==================== 0.5 世界层（战场） ====================
+         它也**铺满全屏**，理由和第 0 层一样：那片地本来就该能糊满整屏。
+         放大到 2 倍时 18 行地有 2898px 高，比整块屏幕（2844px）还高——
+         只给它中间那一条的话，超出的部分会被裁掉，放到多大都出不了那个框，
+         屏幕上永远是"石头 / 绿地 / 石头"三段。
+
+         它画在界面层**下面**（这个位置就是顺序）：地滑到 HUD 底下时，
+         字仍然压在它上面，看得见。
+
+         **它自己不决定"战场在哪"**：面板是下面那个 @id/play_area 空占位，
+         MainActivity 里接过去。格子多大、相机怎么取景，全按那个面板算。 -->
+    <com.mobilegroup20.tokentrail.game.view.BattlefieldView
+        android:id="@+id/battlefield"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- ==================== 1. 界面（浮在世界之上） ====================
+         这一层里装着**四个页面**（底部导航那四项），同一时刻只显示一个。
+         但只有"游戏"那一页是真的，另外三页共用下面那个 @id/empty_page 空壳——
+         见文件末尾那段注释。 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:fitsSystemWindows="true">
+
+        <!-- ===== 1.0 游戏页 =====
+             这一页 = HUD + 战场面板 + 操作行。整块用一个容器包起来，是为了
+             **切页时能一口气藏掉**：这三段在竖向上是"上面固定、中间吃掉剩余、
+             下面固定"的关系，必须留在同一个 LinearLayout 里才排得出那个
+             weight=1 的中间段（拆成三个兄弟、各自和 empty_page 抢高度的话，
+             战场会算出错误的高度，格子尺寸跟着错）。
+
+             weight=1 从原来的"play_area 自己"挪到了这一页身上：现在和
+             empty_page 平分这块地方的是**页**，不再是面板。 -->
+        <LinearLayout
+            android:id="@+id/game_page"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- ===== 1.1 HUD ===== -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="8dp">
+
+                <!-- 第一行：赛季在左，剩余天数在右 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/hud_season"
+                        style="@style/GameText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:text="@string/hud_season"
+                        android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+                    <TextView
+                        android:id="@+id/hud_days"
+                        style="@style/GameText.Dim"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/hud_days_left"
+                        android:textAppearance="?attr/textAppearanceLabelMedium" />
+                </LinearLayout>
+
+                <!-- 第二行：本月 token 总量。资源余额不放这儿了——那是商店里的账，
+                     放在购买的地方才看得懂"这个数字和我买得起什么有什么关系"。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/hud_total"
+                        style="@style/GameText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:textAppearance="?attr/textAppearanceHeadlineMedium"
+                        android:textStyle="bold"
+                        tools:text="9.90M" />
+
+                    <TextView
+                        style="@style/GameText.Dim"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/hud_tokens_label"
+                        android:textAppearance="?attr/textAppearanceLabelSmall" />
+                </LinearLayout>
+
+                <!-- 第三行：三个桶，等宽平铺。**三个数字加起来正好等于上面那个大数字**，
+                     而且和三种资源一一对应（CONTRACTS.md §8 那张表）——
+                     所以商店里的余额（数字除以 1 万）说的就是这三格。
+
+                     **为什么是三个而不是四个。** 数据里 token 分四个桶
+                     （TokenBundle：input / cacheRead / cacheWrite / output），因为账单上
+                     四个单价不同（$3 / $0.30 / $3.75 / $15 每 1M），混在一起永远对不上账。
+                     但**显示可以合并**：两个缓存桶合成一格，正好对上 ResourceType 的三个值。
+                     合并的必须是这两个缓存桶——**不能把缓存并进 input**，
+                     那会算成"输入总量"，和资源的口径就不是一回事了。
+                     分类聊天的口径见字符串文件里那段注释。
+
+                     每格两行：上面是"色点 + 数字"，下面是桶的名字（9sp，一行三个格子
+                     每个有 110dp，比之前四个格子宽松多了）。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_pill"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <View
+                                android:layout_width="6dp"
+                                android:layout_height="6dp"
+                                android:background="@drawable/bg_circle"
+                                android:backgroundTint="@color/resource_input" />
+
+                            <TextView
+                                android:id="@+id/tok_input"
+                                style="@style/GameText"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                android:maxLines="1"
+                                android:textAppearance="?attr/textAppearanceLabelMedium"
+                                tools:text="5.41M" />
+                        </LinearLayout>
+
+                        <TextView
+                            style="@style/GameText.Dim"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="center"
+                            android:maxLines="1"
+                            android:text="@string/hud_tok_input"
+                            android:textSize="9sp"
+                            tools:ignore="SmallSp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_pill"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <View
+                                android:layout_width="6dp"
+                                android:layout_height="6dp"
+                                android:background="@drawable/bg_circle"
+                                android:backgroundTint="@color/resource_cache" />
+
+                            <TextView
+                                android:id="@+id/tok_cache"
+                                style="@style/GameText"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                android:maxLines="1"
+                                android:textAppearance="?attr/textAppearanceLabelMedium"
+                                tools:text="3.53M" />
+                        </LinearLayout>
+
+                        <TextView
+                            style="@style/GameText.Dim"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="center"
+                            android:maxLines="1"
+                            android:text="@string/hud_tok_cache"
+                            android:textSize="9sp"
+                            tools:ignore="SmallSp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_pill"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <View
+                                android:layout_width="6dp"
+                                android:layout_height="6dp"
+                                android:background="@drawable/bg_circle"
+                                android:backgroundTint="@color/resource_output" />
+
+                            <TextView
+                                android:id="@+id/tok_output"
+                                style="@style/GameText"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                android:maxLines="1"
+                                android:textAppearance="?attr/textAppearanceLabelMedium"
+                                tools:text="956.2K" />
+                        </LinearLayout>
+
+                        <TextView
+                            style="@style/GameText.Dim"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="center"
+                            android:maxLines="1"
+                            android:text="@string/hud_tok_output"
+                            android:textSize="9sp"
+                            tools:ignore="SmallSp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 赛季进度。值由 MainActivity 按"已过天数 / 总天数"填。
+                     换算率那行小字挪进商店弹窗了：它和价格放在一起才读得懂。 -->
+                <ProgressBar
+                    android:id="@+id/hud_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="4dp"
+                    android:layout_marginTop="6dp"
+                    android:max="100"
+                    android:progressBackgroundTint="@color/on_mountain_track"
+                    android:progressTint="@color/on_mountain"
+                    tools:progress="46" />
+            </LinearLayout>
+
+            <!-- ===== 1.2 战场面板（占位，不画东西） =====
+                 这一块吃掉剩下的全部高度，**格子大小就是由它算出来的**：
+                 MainActivity 把它交给 BattlefieldView，后者用它的位置和宽高
+                 定几何和相机。它自己一个像素都不画——真正画地在下面那一层。
+
+                 **故意没有背景色、没有 elevation 投影。** 投影画出来就是一个矩形
+                 轮廓，正好把"整页是一整片地"劈成上/中/下三段，是屏幕上最硬的那条线。
+                 （同理：底部的导航也把 elevation 设成 0。）
+                 有了不透明背景，边界同样会显出来。 -->
+            <FrameLayout
+                android:id="@+id/play_area"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <!-- 左下角的小字，写清楚这台设备上是多少列、一格多少 dp。
+                     是给"看尺寸"用的自查信息，正式版可以删。
+
+                     **放左下，不放左上**：它是两行，右上角那个战况胶囊（@id/battle_status）
+                     是一行，两个都放上面的话在窄屏上会挤到一起，读起来像一根被切成
+                     两段的长条。挪到下面各占一个角，谁也不挨着谁。
+                     压在敌人通道那几格上是有代价的，但它是调试用的，正式版要删。 -->
+                <TextView
+                    android:id="@+id/grid_info"
+                    style="@style/GameText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|start"
+                    android:layout_margin="6dp"
+                    android:background="@drawable/bg_pill"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    tools:text="40 × 18 cells · 23.9 dp · 15.6 on screen" />
+
+                <!-- 战况：核心还剩多少、到现在漏了几只。放在右上角，
+                     和左下那行自查小字各占一个角（理由见上）。
+
+                     **波次进度不在这儿**，在下面那个"开始波次"按钮上（"Wave 2/5 · 7 left"）：
+                     这个胶囊要常驻显示核心耐久，再塞进波次就太长。
+
+                     内容由 MainActivity 按 BattlefieldView 的战况回调填，
+                     没有敌人、也没漏怪时它就是一句 "Core 600/600 · 0 leaked"。 -->
+                <TextView
+                    android:id="@+id/battle_status"
+                    style="@style/GameText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="6dp"
+                    android:background="@drawable/bg_pill"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    tools:text="Core 600/600 · 0 leaked" />
+
+                <!-- 这一局的结果。**只在打完（守住或失守）之后出现**，平时 GONE。
+
+                     为什么要有它：输了和赢了都得说一声，而且得给一条出路。
+                     没有这张卡的话，"核心被打掉"在画面上只表现为核心那个色块不见了
+                     ——玩家会以为是自己看错了，然后继续点"开始波次"，而那个按钮
+                     已经什么都不做了。
+
+                     压在战场正中：它是这一局的结论，该盖在刚打完的那片地上，
+                     而不是挤到 HUD 或者下面那行按钮里去找位置。
+                     elevation 给 0，和底部导航同理——投影在岩石上会切出一道矩形轮廓。 -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/result_card"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_margin="24dp"
+                    android:visibility="gone"
+                    app:cardBackgroundColor="@color/game_mountain_deep"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="@color/glass_strong"
+                    app:strokeWidth="1dp"
+                    tools:visibility="visible">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_horizontal"
+                        android:minWidth="200dp"
+                        android:orientation="vertical"
+                        android:paddingStart="20dp"
+                        android:paddingTop="16dp"
+                        android:paddingEnd="20dp"
+                        android:paddingBottom="16dp">
+
+                        <TextView
+                            android:id="@+id/result_title"
+                            style="@style/GameText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                            android:textStyle="bold"
+                            tools:text="Defended" />
+
+                        <!-- 1 打完了几波 2 一共几波 3 漏了几只 -->
+                        <TextView
+                            android:id="@+id/result_note"
+                            style="@style/GameText.Dim"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            tools:text="5/5 waves · 3 leaked" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/result_again"
+                            style="@style/Widget.Material3.Button"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="@string/game_play_again"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@color/primary_button" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
+
+            <!-- ===== 1.3 操作行 =====
+                 **只有两个按钮**：商店（玻璃）和开始波次（实心）。
+
+                 以前这里是三行：一排"选塔/选墙/选核心/只看"、一行发波 + 计数、
+                 一行操作提示。选建筑搬进了商店弹窗（要花钱买的东西，本来就该
+                 和价格在一起）。计数没有全删——核心耐久和漏怪数挪进了战场上那个
+                 @id/battle_status 胶囊（那里离它标注的东西更近）；**波次进度挪进了
+                 发波按钮自己的文案**（"Wave 2/5 · 7 left"）：正在打第几波是
+                 "这个按钮现在管什么"，写在该按钮上比另起一行更省高度。
+
+                 发波是这一页唯一的主操作，所以**只有它用实心填充**，
+                 在满屏的玻璃和石头里是唯一一块饱和色。 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="2dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/shop"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:text="@string/game_shop"
+                    android:textColor="@color/on_mountain"
+                    app:backgroundTint="@color/glass_button" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/start_wave"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1.4"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:text="@string/game_start_wave"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/primary_button" />
+            </LinearLayout>
+
+        </LinearLayout>
+        <!-- ===== 游戏页到此为止 ===== -->
+
+        <!-- ===== 1.4 还没做的三页（统计 / 论坛 / 我的）=====
+             **三页共用这一个空壳**，不是各写一个：它们现在的内容一模一样
+             （一句话 + 什么都没有），分成三份只会让"改这句提示"要改三处。
+             哪一页该显示什么由 MainActivity.showTab 把文案填进 @id/empty_label。
+
+             **为什么是"一句话"而不是干脆留白。** 一片纯空白的界面分不清
+             "这一页还没做"和"这一页崩了"——用户会以为是后者。写一句
+             "Dashboard is not built yet"就把它变成一条明确的信息。
+
+             **底下那层岩石照样透上来**（所以这里没有背景色）：这三页是
+             同一个 App 的另外一屏，不是弹出来的一个框，底该是同一片地。
+             game_page 和它是兄弟，weight 各占 1，同一时刻只有一个 VISIBLE。 -->
+        <FrameLayout
+            android:id="@+id/empty_page"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/empty_label"
+                style="@style/GameText.Dim"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_pill"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                tools:text="Dashboard is not built yet" />
+        </FrameLayout>
+
+        <!-- ===== 1.5 底部导航 =====
+             底透明，岩石直接透上来；图标和文字用 nav_item 那套浅色。
+             elevation=0：不然它会给自己画一道矩形投影，在岩石上是一条莫名其妙的横线。 -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:elevation="0dp"
+            app:itemActiveIndicatorStyle="@style/GameNavIndicator"
+            app:itemIconTint="@color/nav_item"
+            app:itemTextColor="@color/nav_item"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav" />
+
+    </LinearLayout>
+
+</FrameLayout>
