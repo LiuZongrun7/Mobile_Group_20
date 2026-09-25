@@ -14,8 +14,13 @@
  * </ul>
  *
  * <p>本包还提供 {@code AdviceApi}（Retrofit 接口）指向 Java 建议服务。
- * 客户端<b>不持有任何模型 API key</b>，key 只在服务端；服务端先验 Firebase ID token，
+ * 客户端<b>不持有建议服务调模型用的那个 key</b>，它在服务端；服务端先验 Firebase ID token，
  * 再从 token 里取 uid，提交的 uid 参数一律不信任。
+ *
+ * <p><b>另一类别搞混：</b>用量 fetcher 会用到<b>用户自己的</b>凭据（换他账号的用量数据），
+ * 那类凭据落客户端、由用户填，和建议服务的 key 是两回事——上面那句不覆盖它，
+ * 也不能因为有了它就删掉上面那句。两类 key 的存法与风险见
+ * {@code docs/DATA_SOURCES.md} §3。
  *
  * @see com.mobilegroup20.tokentrail.contract.tool.AgentTool
  */

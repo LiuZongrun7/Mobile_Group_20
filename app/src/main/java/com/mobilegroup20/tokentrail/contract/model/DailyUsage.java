@@ -51,8 +51,28 @@ public class DailyUsage {
      */
     public long costMicros;
 
-    /** 算这笔成本用的价目表版本号。界面上的「估算」提示和它对应。 */
+    /**
+     * 算这笔成本用的价目表版本号。界面上的「估算」提示和它对应。
+     *
+     * <p>三个取值各有各的意思，界面必须分开显示，别都当成一个普通字符串：
+     * <ul>
+     *   <li><b>具体版本号</b>（如 {@code "2026-09"}）——我们按那版价目表算的，是估算；</li>
+     *   <li>{@link #RATE_VERSION_FROM_SOURCE}——这笔钱是<b>来源账单直接给的</b>，
+     *       不是我们算的，比估算准；</li>
+     *   <li><b>null</b>——<b>没查到价，这个成本不可信</b>。此时 {@link #costMicros}
+     *       是 0，但那是「不知道」而不是「没花钱」。界面上要显示成「价格未知」，
+     *       直接显示 0 元等于把「没录价格」伪装成「免费」。</li>
+     * </ul>
+     */
     public String rateVersion;
+
+    /**
+     * {@link #rateVersion} 的哨兵值：成本来自来源账单，而不是我们按价目表算的。
+     *
+     * <p>放在契约里而不是实现里，是因为界面要能认出它并换一种说法
+     * （「来自账单」而不是「按 2026-09 版价目估算」）。
+     */
+    public static final String RATE_VERSION_FROM_SOURCE = "source";
 
     /**
      * 这天是否已经换算成游戏资源。

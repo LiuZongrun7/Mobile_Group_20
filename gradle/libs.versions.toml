@@ -3,7 +3,13 @@ agp = "9.1.0"
 appcompat = "1.7.0"
 material = "1.14.0"
 lifecycle = "2.11.0"
+room = "2.8.5"
+# JitPack 上的 tag 带 v，和 Maven Central 那种纯数字版本号不一样，别手滑写成 3.1.0
+mpandroidchart = "v3.1.0"
 desugarJdkLibs = "2.1.5"
+# 只为对齐 kotlinx-serialization 的版本，见 app/build.gradle.kts 里那条 platform()。
+# 这不是我们直接用的库，版本号跟着 room-testing 的要求走。
+kotlinxSerialization = "1.8.1"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
@@ -14,8 +20,21 @@ material = { group = "com.google.android.material", name = "material", version.r
 # ViewModel/LiveData：Repository 向界面暴露状态用它，大纲 §8 也写的这套
 androidx-lifecycle-livedata = { group = "androidx.lifecycle", name = "lifecycle-livedata", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycle" }
+# Room：数据侧的本地库，三张表见 docs/CONTRACTS.md §5。去重那条验收标准
+# （usage_call.id 唯一索引 + OnConflictStrategy.IGNORE）就是它，别换成手写 SQLite。
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+# room-testing：只为 MigrationTestHelper。它拿 app/schemas/ 里导出的建表语句
+# 建一个 v1 的库、灌几行、跑迁移、再拿 v2 的期望结构和实际结构逐列比对——
+# 迁移写错只有它能发现，unit test 跑不到（要真 SQLite）。
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+# MPAndroidChart：dashboard 的折线/柱状图，大纲 §8 的 "may supply charts"。
+# 只画图，不管热力图（那张自己画）。它只在 JitPack 上，settings.gradle.kts 里
+# 那个 jitpack 仓库和它是配套的，删一个另一个就解析不到。
+mpandroidchart = { group = "com.github.PhilJay", name = "MPAndroidChart", version.ref = "mpandroidchart" }
 # java.time 脱糖：minSdk 24 上也能用 LocalDate/Instant，见 app/build.gradle.kts 的说明
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+kotlinx-serialization-bom = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-bom", version.ref = "kotlinxSerialization" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

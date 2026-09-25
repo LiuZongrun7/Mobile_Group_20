@@ -115,9 +115,35 @@ public final class TimeUtils {
         return days;
     }
 
-    /** 月份的第一天和最后一天，给「本月至今」这类查询拼区间用。 */
+    /** 月份的第一天，给「本月至今」这类查询拼区间用。 */
     public static String firstDayOfMonth(String month) {
         return LocalDate.parse(month + "-01", DAY).withDayOfMonth(1).format(DAY);
+    }
+
+    /**
+     * 月份的最后一天。
+     *
+     * <p>为什么不能拿 {@link #yesterday()} 当上界：那只在查<b>当月</b>的时候凑巧对，
+     * 查 7 月的用量时上界会落到今天，把 8 月、9 月的数据一起算进 7 月。
+     * 这种错不会报错，只会让历史月份的数字偏大。
+     */
+    public static String lastDayOfMonth(String month) {
+        return LocalDate.parse(month + "-01", DAY).withDayOfMonth(
+                LocalDate.parse(month + "-01", DAY).lengthOfMonth()).format(DAY);
+    }
+
+    /**
+     * 某个区间和「今天之前」的交集上界，用来把查询截到已结束的天。
+     *
+     * <p>结算是按天推进的，今天还没过完，把今天算进去会让余额在一天之内一直变。
+     * 返回 null 表示这个区间整个都在未来，调用方应该当作空区间处理。
+     */
+    public static String clampToYesterday(String day) {
+        if (day == null) {
+            return null;
+        }
+        String yesterday = yesterday();
+        return day.compareTo(yesterday) > 0 ? yesterday : day;
     }
 
     /** 某个日期是不是格式合法的 {@code yyyy-MM-dd}。解析外部日志时用来挡脏数据。 */

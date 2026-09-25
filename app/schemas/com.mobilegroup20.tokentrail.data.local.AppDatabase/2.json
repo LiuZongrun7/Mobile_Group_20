@@ -1,0 +1,256 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "2892a3f0eb9b46e40455617a8dc06b37",
+    "entities": [
+      {
+        "tableName": "usage_call",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `uid` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `startedAtEpochMillis` INTEGER NOT NULL, `day` TEXT NOT NULL, `input` INTEGER NOT NULL, `cacheRead` INTEGER NOT NULL, `cacheWrite` INTEGER NOT NULL, `output` INTEGER NOT NULL, `costMicros` INTEGER, `costCurrency` TEXT, `nativeCostMicros` INTEGER, `source` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMillis",
+            "columnName": "startedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "day",
+            "columnName": "day",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "input",
+            "columnName": "input",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cacheRead",
+            "columnName": "cacheRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cacheWrite",
+            "columnName": "cacheWrite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "output",
+            "columnName": "output",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costMicros",
+            "columnName": "costMicros",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "costCurrency",
+            "columnName": "costCurrency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nativeCostMicros",
+            "columnName": "nativeCostMicros",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_usage_call_uid_day",
+            "unique": false,
+            "columnNames": [
+              "uid",
+              "day"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_usage_call_uid_day` ON `${TABLE_NAME}` (`uid`, `day`)"
+          }
+        ]
+      },
+      {
+        "tableName": "daily_usage",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uid` TEXT NOT NULL, `day` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `calls` INTEGER NOT NULL, `input` INTEGER NOT NULL, `cacheRead` INTEGER NOT NULL, `cacheWrite` INTEGER NOT NULL, `output` INTEGER NOT NULL, `costMicros` INTEGER NOT NULL, `rateVersion` TEXT, `settled` INTEGER NOT NULL, PRIMARY KEY(`uid`, `day`, `provider`, `model`))",
+        "fields": [
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "day",
+            "columnName": "day",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calls",
+            "columnName": "calls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "input",
+            "columnName": "input",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cacheRead",
+            "columnName": "cacheRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cacheWrite",
+            "columnName": "cacheWrite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "output",
+            "columnName": "output",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costMicros",
+            "columnName": "costMicros",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rateVersion",
+            "columnName": "rateVersion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "settled",
+            "columnName": "settled",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uid",
+            "day",
+            "provider",
+            "model"
+          ]
+        }
+      },
+      {
+        "tableName": "season_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uid` TEXT NOT NULL, `seasonId` TEXT, `lastSettledDay` TEXT, `balanceInput` INTEGER NOT NULL, `balanceCache` INTEGER NOT NULL, `balanceOutput` INTEGER NOT NULL, `updatedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`uid`))",
+        "fields": [
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonId",
+            "columnName": "seasonId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSettledDay",
+            "columnName": "lastSettledDay",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "balanceInput",
+            "columnName": "balanceInput",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balanceCache",
+            "columnName": "balanceCache",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balanceOutput",
+            "columnName": "balanceOutput",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMillis",
+            "columnName": "updatedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uid"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2892a3f0eb9b46e40455617a8dc06b37')"
+    ]
+  }
+}

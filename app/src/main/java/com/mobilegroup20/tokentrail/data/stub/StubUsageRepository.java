@@ -63,7 +63,12 @@ public class StubUsageRepository implements UsageRepository {
     public LiveData<TokenBundle> monthTokens(String uid, String month) {
         TokenBundle sum = new TokenBundle();
         String from = TimeUtils.firstDayOfMonth(month);
-        String to = TimeUtils.yesterday();
+        // 上界是「月底」和「昨天」里更早的那个。原来直接写 yesterday()，
+        // 查当月时凑巧对，查过去的月份就会把后面几个月的数据一起算进来。
+        String to = TimeUtils.clampToYesterday(TimeUtils.lastDayOfMonth(month));
+        if (to == null) {
+            return live(sum);
+        }
         for (String day : TimeUtils.daysBetween(from, to)) {
             for (DailyUsage d : sampleDay(uid, day)) {
                 sum.add(TokenBundle.from(d));

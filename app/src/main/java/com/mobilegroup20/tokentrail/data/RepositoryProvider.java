@@ -1,5 +1,12 @@
 package com.mobilegroup20.tokentrail.data;
 
+import android.content.Context;
+
+import androidx.room.Room;
+
+import com.mobilegroup20.tokentrail.data.local.AppDatabase;
+import com.mobilegroup20.tokentrail.data.local.BundledPricingSource;
+import com.mobilegroup20.tokentrail.data.local.RoomUsageRepository;
 import com.mobilegroup20.tokentrail.data.repository.AdviceRepository;
 import com.mobilegroup20.tokentrail.data.repository.BudgetRepository;
 import com.mobilegroup20.tokentrail.data.repository.ForumRepository;
@@ -36,14 +43,82 @@ public final class RepositoryProvider {
     private static ForumRepository forum;
     private static BudgetRepository budget;
 
+    /**
+     * 应用级的 Context，只用来建数据库。
+     *
+     * <p>传进来的必须是 Application 的，不能是 Activity 的——它存在静态字段里，
+     * 存 Activity 就是把一个会销毁的对象钉住不放。{@code TokenTrailApp} 负责传对的这个。
+     */
+    private static Context appContext;
+    private static AppDatabase database;
+    private static PricingSource pricing;
+
     private RepositoryProvider() {
+    }
+
+    /**
+     * 由 {@code TokenTrailApp.onCreate} 调用，全项目只调这一次。
+     *
+     * <p>重复调用是安全的（只留第一个），因为 Application 只会建一次，
+     * 而测试里可能会手动调。
+     */
+    public static synchronized void init(Context context) {
+        if (context == null) {
+            throw new IllegalArgumentException("init 需要一个 Context");
+        }
+        appContext = context.getApplicationContext();
+    }
+
+    /**
+     * 本地数据库，懒建。
+     *
+     * <p>没初始化就抛异常而不是返回 null：报错信息要说清楚<b>怎么办</b>，
+     * 而不是让调用方在远处收到一个空指针。
+     */
+    private static synchronized AppDatabase database() {
+        if (database == null) {
+            if (appContext == null) {
+                throw new IllegalStateException(
+                        "RepositoryProvider 还没初始化。正常情况下 TokenTrailApp.onCreate "
+                                + "会调 init()；如果你是从测试或别的地方进来，先调 "
+                                + "RepositoryProvider.init(context)。");
+            }
+            database = Room.databaseBuilder(appContext, AppDatabase.class, AppDatabase.NAME)
+                    // 每加一版表结构，这里就要多挂一个迁移。漏挂的后果是运行时抛
+                    // IllegalStateException（"A migration from 1 to 2 was required but
+                    // not found"），装过旧版的设备直接打不开——比静默改坏数据好，
+                    // 但不如在装机前就发现。
+                    .addMigrations(AppDatabase.MIGRATION_1_2)
+                    // 不加 fallbackToDestructiveMigration：那会在版本号对不上时
+                    // 静默删掉全部原始记录，而那张表是「删了就没了」的唯一事实来源。
+                    // 改了表结构就老老实实写迁移，见 docs/CONTRACTS.md §5。
+                    .build();
+        }
+        return database;
+    }
+
+    /**
+     * 打包的价目表。
+     *
+     * <p><b>现在这张表是空的</b>，也就是说凡是查不到价的模型，成本会留成
+     * 「不可计算」而不是 0。要让它有数，得照
+     * {@code BundledPricingSource} 类注释里的格式，从各家官网定价页
+     * 把单价和链接一起抄进来——别猜数字。
+     */
+    private static synchronized PricingSource pricing() {
+        if (pricing == null) {
+            pricing = new BundledPricingSource();
+        }
+        return pricing;
     }
 
     /** 用量数据。桩 → {@code com.mobilegroup20.tokentrail.data.local.RoomUsageRepository}。 */
     public static synchronized UsageRepository usage() {
         if (usage == null) {
-            usage = USE_STUBS ? new StubUsageRepository() : null;
-            requireReady(usage, "UsageRepository（数据侧，张莉）");
+            usage = USE_STUBS
+                    ? new StubUsageRepository()
+                    : new RoomUsageRepository(database(), pricing());
+            requireReady(usage, "UsageRepository（数据侧）");
         }
         return usage;
     }
