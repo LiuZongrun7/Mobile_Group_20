@@ -271,7 +271,7 @@ items = [
     ('2', 'Discussion of similar / related apps', 'Codex, ZCode, dsh-context, LiteLLM and dsh-pet', 'Slide 5'),
     ('3', 'Related apps: features and components', 'What each one covers, and the gap it leaves open', 'Slide 6'),
     ('4', 'Open-source code available to reuse', 'Libraries, samples and licences we will record', 'Slide 7'),
-    ('5', 'Proposed features and uniqueness', 'Game, analytics, forum and the in-game advice agent', 'Slides 8-13'),
+    ('5', 'Proposed features and uniqueness', 'Analytics, game, forum and the advice agent on the home screen', 'Slides 8-13'),
     ('6', 'Approach and work plan to week 15', 'Alpha, Beta and Final checkpoints with acceptance tests', 'Slides 14-15'),
 ]
 table(s, MARGIN, 1.62, [3.55, 6.45, 1.893],
@@ -283,16 +283,17 @@ para(tf, True, 'The written outline covers the same six points in the same order
      size=10.5, color=MUTE, after=0)
 
 # ============================================================ 3. app idea
-s = slide('1 · App idea', 'An API-cost companion that makes agent spend visible')
+s = slide('1 · App idea', 'An API-cost analytics app that makes agent spend visible')
 tf = tb(s, MARGIN, 1.62, CW, 0.75)
 para(tf, True, [('TokenTrail is an Android app for people who pay for coding agents with an API key. '
-                 'It prices the usage those agents already logged, turns that usage into a monthly '
-                 'tower-defence season, and answers cost questions with evidence.', False, INK)],
+                 'It opens on a statistics home screen that prices the usage those agents already logged '
+                 'and answers cost questions with evidence, and it turns that usage into a monthly '
+                 'tower-defence season.', False, INK)],
      size=14, after=0, line=1.2)
 parts = [
-    ('Monthly tower-defence game', 'The home screen. Tokens you have already spent become building resources in a season that resets each month.', LIGHTBLUE, NAVY),
-    ('API-cost analytics', 'Prices logged calls from Codex, ZCode and a DeepSeek-side tool using dated official rates, and compares agents.', LIGHTTEAL, TEAL),
-    ('Community forum', 'Official model and pricing posts plus user tips; the hot posts feed the in-game advice agent.', LIGHTAMBER, AMBER),
+    ('API-cost analytics (home)', 'Prices logged calls from Codex, ZCode and a DeepSeek-side tool using dated official rates, and compares agents.', LIGHTTEAL, TEAL),
+    ('Monthly tower-defence game', 'A supporting tab. Tokens you have already spent become building resources in a season that resets each month.', LIGHTBLUE, NAVY),
+    ('Community forum', 'Official model and pricing posts plus user tips; the hot posts feed the advice agent.', LIGHTAMBER, AMBER),
 ]
 cw, gap = (CW - 2 * 0.26) / 3, 0.26
 for i, (head, body, fill, hc) in enumerate(parts):
@@ -302,7 +303,7 @@ agent = shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 4.22, CW, 0.86, fill=NAVY,
 tfa = agent.text_frame
 tfa.margin_left = tfa.margin_right = Inches(0.22)
 tfa.vertical_anchor = MSO_ANCHOR.MIDDLE
-para(tfa, True, [('And an advice agent inside the game.  ', True, WHITE),
+para(tfa, True, [('And an advice agent on that home screen.  ', True, WHITE),
                  ('It reads your logged usage and recent forum posts, then answers questions with '
                   'the evidence behind them. TokenTrail never runs, routes or controls the coding agents.',
                   False, 'D6E4EB')], size=13, after=0, line=1.15)
@@ -344,7 +345,7 @@ feet = ['One of the three providers we track.',
         'Tracked through its general API endpoint.',
         'Its dashboard is our model for the analytics screen.',
         'Teaches the vocabulary of spend tracking and budgets.',
-        'Its entry point inspires our in-game agent panel.']
+        'Its entry point inspires our advice agent panel on the home screen.']
 gap = 0.16
 cw = (CW - 4 * gap) / 5
 for i, (tag, name, body) in enumerate(apps):
@@ -397,7 +398,7 @@ s = slide('4 · Open source and tools', 'What we reuse, and what we build oursel
 table(s, MARGIN, 1.62, [2.45, 9.443],
       [['Layer', 'Planned tools and rationale'],
        ['Android interface',
-        'Java/XML, Material Components and Navigation; ViewModel/LiveData for state; RecyclerView and MPAndroidChart for trends; a tower-defence game surface and the in-game agent panel.'],
+        'Java/XML, Material Components and Navigation; ViewModel/LiveData for state; RecyclerView and MPAndroidChart for trends; a tower-defence game surface and the advice agent panel on the home screen.'],
        ['Network and work',
         'Retrofit/OkHttp for log import and a Java advice service. The service runs one model API and a bounded function-call loop over read-only usage, budget and comparison tools. WorkManager schedules price checks.'],
        ['Persistence and security',
@@ -436,8 +437,9 @@ tf = s.shapes[-1].text_frame
 tf.margin_left = tf.margin_right = Inches(0.20)
 tf.vertical_anchor = MSO_ANCHOR.MIDDLE
 para(tf, True, [('Scope rule:  ', True, AMBER),
-                ('three core parts — the monthly tower-defence game, the API-cost analytics view and the community '
-                 'forum. The advice agent can recommend but cannot execute coding agents or enforce a hard cap.', False, INK)],
+                ('statistics are the app\'s main purpose. Three core parts — the API-cost analytics home screen, '
+                 'the monthly tower-defence game and the community forum. The advice agent can recommend but '
+                 'cannot execute coding agents or enforce a hard cap.', False, INK)],
      size=11.5, after=0, line=1.12)
 
 # ===================================================== 9. game (new feature)
@@ -446,7 +448,7 @@ s.shapes.add_picture(os.path.join(BASE, 'fig_game.png'), Inches(MARGIN), Inches(
 l = 3.62
 tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
 bullets = [
-    ('The home screen is the game.', 'It is played in monthly seasons that match the billing cycle AI subscriptions already follow.'),
+    ('It has its own tab.', 'Reached from the bottom bar. It is played in monthly seasons that match the billing cycle AI subscriptions already follow.'),
     ('Tokens become resources.', 'Tokens already spent convert into building resources at a fixed rate per million tokens.'),
     ('You plan the space yourself.', 'Defences and wall segments are placed and upgraded by hand on a build grid around the data-centre core, which expands in one direction.'),
     ('Enemies arrive from one side.', 'A wave enters from a single edge, so where each tower stands and whether the walls close decide how the wave goes.'),
@@ -467,7 +469,7 @@ s = slide('5 · New feature B', 'An advice agent that answers from evidence, not
 s.shapes.add_picture(os.path.join(BASE, 'fig_agent.png'), Inches(MARGIN), Inches(1.62), height=Inches(5.05))
 tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
 bullets = [
-    ('It lives inside the game.', 'An expandable question panel, one tap from the home screen. It reads two sources: your logged usage and recent forum posts.'),
+    ('It lives on the home screen.', 'An expandable question panel on the analytics dashboard, where the figures it reasons about already are. It reads two sources: your logged usage and recent forum posts.'),
     ('A Java service does the work.', 'It calls one selected external GPT, GLM or DeepSeek model, which may request read-only tools through function calling. Java executes and validates every call.'),
     ('Four read-only tools.', 'getUsageSummary · getBudgetStatus · compareAgentCosts · getForumHighlights.'),
     ('It admits what it does not know.', 'Replies state evidence and missing data; no logs means no cost-based answer. Its own tokens are tracked separately from coding-agent usage.'),
@@ -483,13 +485,13 @@ para(tf, False, [('Boundary.  ', True, TEAL),
                   'hard spending cap.', False, INK)], size=12, after=0, before=6, line=1.16)
 
 # ============================================================ 11. data flow
-s = slide('5 · How it is implemented', 'One path from logs to game, and the four data aspects')
+s = slide('5 · How it is implemented', 'One path from logs to the app, and the four data aspects')
 s.shapes.add_picture(os.path.join(BASE, 'fig_flow.png'), Inches((PAGE_W - 9.9) / 2), Inches(1.70), width=Inches(9.9))
 aspects = [
     ('Data input', 'Agent profile and key label, authorised usage logs, user questions, forum posts.', NAVY, LIGHTBLUE),
     ('Data processing', 'Java prices dated usage, compares agents by cost and converts spent tokens into resources.', TEAL, LIGHTTEAL),
     ('Data storage', 'Firebase Auth; UID-restricted Firestore; Room for usage, price versions, game state and advice history.', NAVY, LIGHTBLUE),
-    ('Data output', 'The game, cards, heatmap, sessions, budget alerts and the forum, with explicit unavailable states.', AMBER, LIGHTAMBER),
+    ('Data output', 'Cost cards, heatmap, sessions, budget alerts and the advice agent, plus the game and forum, with explicit unavailable states.', AMBER, LIGHTAMBER),
 ]
 cw, gap = (CW - 3 * 0.20) / 4, 0.20
 for i, (head, body, hc, fill) in enumerate(aspects):
@@ -506,12 +508,13 @@ para(tf, True, 'The same four aspects (input, processing, storage, output) run t
      size=10.5, color=MUTE, after=0)
 
 # ============================================================ 12. proposed UI
-s = slide('5 · Proposed interface', 'Three screens, with the game as the entry point')
+s = slide('5 · Proposed interface', 'Three screens, opening on the analytics dashboard')
 s.shapes.add_picture(os.path.join(BASE, 'fig_ui.png'), Inches((PAGE_W - 11.1) / 2), Inches(1.52), width=Inches(11.1))
 tf = tb(s, MARGIN, 6.26, CW, 0.4)
-para(tf, True, 'The app opens into the game; a bottom bar reaches the forum and the dashboard (Activity, Sessions, '
-               'Compare, Budget). Inspired by dsh-context and dsh-pet. Log-dependent sections show an empty state '
-               'when records are unavailable.', size=10.5, color=MUTE, after=0)
+para(tf, True, 'The app opens on the dashboard — the statistics home screen with Activity, Sessions, Compare and '
+               'Budget, and the advice agent entered from it. A bottom bar reaches the game and the forum. Inspired '
+               'by dsh-context and dsh-pet. Log-dependent sections show an empty state when records are unavailable.',
+     size=10.5, color=MUTE, after=0)
 
 # ============================================= 13. functional requirements
 s = slide('5 · Proposed features', 'Functional requirements mapped to what already exists')
@@ -526,11 +529,11 @@ table(s, MARGIN, 1.60, [0.45, 2.30, 7.55, 1.593],
        ['4', 'Provider billing consoles',
         'One cross-provider monthly budget with threshold alerts and a per-session breakdown', 'Improvement'],
        ['5', 'Community forums',
-        'Official model and pricing posts plus user tips, ranked for the in-game agent', 'Improvement'],
+        'Official model and pricing posts plus user tips, ranked for the advice agent', 'Improvement'],
        ['6', 'Interactive pet with feeding (dsh-pet)',
         'Monthly tower-defence season in which tokens already spent convert into build resources, with one-direction base growth and a wave the user starts', 'New feature'],
        ['7', 'General chat assistants',
-        'In-game advice agent with function calling over read-only tools, reading usage records and hot forum posts', 'New feature']],
+        'Advice agent on the home screen with function calling over read-only tools, reading usage records and hot forum posts', 'New feature']],
       row_h=0.62, head_h=0.48, size=10.5)
 
 # =============================================================== 14. plan
@@ -539,11 +542,11 @@ table(s, MARGIN, 1.60, [1.42, 6.55, 3.923],
       [['Course weeks', 'Work', 'Checkpoint / acceptance'],
        ['1-3', 'Confirm API-key agent use cases and UI; set up Firebase Auth and Firestore rules; document usage-log access and pricing dimensions.',
         'Neither test account sees the other\'s records; token-source limits documented.'],
-       ['4-7', 'Implement agent profiles, usage-log import, Room/Firestore records, versioned pricing, CNY display and the dashboard.',
+       ['4-7', 'Implement agent profiles, usage-log import, Room/Firestore records, versioned pricing, CNY display and the analytics home screen.',
         'Each provider\'s sample calls are priced at the correct dated rate and de-duplicated.'],
        ['8-9 · Alpha', 'Deliver a working login → add agent → import log → estimated cost → analytics path; separate real logs from sample data.',
         'Source, description, GitHub link and MP4 per submission guidance.'],
-       ['10-12 · Beta', 'Add budgets and sessions; build the tower-defence loop (season, token-to-resource conversion, user-started waves) and the agent panel; connect one model to three read-only tools.',
+       ['10-12 · Beta', 'Add budgets and sessions; build the tower-defence loop (season, token-to-resource conversion, user-started waves); add the agent panel to the home screen and connect one model to three read-only tools.',
         'The agent answers a usage question with evidence and admits missing data; a wave starts and resolves without blocking the UI.'],
        ['13-15 · Final', 'Evaluate advice accuracy and API cost, balance the season, improve accessibility, verify account isolation and document estimation limits.',
         'End-to-end demo, report and video; no agent answer invents usage or controls coding agents.']],
@@ -565,8 +568,9 @@ for i, (head, body, fill, hc) in enumerate(team):
          fill=fill, head_color=hc, size=11, head_size=12.5, pad=0.15)
 card(s, MARGIN, 3.36, CW, 1.32, head='Demo path',
      body='Account isolation → tracked Codex, ZCode and DeepSeek-side profiles → three provider estimates from dated '
-          'token logs → a season in which those tokens became build resources → heatmap and budget warning → an agent '
-          'question such as "Why did cost rise?", answered with a queried summary, evidence and its own estimated API cost.',
+          'token logs → heatmap and budget warning → an agent question asked from that screen, such as "Why did cost '
+          'rise?", answered with a queried summary, evidence and its own estimated API cost → a season in which those '
+          'tokens became build resources.',
      fill=LIGHTROW, size=11.5, head_size=12.5)
 card(s, MARGIN, 4.82, CW, 1.32, head='Validation',
      body='Tests cover token accounting, price-version boundaries, missing usage, de-duplication and read-only tool '

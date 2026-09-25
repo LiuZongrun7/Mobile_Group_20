@@ -18,7 +18,7 @@
 \node[flow,draw=navy,fill=lightblue] (input) at (1.725,0) {\textbf{1  Input}\\Logs + questions};
 \node[flow,draw=teal,fill=lightteal] (process) at (5.725,0) {\textbf{2  Process}\\Price + compare};
 \node[flow,draw=navy,fill=lightblue] (storage) at (9.725,0) {\textbf{3  Store}\\Room + Firestore};
-\node[flow,draw=amber,fill=lightamber] (action) at (13.725,0) {\textbf{4  Output}\\Game + charts + forum};
+\node[flow,draw=amber,fill=lightamber] (action) at (13.725,0) {\textbf{4  Output}\\Stats + game + forum};
 \foreach \a/\b in {input/process,process/storage,storage/action}{\draw[-{Stealth[length=2.5mm]},line width=.9pt,draw=navy] (\a.east) -- (\b.west);}
 \end{tikzpicture}
 \end{document}

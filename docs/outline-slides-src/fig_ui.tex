@@ -16,31 +16,33 @@
 \pagestyle{empty}
 \begin{document}
 \noindent\begin{tikzpicture}[scale=1.1,transform shape,font=\scriptsize,every node/.style={text=black}]
-\foreach \x/\title/\border/\filltone in {0/Game/navy/lightblue,4.7/Dashboard/teal/lightteal,9.4/Forum/amber/lightamber}{
+\foreach \x/\title/\border/\filltone in {0/Dashboard/teal/lightteal,4.7/Game/navy/lightblue,9.4/Forum/amber/lightamber}{
   \draw[draw=\border,line width=1pt,rounded corners=5pt] (\x,0) rectangle (\x+4.25,5.6);
   \fill[\filltone,rounded corners=4pt] (\x+.025,4.91) rectangle (\x+4.225,5.575);
   \node[anchor=west,font=\small\bfseries] at (\x+.28,5.23) {\title};
 }
-\node[anchor=west,font=\scriptsize\bfseries] at (.3,4.49) {Season 3 · September};
-\node[anchor=west,font=\Large\bfseries] at (.3,3.92) {1.2M tokens};
-\fill[lightblue,rounded corners=2pt] (.3,3.42) rectangle (3.95,3.61);
-\fill[navy,rounded corners=2pt] (.3,3.42) rectangle (2.81,3.61);
-\node[anchor=west] at (.3,3.14) {120 resources · 100/1M tokens};
-\draw[hairline,line width=.5pt] (.3,2.82) -- (3.95,2.82);
-\node[anchor=west,font=\scriptsize\bfseries] at (.3,2.44) {4 towers · walls};
-\node[anchor=west] at (.3,2.04) {Start next wave};
-\node[anchor=west,font=\scriptsize\bfseries] at (.3,1.20) {Tap agent to ask};
-\node[anchor=west] at (.3,.84) {Evidence in panel};
-\fill[lightblue] (3.44,1.02) circle (.40);
-\draw[draw=navy,line width=.8pt] (3.44,1.02) circle (.40);
-\node[font=\scriptsize\bfseries] at (3.44,1.02) {AI};
-\node[anchor=west,font=\scriptsize\bfseries] at (5.0,4.49) {Daily activity · Logs};
-\foreach \col in {0,...,6}{\foreach \row in {0,...,3}{\fill[lightrow,rounded corners=1pt] ({5.15+0.48*\col},{2.75+0.35*\row}) rectangle ({5.51+0.48*\col},{3.05+0.35*\row});}}
-\foreach \col/\row/\tone in {1/0/lightteal,2/1/lightblue,4/0/teal,5/2/navy,6/1/lightteal,6/3/teal,3/2/lightblue}{\fill[\tone,rounded corners=1pt] ({5.15+0.48*\col},{2.75+0.35*\row}) rectangle ({5.51+0.48*\col},{3.05+0.35*\row});}
-\fill[lightteal,rounded corners=3pt] (5.0,1.1) rectangle (8.65,2.39);
-\node[anchor=west,font=\scriptsize\bfseries] at (5.18,2.05) {2.7k tool calls · 6h19m};
-\node[anchor=west] at (5.18,1.68) {866.9k logged tokens};
-\node[anchor=west] at (5.0,.67) {Filter: date / agent};
+\node[anchor=west,font=\scriptsize\bfseries] at (.3,4.49) {Daily activity · Logs};
+\foreach \col in {0,...,6}{\foreach \row in {0,...,3}{\fill[lightrow,rounded corners=1pt] ({.45+0.48*\col},{2.95+0.35*\row}) rectangle ({.81+0.48*\col},{3.25+0.35*\row});}}
+\foreach \col/\row/\tone in {1/0/lightteal,2/1/lightblue,4/0/teal,5/2/navy,6/1/lightteal,6/3/teal,3/2/lightblue}{\fill[\tone,rounded corners=1pt] ({.45+0.48*\col},{2.95+0.35*\row}) rectangle ({.81+0.48*\col},{3.25+0.35*\row});}
+\fill[lightteal,rounded corners=3pt] (.3,1.62) rectangle (3.95,2.62);
+\node[anchor=west,font=\scriptsize\bfseries] at (.48,2.34) {2.7k tool calls · 6h19m};
+\node[anchor=west] at (.48,1.97) {866.9k logged tokens};
+\node[anchor=west] at (.3,1.32) {Filter: date / agent};
+\node[anchor=west,font=\scriptsize\bfseries] at (.3,.95) {Tap agent to ask};
+\node[anchor=west] at (.3,.60) {Cites logs and posts};
+\fill[lightblue] (3.44,.78) circle (.38);
+\draw[draw=navy,line width=.8pt] (3.44,.78) circle (.38);
+\node[font=\scriptsize\bfseries] at (3.44,.78) {AI};
+\node[anchor=west,font=\scriptsize\bfseries] at (5.0,4.49) {Season 3 · September};
+\node[anchor=west,font=\Large\bfseries] at (5.0,3.92) {1.2M tokens};
+\fill[lightblue,rounded corners=2pt] (5.0,3.42) rectangle (8.65,3.61);
+\fill[navy,rounded corners=2pt] (5.0,3.42) rectangle (7.51,3.61);
+\node[anchor=west] at (5.0,3.14) {120 resources · 100/1M tokens};
+\draw[hairline,line width=.5pt] (5.0,2.82) -- (8.65,2.82);
+\node[anchor=west,font=\scriptsize\bfseries] at (5.0,2.44) {4 towers · walls};
+\node[anchor=west] at (5.0,2.04) {Start next wave};
+\node[anchor=west] at (5.0,1.24) {Core 600 / 600 · 0 leaked};
+\node[anchor=west] at (5.0,.88) {Waves run in real time};
 \node[anchor=west,font=\scriptsize\bfseries] at (9.7,4.49) {Official + community};
 \draw[draw=hairline,fill=lightrow,rounded corners=3pt] (9.7,2.73) rectangle (13.34,4.16);
 \node[anchor=west,font=\scriptsize\bfseries] at (9.85,3.92) {New model release};

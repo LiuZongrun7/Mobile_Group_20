@@ -61,11 +61,12 @@
 \node[anchor=west,font=\scriptsize,text=mute] at (.60,1.96) {Ask about your usage…};
 \fill[navy] (5.42,1.96) circle (.28);
 \fill[white] (5.34,1.88) -- (5.56,1.96) -- (5.34,2.04) -- cycle;
-% bottom navigation
+% bottom navigation — the agent is entered from the dashboard, which is the
+% landing tab, so the highlight sits there and not under Game.
 \draw[hairline,line width=.6pt] (.30,1.30) -- (5.90,1.30);
-\node[font=\bfseries,text=navy] at (1.03,.72) {Game};
-\node[font=\scriptsize,text=mute] at (3.10,.72) {Dashboard};
+\node[font=\scriptsize,text=mute] at (1.03,.72) {Game};
+\node[font=\bfseries,text=navy] at (3.10,.72) {Dashboard};
 \node[font=\scriptsize,text=mute] at (5.17,.72) {Forum};
-\fill[navy,rounded corners=1pt] (.72,.30) rectangle (1.34,.38);
+\fill[navy,rounded corners=1pt] (2.79,.30) rectangle (3.41,.38);
 \end{tikzpicture}
 \end{document}

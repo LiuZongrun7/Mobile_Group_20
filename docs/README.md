@@ -7,6 +7,9 @@
 | --- | --- | --- |
 | [`CONTRACTS.md`](CONTRACTS.md) | 接口契约：命名口径、时间口径、存储、结算规则、三种资源、TBD 清单 | **动手前先看一遍**，改字段前再查一次 |
 | [`TASKS.md`](TASKS.md) | 三个人的待办、验收标准、依赖谁 | 认领任务、判断「做完了没」 |
+| [`ART.md`](ART.md) | 游戏贴图的规格：视角、光源、尺寸、命名、抠图流程、来源留痕 | **动手画图之前先看** |
+| [`OPEN_SOURCE.md`](OPEN_SOURCE.md) | 第三方库的清单：许可证、出处、谁在用、怎么加新库 | **加依赖之前先看**，写报告的开源节时照抄 |
+| [`DATA_SOURCES.md`](DATA_SOURCES.md) | 用量从哪来：三家 provider 各自要用户填什么、我们能拉到什么、官方还是私有接口 | **写 fetcher / 做填凭据界面之前先看** |
 | 本文 | 架构、依赖方向、桩数据开关、怎么构建 | 刚接手时 |
 
 交给老师的成品也在这里（英文，**不返工**）：
@@ -54,11 +57,14 @@ app/src/main/java/com/mobilegroup20/tokentrail/
 │   ├── importer/      张莉：日志解析
 │   └── RepositoryProvider.java   ★ 全项目拿 Repository 的唯一入口
 ├── game/
-│   ├── engine/        刘宗润：塔防逻辑。不 import 任何 android.*，能脱离手机跑单元测试
-│   └── view/          刘宗润：把 engine 画到屏幕上
+│   ├── engine/        刘宗润：塔防逻辑与相机。不 import 任何 android.*，能脱离手机跑单元测试。
+│   │                  `Cost` 是全项目唯一的"一笔开销"（货架价和升级价共用），
+│   │                  `BuildingStats` 管每级的数值，`ShopCatalog` 只管货架价
+│   └── view/          刘宗润：把 engine 画到屏幕上（战场 + 整页的岩石底）
 ├── agent/             刘宗润：建议服务的客户端与工具分发
 ├── ui/                game / dashboard / forum / auth / common —— 三人共担
-└── util/TimeUtils.java  时区与「天」的换算，唯一出处
+└── util/                TimeUtils：时区与「天」的换算，唯一出处
+                         TokenFormat：token 怎么写短、以及"屏幕上的数字要能相加"
 ```
 
 每个包都有一份 `package-info.java`，写着**这个包归谁、里面该放什么**。
@@ -129,7 +135,7 @@ public static final boolean USE_STUBS = true;
 
 ```bash
 ./gradlew assembleDebug            # 编译，出 APK
-./gradlew testDebugUnitTest        # 跑单元测试（现在 21 个，全过）
+./gradlew testDebugUnitTest        # 跑单元测试（现在 191 个，全过）
 ./gradlew connectedDebugAndroidTest # 需要连真机/模拟器，目前只有模板测试
 ```
 
@@ -146,11 +152,18 @@ public static final boolean USE_STUBS = true;
 
 | 部分 | 状态 |
 | --- | --- |
-| 接口契约（`contract/`） | **完成**，字段定稿，21 个单元测试盯着 |
+| 接口契约（`contract/`） | **完成**，字段定稿，12 个单元测试盯着计价和结算口径 |
+| 战场几何与相机（`game/engine/`） | **完成**：`BoardGeometry` 算格子和像素的换算、占地判定（24 个测试），`Viewport` 管缩放拖动和取景（23 个测试），`Battlefield` 管占位、地形分区（通道/可放置/山区）、挪动（核心和任意建筑）和整场战斗（推进、开火、挡路、清场、胜负判定） |
+| 战斗（`game/engine/Battlefield` + `PathField` + `Waves` + `EnemyType`） | **能在真机上跑**：五波敌人、三种兵、塔打子弹（`Projectile`：每发多少 + 几秒一发，追着目标飞）、敌人自己找路、敌人啃建筑、核心被打掉就结束、漏怪计数、结果卡片。挑目标：塔打**最靠前**的那只（按寻路表算，不按 x），敌人去**最近的建筑**、咬**挨着最近**的那座——**塔和核心优先级相同**，核心不是天然终点。**墙是唯一的例外**：寻路表上只有墙贵（贵过任何绕路），所以敌人绕着墙走、只有封死了才拆；塔和核心是表上的目标、不参与价钱。真机验过：发波、行走、被墙挡住、墙被拆掉、子弹在飞（真机连拍 12 帧抓到 3 帧）、血条、`Core 600/600 · N leaked`。**还没做的**：敌人之间不互相挡（汇到缺口会叠成一坨）、没有音效、**演示场面的配平**（敌人现在会主动拆塔，20 个种子里 0 个守得住、六座塔全被打光，见 [`TASKS.md`](TASKS.md) 那节） |
+| 战场纯色块预览（`game/view/`） | **能在真机上跑**：40×18 的战场，三区地形分色、摆放、挪核心、缩放、横向拖动、发波、战斗（子弹画成白点）、建筑详情都通了；贴图待画（换真贴图只动 `drawBlock` / `drawEnemy` / `drawProjectiles` 三处） |
+| 商店与资源（`game/engine/ShopCatalog`） | **能在真机上跑**：箭塔 / 城墙 / 核心三件货，塔吃 CACHE + OUTPUT、墙吃 INPUT、核心免费（只挪）；买不起的落子会拦下并提示。**钱包是月度快照的临时值**，真余额等 `SeasonRepository` |
+| 建筑详情与升级（`game/engine/BuildingStats`） | **能在真机上跑**：点建筑只看不放，弹出等级 / 占地 / **耐久** / 攻击范围 / 升级价 / **Move**；**三种建筑都能升到 3 级**——塔升火力（范围 2.5 → 3.0 → 3.5 格），墙和核心升耐久（墙 150/220/320、核心 600/900/1300），升完按新等级回满；任意建筑都能**免费挪**（等级和已花的钱都带得走）。范围圈和真实判定是同一个数（判定另加敌人半个身位） |
+| 整页分层（`activity_main.xml`） | **三层**：第 0 层 `MountainBackgroundView` 岩石底、第 0.5 层 `BattlefieldView` 世界层，**两个都铺满全屏**，第 1 层界面浮在最上面（HUD/按钮/底部导航用 glass 半透明）。两层**共用同一个相机**，拖动/缩放时地上的石头和格子一起动。界面层**只加东西、不加底**：中间那个 `@id/play_area` 是空占位，只负责回答"战场是哪一块、在哪儿"（格子大小由它算）。世界层铺满是必须的——2× 时那片地（2898px）比屏幕（2844px）还高，只给中间一条的话会被裁掉，放多大都出不了框。游戏页是**固定美术、不跟随系统深浅色**，所以没有 `values-night/`。规格见 `ART.md` §5 |
+| 底部导航与落地页（`menu/bottom_nav.xml` + `MainActivity.showTab`） | **骨架通了**：统计 / 游戏 / 论坛 / 我的。**打开 App 落在"统计"**——落地页就是菜单里的第一项，没有第二个开关，换顺序就是换主页。**只有"游戏"是真的**，另外三页共用一个空壳（`@id/empty_page`），上面写一句 `Xxx is not built yet`（一片空白分不清"还没做"和"崩了"）。切页时世界层一起 `INVISIBLE`（它铺满全屏，不藏会从空壳下面透出来），**顺带把战斗冻住了**——推进挂在 `onDraw` 上，看不见就不出帧，回来也不补帧。四个坑见 [`TASKS.md`](TASKS.md) |
 | 桩数据（`data/stub/`） | **完成**，可以照着做界面和玩法 |
-| 界面骨架（`ui/`） | 只有模板 `MainActivity`（在根包，不在 `ui/` 下），`ui/` 里目前只有 `package-info.java`，等三人分头填 |
-| 数据侧真实现（张莉） | 未开始，接口已定 |
+| 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行），但 `ui/` 里还只有 `package-info.java`，等三人分头填 |
+| 数据侧真实现 | **进行中**。`data/local` 已经落地：三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，11 个测试）+ `RoomUsageRepository`，Room 的建表语句导出在 `app/schemas/`。**还没有**：`data/remote` 的 fetcher、`data/importer` 的解析器、`BudgetRepository`（见 `TASKS.md` 的待办）。**价目表是空的**——见 `DATA_SOURCES.md`/`BundledPricingSource`，没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
 | 论坛真实现（汪庭栋） | 未开始，接口已定 |
-| 游戏与 agent（刘宗润） | engine / agent 逻辑未开始，接口已定 |
+| 游戏与 agent（刘宗润） | 战场几何已定；波次、放塔、塔的数值、agent 逻辑未开始 |
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。
