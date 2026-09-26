@@ -15,7 +15,7 @@ import com.mobilegroup20.tokentrail.contract.tool.UsageSummary;
 /**
  * 用量数据的读写口。<b>数据侧（张莉）实现，游戏和 agent 只依赖这个接口。</b>
  *
- * <p>接口里没有一个方法提到 Room、Firestore 或 Retrofit。实现者用哪种存储、
+ * <p>接口里没有一个方法提到 Room、服务端存储或 Retrofit。实现者用哪种存储、
  * 几张表、怎么建索引，都是接口背后的事；换成别的存储，这个文件一行不用改。
  *
  * <p>所有方法都带 {@code uid} 参数而不是从全局拿：账号隔离是每个查询的性质，

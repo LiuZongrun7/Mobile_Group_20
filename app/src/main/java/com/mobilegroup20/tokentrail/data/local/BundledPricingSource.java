@@ -30,7 +30,7 @@ import com.mobilegroup20.tokentrail.data.PricingSource;
  *           "https://api-docs.deepseek.com/quick_start/pricing"));
  * </pre>
  *
- * <p>长期这份表应该从 Firestore 的 {@code pricing/rates/...} 拉（见
+ * <p>长期这份表应该从服务端的 {@code pricing/rates/...} 拉（见
  * {@code CONTRACTS.md} §5），这里的用途是首启和离线时的兜底。
  * 换实现只动 {@code RepositoryProvider} 里接哪一个，滚汇总的代码不用改。
  */

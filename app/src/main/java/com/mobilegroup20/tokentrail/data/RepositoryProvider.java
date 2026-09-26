@@ -123,7 +123,7 @@ public final class RepositoryProvider {
         return usage;
     }
 
-    /** 论坛数据。桩 → {@code com.mobilegroup20.tokentrail.data.remote.FirestoreForumRepository}。 */
+    /** 论坛数据。桩 → {@code com.mobilegroup20.tokentrail.data.remote.HttpForumRepository}。 */
     public static synchronized ForumRepository forum() {
         if (forum == null) {
             forum = USE_STUBS ? new StubForumRepository() : null;
@@ -157,7 +157,7 @@ public final class RepositoryProvider {
     public static AdviceRepository advice() {
         throw new UnsupportedOperationException(
                 "AdviceRepository 还没实现。实现类放在 com.mobilegroup20.tokentrail.data.remote，"
-                        + "负责取 Firebase ID token 并请求 Java 建议服务。");
+                        + "负责取会话 token 并请求 Java 建议服务。");
     }
 
     /** 测试要换实现时，用它把缓存清掉。 */

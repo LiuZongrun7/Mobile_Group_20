@@ -3,7 +3,7 @@ package com.mobilegroup20.tokentrail.contract.model;
 /**
  * 客户端问建议 agent 的一句话。
  *
- * <p>请求里<b>不带 uid</b>：uid 由服务端从 Firebase ID token 里解出来。
+ * <p>请求里<b>不带 uid</b>：uid 由服务端从会话 token 里解出来。
  * 让客户端传 uid 等于把「查谁的数据」交给客户端决定，那样账号隔离就是摆设。
  * 服务端收到请求先验 token，验过了才拿 token 里的 uid 去查库。
  */

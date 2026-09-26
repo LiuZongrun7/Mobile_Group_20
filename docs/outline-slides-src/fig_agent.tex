@@ -2,6 +2,7 @@
 \usepackage[paperwidth=7.6cm,paperheight=12.8cm,margin=0pt]{geometry}
 \usepackage{fontspec,tikz}
 \usepackage[table]{xcolor}
+\usetikzlibrary{arrows.meta}
 \IfFontExistsTF{Helvetica Neue}
   {\setmainfont{Helvetica Neue}\setsansfont{Helvetica Neue}}
   {\IfFontExistsTF{Arial}{\setmainfont{Arial}\setsansfont{Arial}}{}}
@@ -22,51 +23,60 @@
 % panel header
 \fill[lightblue,rounded corners=2pt] (.10,10.15) rectangle (6.10,11.30);
 \node[anchor=west,font=\bfseries,text=navy] at (.35,10.78) {Advice agent};
-\node[anchor=west,font=\scriptsize,text=mute] at (.35,10.38) {Reads your usage + hot forum posts};
+\node[anchor=west,font=\scriptsize,text=mute] at (.35,10.38) {Ask AI / hold to talk};
 \draw[draw=navy,line width=.9pt] (5.62,10.66) -- (5.84,10.88);
 \draw[draw=navy,line width=.9pt] (5.62,10.88) -- (5.84,10.66);
 % user question (right)
-\fill[navy,rounded corners=4pt] (2.20,9.00) rectangle (5.85,9.82);
-\node[anchor=west,font=\scriptsize,text=white] at (2.44,9.55) {Where did my spend};
-\node[anchor=west,font=\scriptsize,text=white] at (2.44,9.20) {go this week?};
+\fill[navy,rounded corners=4pt] (2.20,9.05) rectangle (5.85,9.85);
+\node[anchor=west,font=\scriptsize,text=white] at (2.44,9.45) {Why did cost rise?};
 % assistant answer (left)
-\fill[lightrow,rounded corners=4pt] (.35,6.90) rectangle (5.20,8.78);
-\draw[draw=hairline,line width=.7pt,rounded corners=4pt] (.35,6.90) rectangle (5.20,8.78);
-\node[anchor=west,font=\scriptsize] at (.60,8.42) {Codex cost the most: 612k tokens};
-\node[anchor=west,font=\scriptsize] at (.60,8.06) {over 34 calls. Input was 71\% of the};
-\node[anchor=west,font=\scriptsize] at (.60,7.70) {bill; cache reads covered 22\%.};
-\fill[lightblue,rounded corners=2pt] (.55,6.98) rectangle (5.00,7.48);
-\draw[draw=navy,line width=.6pt,rounded corners=2pt] (.55,6.98) rectangle (5.00,7.48);
-\node[font=\fontsize{5.5}{6}\selectfont\ttfamily,text=navy] at (2.775,7.23)
-  {getUsageSummary · compareAgentCosts};
+\fill[lightrow,rounded corners=4pt] (.35,7.70) rectangle (5.20,8.88);
+\draw[draw=hairline,line width=.7pt,rounded corners=4pt] (.35,7.70) rectangle (5.20,8.88);
+\node[anchor=west,font=\scriptsize] at (.60,8.52) {More output tokens.};
+\node[anchor=west,font=\scriptsize] at (.60,8.20) {Costs and tokens only,};
+\node[anchor=west,font=\scriptsize] at (.60,7.88) {not answer quality.};
+% the five read-only tools the service may call
+\fill[lightblue,rounded corners=3pt] (.35,6.28) rectangle (5.20,7.55);
+\draw[draw=navy,line width=.7pt,rounded corners=3pt] (.35,6.28) rectangle (5.20,7.55);
+\node[anchor=west,font=\scriptsize\bfseries,text=navy] at (.60,7.30) {Five read-only tools};
+\node[anchor=west,font=\fontsize{5}{6}\selectfont\ttfamily,text=navy] at (.60,6.98)
+  {getUsageSummary · getBudgetStatus};
+\node[anchor=west,font=\fontsize{5}{6}\selectfont\ttfamily,text=navy] at (.60,6.72)
+  {compareAgentCosts · getForumHighlights};
+\node[anchor=west,font=\fontsize{5}{6}\selectfont\ttfamily,text=navy] at (.60,6.46)
+  {getMyThreads \quad (UID from the token)};
 % evidence box
-\fill[lightteal,rounded corners=3pt] (.35,5.40) rectangle (5.20,6.62);
-\draw[draw=teal,line width=.7pt,rounded corners=3pt] (.35,5.40) rectangle (5.20,6.62);
-\node[anchor=west,font=\scriptsize\bfseries,text=teal] at (.60,6.34) {Evidence};
-\node[anchor=west,font=\scriptsize] at (.60,5.98) {2{,}743 calls · 6 agents · 1--21 Sep};
-\node[anchor=west,font=\scriptsize,text=mute] at (.60,5.62) {Missing: no rate for o3-mini};
+\fill[lightteal,rounded corners=3pt] (.35,4.80) rectangle (5.20,6.10);
+\draw[draw=teal,line width=.7pt,rounded corners=3pt] (.35,4.80) rectangle (5.20,6.10);
+\node[anchor=west,font=\scriptsize\bfseries,text=teal] at (.60,5.86) {Evidence};
+\node[anchor=west,font=\scriptsize] at (.60,5.56) {12 / 14 days; 2 missing};
+\node[anchor=west,font=\scriptsize] at (.60,5.26) {Rate version / source};
+\node[anchor=west,font=\scriptsize,text=mute] at (.60,4.98) {Assistant API est. ¥0.02};
 % second user question
-\fill[navy,rounded corners=4pt] (3.55,4.16) rectangle (5.85,4.98);
-\node[anchor=west,font=\scriptsize,text=white] at (3.79,4.72) {Should I switch};
-\node[anchor=west,font=\scriptsize,text=white] at (3.79,4.37) {model?};
+\fill[navy,rounded corners=4pt] (3.30,3.86) rectangle (5.85,4.66);
+\node[anchor=west,font=\scriptsize,text=white] at (3.54,4.28) {Which agent};
+\node[anchor=west,font=\scriptsize,text=white] at (3.54,3.98) {costs more?};
 % second assistant answer
-\fill[lightrow,rounded corners=4pt] (.35,2.80) rectangle (5.20,4.08);
-\draw[draw=hairline,line width=.7pt,rounded corners=4pt] (.35,2.80) rectangle (5.20,4.08);
-\node[anchor=west,font=\scriptsize] at (.60,3.72) {I compare cost per 1M tokens};
-\node[anchor=west,font=\scriptsize] at (.60,3.36) {and token use. I do not judge};
-\node[anchor=west,font=\scriptsize] at (.60,3.00) {answer quality.};
-% input bar
-\fill[white,rounded corners=3pt] (.35,1.60) rectangle (5.85,2.32);
-\draw[draw=hairline,line width=.8pt,rounded corners=3pt] (.35,1.60) rectangle (5.85,2.32);
-\node[anchor=west,font=\scriptsize,text=mute] at (.60,1.96) {Ask about your usage…};
-\fill[navy] (5.42,1.96) circle (.28);
-\fill[white] (5.34,1.88) -- (5.56,1.96) -- (5.34,2.04) -- cycle;
-% bottom navigation — the agent is entered from the dashboard, which is the
-% landing tab, so the highlight sits there and not under Game.
-\draw[hairline,line width=.6pt] (.30,1.30) -- (5.90,1.30);
-\node[font=\scriptsize,text=mute] at (1.03,.72) {Game};
-\node[font=\bfseries,text=navy] at (3.10,.72) {Dashboard};
-\node[font=\scriptsize,text=mute] at (5.17,.72) {Forum};
-\fill[navy,rounded corners=1pt] (2.79,.30) rectangle (3.41,.38);
+\fill[lightrow,rounded corners=4pt] (.35,2.58) rectangle (5.20,3.68);
+\draw[draw=hairline,line width=.7pt,rounded corners=4pt] (.35,2.58) rectangle (5.20,3.68);
+\node[anchor=west,font=\scriptsize] at (.60,3.42) {Codex costs the most};
+\node[anchor=west,font=\scriptsize] at (.60,3.10) {on the days both agents};
+\node[anchor=west,font=\scriptsize] at (.60,2.78) {logged calls.};
+% input bar — typing stays available even if the microphone is denied
+\fill[white,rounded corners=3pt] (.35,1.72) rectangle (5.85,2.42);
+\draw[draw=hairline,line width=.8pt,rounded corners=3pt] (.35,1.72) rectangle (5.85,2.42);
+\node[anchor=west,font=\scriptsize,text=mute] at (.60,2.22) {Type, or hold to talk…};
+\node[anchor=west,font=\scriptsize,text=mute] at (.60,1.90) {Review transcript};
+\node[anchor=west,font=\scriptsize,text=mute] at (4.30,1.90) {Send};
+\fill[navy] (5.42,2.06) circle (.24);
+\fill[white] (5.34,1.99) -- (5.54,2.06) -- (5.34,2.13) -- cycle;
+% bottom navigation — the assistant is entered from Home, which is the landing
+% tab, so the highlight sits there.
+\draw[hairline,line width=.6pt] (.30,1.42) -- (5.90,1.42);
+\node[font=\bfseries,text=navy] at (1.00,.85) {Home};
+\node[font=\scriptsize,text=mute] at (2.25,.85) {Forum};
+\node[font=\scriptsize,text=mute] at (3.50,.85) {Game};
+\node[font=\scriptsize,text=mute] at (4.75,.85) {Me};
+\fill[navy,rounded corners=1pt] (.68,.40) rectangle (1.32,.48);
 \end{tikzpicture}
 \end{document}

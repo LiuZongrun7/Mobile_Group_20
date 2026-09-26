@@ -13,7 +13,7 @@ import com.mobilegroup20.tokentrail.contract.model.ForumReply;
  * 不一样</b>：官方帖和热帖是跨账号的公共内容，谁都能读；这个只有本人能读。
  * 混在一个工具里，服务端就没法用一条规则把权限卡死。
  *
- * <p>uid 不从参数传，由服务端从 Firebase ID token 里取——工具签名里看不到 uid，
+ * <p>uid 不从参数传，由服务端从会话 token 里取——工具签名里看不到 uid，
  * 也就没有「传别人的 uid」这条路。
  */
 public class MyThreads {

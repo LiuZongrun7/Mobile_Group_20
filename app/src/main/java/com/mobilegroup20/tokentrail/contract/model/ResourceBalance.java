@@ -3,7 +3,7 @@ package com.mobilegroup20.tokentrail.contract.model;
 /**
  * 玩家手里的三种建造资源余额。
  *
- * <p>写死三个字段而不是用 {@code Map<ResourceType, Long>}：字段名能直接当 Firestore
+ * <p>写死三个字段而不是用 {@code Map<ResourceType, Long>}：字段名能直接当服务端
  * 的字段名用，序列化不会出错，游戏里读余额也是直取，不用查表。代价是加第四种资源时
  * 要改这个类——按目前的设计不会有第四种。
  *

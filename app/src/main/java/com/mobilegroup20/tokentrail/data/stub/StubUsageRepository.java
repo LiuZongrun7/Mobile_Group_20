@@ -183,8 +183,8 @@ public class StubUsageRepository implements UsageRepository {
         switch (provider) {
             case OPENAI:
                 return "gpt-5";
-            case GLM:
-                return "glm-4.6";
+            case MIMO:
+                return "mimo-v2.6-pro";
             case DEEPSEEK:
                 return "deepseek-reasoner";
             default:

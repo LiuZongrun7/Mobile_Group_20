@@ -254,7 +254,7 @@ para(tf, False, [('Target users:  ', True, NAVY),
                  ('Students and independent developers who use API-key coding agents', False, INK)],
      size=13, after=6)
 para(tf, False, [('Stack:  ', True, NAVY),
-                 ('Android · Java/XML · Firebase Auth + Firestore · Room · Java advice service',
+                 ('Android · Java/XML · Room · Java advice service on the team\'s own server',
                   False, INK)], size=13, after=0)
 tf = tb(s, MARGIN, 5.75, 8.6, 0.9)
 para(tf, True, [('Group 20 ·  ', True, NAVY),
@@ -268,10 +268,10 @@ s.shapes.add_picture(os.path.join(BASE, 'fig_game.png'), Inches(9.85), Inches(1.
 s = slide('How to read this deck', 'The six points the outline slides must cover')
 items = [
     ('1', 'Brief app idea description', 'What TokenTrail is, who it is for, and what is out of scope', 'Slide 3'),
-    ('2', 'Discussion of similar / related apps', 'Codex, ZCode, dsh-context, LiteLLM and dsh-pet', 'Slide 5'),
+    ('2', 'Discussion of similar / related apps', 'Codex, ZCode, DSH with dsh-context, LiteLLM and dsh-pet', 'Slide 5'),
     ('3', 'Related apps: features and components', 'What each one covers, and the gap it leaves open', 'Slide 6'),
     ('4', 'Open-source code available to reuse', 'Libraries, samples and licences we will record', 'Slide 7'),
-    ('5', 'Proposed features and uniqueness', 'Analytics, game, forum and the advice agent on the home screen', 'Slides 8-13'),
+    ('5', 'Proposed features and uniqueness', 'Analytics and the home-screen assistant as the core; forum and game as supporting tabs', 'Slides 8-13'),
     ('6', 'Approach and work plan to week 15', 'Alpha, Beta and Final checkpoints with acceptance tests', 'Slides 14-15'),
 ]
 table(s, MARGIN, 1.62, [3.55, 6.45, 1.893],
@@ -285,39 +285,38 @@ para(tf, True, 'The written outline covers the same six points in the same order
 # ============================================================ 3. app idea
 s = slide('1 · App idea', 'An API-cost analytics app that makes agent spend visible')
 tf = tb(s, MARGIN, 1.62, CW, 0.75)
-para(tf, True, [('TokenTrail is an Android app for people who pay for coding agents with an API key. '
-                 'It opens on a statistics home screen that prices the usage those agents already logged '
-                 'and answers cost questions with evidence, and it turns that usage into a monthly '
-                 'tower-defence season.', False, INK)],
+para(tf, True, [('TokenTrail is an Android API-cost app for people who use several coding agents: '
+                 'Codex with OpenAI, ZCode with Xiaomi MiMo and DSH with DeepSeek. Its analytics home screen '
+                 'prices the pay-as-you-go calls those agents already logged, and an assistant on the same '
+                 'screen answers cost questions with evidence.', False, INK)],
      size=14, after=0, line=1.2)
 parts = [
-    ('API-cost analytics (home)', 'Prices logged calls from Codex, ZCode and a DeepSeek-side tool using dated official rates, and compares agents.', LIGHTTEAL, TEAL),
-    ('Monthly tower-defence game', 'A supporting tab. Tokens you have already spent become building resources in a season that resets each month.', LIGHTBLUE, NAVY),
-    ('Community forum', 'Official model and pricing posts plus user tips; the hot posts feed the advice agent.', LIGHTAMBER, AMBER),
+    ('API-cost analytics (home)', 'Prices logged pay-as-you-go calls from Codex, ZCode and DSH at dated official rates, with source, coverage and session detail wherever the logs support it.', LIGHTTEAL, TEAL),
+    ('Home-screen AI assistant', 'An "Ask AI / hold to talk" entry above the navigation. Type, or dictate and confirm the transcript; replies cite evidence and admit missing data. Its own API cost is kept separate.', LIGHTBLUE, NAVY),
+    ('Supporting tabs', 'Forum: official model news plus user posts and tips. Game: a monthly tower-defence season built from tokens already logged. Both are extensions, not the main experience.', LIGHTAMBER, AMBER),
 ]
 cw, gap = (CW - 2 * 0.26) / 3, 0.26
 for i, (head, body, fill, hc) in enumerate(parts):
-    card(s, MARGIN + i * (cw + gap), 2.46, cw, 1.56, head=head, body=body,
-         fill=fill, head_color=hc, size=11.5, head_size=13.5)
-agent = shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 4.22, CW, 0.86, fill=NAVY, radius=0.06)
+    card(s, MARGIN + i * (cw + gap), 2.46, cw, 1.92, head=head, body=body,
+         fill=fill, head_color=hc, size=11, head_size=13)
+agent = shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 4.58, CW, 1.00, fill=NAVY, radius=0.06)
 tfa = agent.text_frame
 tfa.margin_left = tfa.margin_right = Inches(0.22)
 tfa.vertical_anchor = MSO_ANCHOR.MIDDLE
-para(tfa, True, [('And an advice agent on that home screen.  ', True, WHITE),
-                 ('It reads your logged usage and recent forum posts, then answers questions with '
-                  'the evidence behind them. TokenTrail never runs, routes or controls the coding agents.',
-                  False, 'D6E4EB')], size=13, after=0, line=1.15)
-card(s, MARGIN, 5.32, CW, 1.30,
-     head='Scope: API usage priced at public API rates',
-     body='Out of scope: ChatGPT and GLM Coding Plan subscriptions, live cross-agent status and system-wide '
-          'overlays. A response reports tokens for one call, not the agent\'s whole history, so a call is priced '
-          'only when a saved rate snapshot covers its date. Every monetary value is an estimate, never an invoiced charge.',
+para(tfa, True, [('Scope rule.  ', True, WHITE),
+                 ('API-cost analytics and the home-screen assistant are core; forum and game are supporting '
+                  'extensions. Token Plan and other subscriptions are excluded, and TokenTrail never runs, '
+                  'routes or controls a coding agent.', False, 'D6E4EB')], size=13, after=0, line=1.15)
+card(s, MARGIN, 5.78, CW, 0.92,
+     head='Estimated, never invoiced',
+     body='An API key alone cannot recover an agent\'s history, so a call is priced only when a saved rate snapshot '
+          'covers its date. Missing logs or rates stay visible, and every monetary value is an estimate.',
      fill=LIGHTROW, head_color=NAVY, size=11, head_size=12)
 
 # ============================================================== 4. problem
 s = slide('1 · App idea', 'Why this is worth building')
 probs = [
-    ('Each console sees one account', 'Codex, Z.ai and DeepSeek bill separately, in their own units, with no cross-provider total and no common price version. A user running three agents has three bills and no single monthly figure.'),
+    ('Each console sees one account', 'Codex, ZCode and DSH bill separately, in their own units, with no cross-provider total and no common price version. A user running three agents has three bills and no single monthly figure.'),
     ('Tokens are not money', 'A response reports tokens for one call, not the agent\'s whole history. A call can only be priced when a saved rate snapshot covers its date, so some calls stay Unavailable rather than being guessed at.'),
     ('Rating your own work is bad input', 'Asking users to score a task costs them extra effort and produces opinions, not measurements. It also makes the numbers depend on mood instead of on the data.'),
     ('Spend leaves no trace', 'A day of agent work leaves nothing visible behind, so usage never turns into progress the user can see and nothing brings them back to the tools.'),
@@ -336,21 +335,22 @@ card(s, MARGIN, 5.72, CW, 1.04, head='What TokenTrail does instead',
 s = slide('2 · Related apps', 'Five products we studied before writing a line of code')
 apps = [
     ('FIRST-PARTY AGENT', 'Codex', 'OpenAI\'s coding agent. Can run with an OpenAI API key and be billed through the Platform account.'),
-    ('FIRST-PARTY AGENT', 'ZCode', 'Z.ai\'s coding client. Can use the general Z.ai API endpoint with a key, separate from the Coding Plan.'),
-    ('MONITORING PLUGIN', 'dsh-context', 'DeepSeek Harness plugin that shows local sessions, token use, cache behaviour, activity and estimated cost.'),
-    ('GATEWAY', 'LiteLLM', 'Open-source proxy with routing, spend tracking and budgets — but only for traffic that goes through it.'),
-    ('COMPANION', 'dsh-pet', 'Floating pet driven by DSH session events, with touch and feeding actions. Closest thing to a game.'),
+    ('MODEL PROVIDER', 'ZCode', 'Supports Xiaomi MiMo as a model provider. Usable MiMo API logs are imported; Token Plan usage is excluded.'),
+    ('SESSION PLUGIN', 'DSH / dsh-context', 'DSH runs coding sessions; its dsh-context plugin visualises tokens, cache and activity.'),
+    ('GATEWAY', 'LiteLLM', 'Open-source gateway with spend tracking and budgets — but only for traffic that goes through it.'),
+    ('COMPANION', 'dsh-pet', 'Floating companion driven by DSH session events, with touch and feeding actions. Closest thing to a game.'),
 ]
-feet = ['One of the three providers we track.',
-        'Tracked through its general API endpoint.',
-        'Its dashboard is our model for the analytics screen.',
+feet = ['The OpenAI-side agent we track.',
+        'Tracked through its MiMo API endpoint.',
+        'Import its logs into Android; no live agent control.',
         'Teaches the vocabulary of spend tracking and budgets.',
-        'Its entry point inspires our advice agent panel on the home screen.']
+        'Its entry point inspires our assistant panel on the home screen.']
 gap = 0.16
 cw = (CW - 4 * gap) / 5
 for i, (tag, name, body) in enumerate(apps):
     card(s, MARGIN + i * (cw + gap), 1.74, cw, 2.42, head=name, body=body,
-         tag=tag, size=11, head_size=15, fill=LIGHTROW, pad=0.15, foot=feet[i])
+         tag=tag, size=11, head_size=15 if len(name) < 10 else 13,
+         fill=LIGHTROW, pad=0.15, foot=feet[i])
 left, rw, rgap = CW * 0.60, CW * 0.40 - 0.24, 0.24
 card(s, MARGIN, 4.36, left, 2.06, head='What the review told us',
      body=['Every product above is strong inside its own boundary: a first-party console prices one provider, a plugin '
@@ -359,10 +359,10 @@ card(s, MARGIN, 4.36, left, 2.06, head='What the review told us',
            'The review also set our boundaries: no proxying, no subscription quotas, and no overlay on another app.'],
      fill=LIGHTTEAL, head_color=TEAL, size=12, head_size=13)
 card(s, MARGIN + left + rgap, 4.36, rw, 2.06, head='The opportunity',
-     body=['Combining the three ideas is what is new:',
-           '▪  cross-provider costing from logs the user owns;',
-           '▪  a companion-style monthly progression driven by real spend;',
-           '▪  advice that cites its own evidence and admits missing data.'],
+     body=['The outline names three contributions:',
+           '▪  unified analytics over logs the user owns;',
+           '▪  reproducible costs that keep the price version;',
+           '▪  evidence-based advice that admits missing data.'],
      fill=LIGHTAMBER, head_color=AMBER, size=11.5, head_size=13)
 tf = tb(s, MARGIN, 6.54, CW, 0.3)
 para(tf, True, 'Section 2 of the written outline compares the same five products, with a link to each one.',
@@ -374,20 +374,20 @@ table(s, MARGIN, 1.62,
       [1.75, 5.05, 5.093],
       [['Product', 'Relevant capability', 'Gap addressed by TokenTrail'],
        [('Codex', 'https://learn.chatgpt.com/docs/auth'),
-        'Can run with an OpenAI API key, billed through the Platform account.',
-        'Estimates only logged Codex API calls, using dated OpenAI prices.'],
+        'API-key coding agent billed through OpenAI Platform.',
+        'Dated estimates from the available Codex logs.'],
        [('ZCode', 'https://zcode.z.ai/en/docs/configuration'),
-        'Can use the general Z.ai API endpoint with an API key, separate from Coding Plan.',
-        'Prices logged general-API calls and excludes plan usage.'],
-       [('dsh-context', 'https://github.com/bowenliang123/dsh-context/blob/main/README.md'),
-        'Plugin showing local sessions, token use, cache, activity and estimated costs.',
-        'Spans API providers; session detail appears only when usable logs are imported.'],
+        'Supports Xiaomi MiMo as a model provider.',
+        'Import usable MiMo API logs; exclude Token Plan usage.'],
+       [('DSH / dsh-context', 'https://github.com/deepseek-ai/deepseek-harness'),
+        'DSH runs coding sessions; its context plugin visualises tokens, cache and activity.',
+        'Import usable DSH logs into Android; no live agent control.'],
        [('LiteLLM', 'https://docs.litellm.ai/docs/simple_proxy'),
-        'Open-source gateway with routing, spend tracking and budgets for proxied calls.',
-        'Does not proxy traffic; tracks agent-associated API costs from permitted records.'],
+        'Gateway spend tracking and budgets for proxied calls.',
+        'Imports records without proxying agent traffic.'],
        [('dsh-pet', 'https://github.com/zhu1090093659/dsh-pet/blob/main/README.zh.md'),
-        'Interactive floating pet driven by session events, with touch and feeding actions.',
-        'Adds cross-provider, evidence-linked advice, and turns consumption into a visible monthly progression.']],
+        'Floating companion driven by DSH session events.',
+        'Interactive home-screen assistant with questions and evidence-linked advice.']],
       row_h=0.80, head_h=0.46, size=10.5, head_size=11.5)
 tf = tb(s, MARGIN, 6.20, CW, 0.45)
 para(tf, True, 'Names link to each product\'s own documentation or repository. The full comparison is section 2 of the written outline.',
@@ -398,59 +398,75 @@ s = slide('4 · Open source and tools', 'What we reuse, and what we build oursel
 table(s, MARGIN, 1.62, [2.45, 9.443],
       [['Layer', 'Planned tools and rationale'],
        ['Android interface',
-        'Java/XML, Material Components and Navigation; ViewModel/LiveData for state; RecyclerView and MPAndroidChart for trends; a tower-defence game surface and the advice agent panel on the home screen.'],
+        'Java/XML, Material Components, Navigation and ViewModel/LiveData; RecyclerView lists, '
+        'speech-to-text and typed fallback.'],
        ['Network and work',
-        'Retrofit/OkHttp for log import and a Java advice service. The service runs one model API and a bounded function-call loop over read-only usage, budget and comparison tools. WorkManager schedules price checks.'],
+        'Retrofit/OkHttp connects the Java advice service; bounded read-only tools and one model API. '
+        'WorkManager checks prices.'],
        ['Persistence and security',
-        'Room plus UID-restricted Firestore; the Java service verifies Firebase ID tokens and holds its model key server-side. Coding-agent passwords and keys are never required.'],
+        'Room stores usage, prices and history; the team\'s own server supports sync and public posts. '
+        'The service authenticates every request and scopes every read to the caller\'s account; '
+        'no client holds a model key.'],
        ['Open-source reuse',
-        [('Room with a View', 'https://github.com/android/codelab-android-room-with-a-view', TEAL),
-         (' guides storage; ', None),
+        [('Room', 'https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt', TEAL),
+         (' (Apache-2.0) for local records; ', None),
          ('MPAndroidChart', 'https://github.com/PhilJay/MPAndroidChart', TEAL),
-         (' may supply charts; an open-source tower-defence sample may supply the wave and '
-          'placement loop; dsh-pet inspires the agent\'s entry point.', None)]]],
-      row_h=0.96, head_h=0.46, size=10.5)
-card(s, MARGIN, 6.02, CW, 0.68,
-     body='Original or properly licensed art only. Every reused file and its licence is recorded in the repository, '
-          'and this layer is revisited if a dependency changes the plan.',
+         (' (Apache-2.0) for charts, added as a dependency; ', None),
+         ('Room with a View', 'https://github.com/android/codelab-android-room-with-a-view', TEAL),
+         (' is an archived architecture reference with no copied code. dsh-context/LiteLLM: comparison only; '
+          'dsh-pet: entry inspiration only. The game engine is original.', None)]]],
+      row_h=0.74, head_h=0.46, size=10.5)
+card(s, MARGIN, 5.16, CW, 0.78,
+     body='Original or properly licensed art only. Every reused file and its licence, version and source is '
+          'recorded in the repository, and this layer is revisited if a dependency changes the plan.',
      fill=LIGHTAMBER, size=11.5, pad=0.16)
+tf = tb(s, MARGIN, 6.10, CW, 0.4)
+para(tf, True, 'Section 8 of the written outline lists the same four layers, with a licence link for each reused library.',
+     size=10.5, color=MUTE, after=0)
 
 # ========================================================= 8. contribution
-s = slide('5 · Proposed features', 'Four contributions, and the rule that keeps them honest')
+s = slide('5 · Proposed features', 'Three contributions, and the rule that keeps them honest')
 contrib = [
-    ('Unified view', ['Merges authorised API-call logs from Codex, ZCode and a DeepSeek-side tool, removes duplicate records, and shows source and coverage on every figure.',
-                      'Where the records do not support a session view, the app shows a provider-level estimate instead of inventing one.'], LIGHTBLUE, NAVY),
-    ('Reproducible costs', ['Java applies dated official rates by provider, model, token class and service tier, and keeps the price version behind each estimate.',
-                            'New rates apply prospectively; old estimates keep the version they were calculated with.'], LIGHTTEAL, TEAL),
-    ('Reflected progress', ['Tokens already spent on real work convert into building resources in a monthly tower-defence game — a visible result without asking anyone to spend differently.',
-                            'The season resets each month, matching the billing cycle AI subscriptions already follow.'], LIGHTAMBER, AMBER),
-    ('Decision support', ['Compares agents on computed measures only: logged token counts, dated rates, cache behaviour and duration. The advice agent supplies evidence, and states sample size and missing data.',
-                          'No task ratings anywhere — the analysis costs the user no extra input, and never judges how good an answer was.'], LIGHTBLUE, NAVY),
+    ('Unified analytics', ['De-duplicates authorised logs and shows source, coverage and session detail — '
+                           'but only where the records support it.',
+                           'Where a session view is not supported, it shows a provider-level estimate instead of '
+                           'inventing one.'], LIGHTBLUE, NAVY),
+    ('Reproducible costs', ['Java applies dated official rates by provider, model, token class and service tier, '
+                            'and keeps the price version behind every estimate.',
+                            'New rates apply prospectively; old estimates keep the version they were computed with.'], LIGHTTEAL, TEAL),
+    ('Evidence-based AI advice', ['Text or speech questions obtain calculated evidence from read-only tools; replies '
+                                  'disclose sample size and missing data.',
+                                  'It compares recorded cost, tokens and cache use — never answer quality, and it '
+                                   'asks for no task ratings.'], LIGHTAMBER, AMBER),
 ]
-cw, ch, gap = (CW - 0.28) / 2, 1.80, 0.28
+cw, gap = (CW - 2 * 0.26) / 3, 0.26
 for i, (head, body, fill, hc) in enumerate(contrib):
-    card(s, MARGIN + (i % 2) * (cw + gap), 1.68 + (i // 2) * (ch + 0.22), cw, ch,
-         head=head, body=body, fill=fill, head_color=hc, size=11.5, head_size=14)
-shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 5.72, CW, 0.82,
+    card(s, MARGIN + i * (cw + gap), 1.70, cw, 2.34, head=head, body=body,
+         fill=fill, head_color=hc, size=11, head_size=13.5, pad=0.16)
+shape(s, MSO_SHAPE.ROUNDED_RECTANGLE, MARGIN, 4.30, CW, 1.02,
       fill=LIGHTAMBER, line=AMBER, radius=0.06)
 tf = s.shapes[-1].text_frame
 tf.margin_left = tf.margin_right = Inches(0.20)
 tf.vertical_anchor = MSO_ANCHOR.MIDDLE
 para(tf, True, [('Scope rule:  ', True, AMBER),
-                ('statistics are the app\'s main purpose. Three core parts — the API-cost analytics home screen, '
-                 'the monthly tower-defence game and the community forum. The advice agent can recommend but '
-                 'cannot execute coding agents or enforce a hard cap.', False, INK)],
-     size=11.5, after=0, line=1.12)
+                ('API-cost analytics and the home-screen assistant are core; forum and game are supporting '
+                 'extensions. Live cross-agent status and system-wide overlays are outside the first release.',
+                 False, INK)], size=12, after=0, line=1.14)
+tf = tb(s, MARGIN, 5.54, CW, 0.75)
+para(tf, True, [('Values are labelled.  ', True, NAVY),
+                ('Every monetary figure is Estimated, Partial estimate or Unavailable — a cost that cannot be '
+                 'computed is never shown as zero. Source-billed amounts are kept as separate reconciliation '
+                 'evidence, not as replacements for the estimates.', False, INK)], size=11.5, after=0, line=1.16)
 
 # ===================================================== 9. game (new feature)
-s = slide('5 · New feature A', 'A monthly tower-defence season built from tokens already spent')
+s = slide('5 · Supporting feature A', 'A monthly tower-defence season built from tokens already logged')
 s.shapes.add_picture(os.path.join(BASE, 'fig_game.png'), Inches(MARGIN), Inches(1.62), height=Inches(5.05))
 l = 3.62
 tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
 bullets = [
-    ('It has its own tab.', 'Reached from the bottom bar. It is played in monthly seasons that match the billing cycle AI subscriptions already follow.'),
-    ('Tokens become resources.', 'Tokens already spent convert into building resources at a fixed rate per million tokens.'),
-    ('You plan the space yourself.', 'Defences and wall segments are placed and upgraded by hand on a build grid around the data-centre core, which expands in one direction.'),
+    ('It is a supporting tab.', 'Reached from the bottom bar, beside the forum. It is played in monthly seasons that match the billing cycle the provider subscriptions already follow.'),
+    ('Tokens become resources.', 'Input, cache and output tokens already logged convert into separate resource pools at a fixed rate per million tokens.'),
+    ('You plan the space yourself.', 'Towers and wall segments are placed and upgraded by hand on a build grid around the data-centre core, which expands in one direction.'),
     ('Enemies arrive from one side.', 'A wave enters from a single edge, so where each tower stands and whether the walls close decide how the wave goes.'),
     ('A wave starts when you start it.', 'Waves run in real time, so no offline simulation and no scheduled settlement is needed. The season resets each month.'),
 ]
@@ -460,125 +476,127 @@ for head, body in bullets:
          size=12.5, after=7, line=1.14)
     first = False
 para(tf, False, [('Why it matters.  ', True, TEAL),
-                 ('A day of agent work leaves a visible result without asking the user to spend differently, and the '
-                  'resource balance is unreachable without logged usage — so the game cannot be played on invented data.',
+                 ('A day of agent work leaves a visible result without asking the user to spend differently. Playing '
+                  'never changes usage, cost or budget totals, and re-importing the same logs grants no duplicate '
+                  'resources — so the balance cannot be reached on invented data.',
                   False, INK)], size=12, after=0, before=6, line=1.16)
 
 # ==================================================== 10. agent (new feature)
-s = slide('5 · New feature B', 'An advice agent that answers from evidence, not opinion')
+s = slide('5 · Core feature B', 'An assistant that answers from evidence, not opinion')
 s.shapes.add_picture(os.path.join(BASE, 'fig_agent.png'), Inches(MARGIN), Inches(1.62), height=Inches(5.05))
 tf = tb(s, l, 1.62, PAGE_W - MARGIN - l, 5.05)
 bullets = [
-    ('It lives on the home screen.', 'An expandable question panel on the analytics dashboard, where the figures it reasons about already are. It reads two sources: your logged usage and recent forum posts.'),
-    ('A Java service does the work.', 'It calls one selected external GPT, GLM or DeepSeek model, which may request read-only tools through function calling. Java executes and validates every call.'),
-    ('Four read-only tools.', 'getUsageSummary · getBudgetStatus · compareAgentCosts · getForumHighlights.'),
-    ('It admits what it does not know.', 'Replies state evidence and missing data; no logs means no cost-based answer. Its own tokens are tracked separately from coding-agent usage.'),
-    ('Cost, never quality.', 'It compares agents on cost and token use, and never on how good an answer was.'),
+    ('It lives on the home screen.', 'An "Ask AI / hold to talk" entry above the navigation opens an expandable panel on the analytics dashboard, where the figures it reasons about already are. It reads your logged usage and recent forum posts.'),
+    ('Ask by text, or hold to talk.', 'Dictate a question, then review or edit the transcript before sending. The microphone is requested when used; denial or failure leaves typing available, and raw audio is not retained by default.'),
+    ('A Java service does the work.', 'It calls one selected OpenAI, Xiaomi MiMo or DeepSeek pay-as-you-go model, which may request tools through function calling. Java executes and validates every call.'),
+    ('Five read-only tools.', 'getUsageSummary · getBudgetStatus · compareAgentCosts · getForumHighlights · getMyThreads. The UID comes from the signed session token, never from a parameter.'),
+    ('It admits what it does not know.', 'Replies state evidence, price versions and missing data; no logs means no cost-based answer. Its own tokens and cost sit in a separate ledger, excluded from coding-agent totals and game resources.'),
 ]
 first = True
 for head, body in bullets:
     para(tf, first, [('▪  ', False, AMBER), (head + '  ', True, NAVY), (body, False, INK)],
-         size=12.5, after=7, line=1.14)
+         size=12, after=6, line=1.13)
     first = False
 para(tf, False, [('Boundary.  ', True, TEAL),
-                 ('The agent can recommend but cannot run, route or interrupt a coding agent, and cannot enforce a '
-                  'hard spending cap.', False, INK)], size=12, after=0, before=6, line=1.16)
+                 ('It can recommend but cannot run, route or interrupt a coding agent, and cannot enforce a hard '
+                  'spending cap. It compares cost and token use, never answer quality.',
+                  False, INK)], size=11.5, after=0, before=5, line=1.15)
 
 # ============================================================ 11. data flow
 s = slide('5 · How it is implemented', 'One path from logs to the app, and the four data aspects')
-s.shapes.add_picture(os.path.join(BASE, 'fig_flow.png'), Inches((PAGE_W - 9.9) / 2), Inches(1.70), width=Inches(9.9))
+s.shapes.add_picture(os.path.join(BASE, 'fig_flow.png'), Inches((PAGE_W - 8.6) / 2), Inches(1.58), width=Inches(8.6))
 aspects = [
-    ('Data input', 'Agent profile and key label, authorised usage logs, user questions, forum posts.', NAVY, LIGHTBLUE),
-    ('Data processing', 'Java prices dated usage, compares agents by cost and converts spent tokens into resources.', TEAL, LIGHTTEAL),
-    ('Data storage', 'Firebase Auth; UID-restricted Firestore; Room for usage, price versions, game state and advice history.', NAVY, LIGHTBLUE),
-    ('Data output', 'Cost cards, heatmap, sessions, budget alerts and the advice agent, plus the game and forum, with explicit unavailable states.', AMBER, LIGHTAMBER),
+    ('Data input', 'Profiles, billing mode and budgets; authorised logs, text or confirmed speech, posts and game actions.', NAVY, LIGHTBLUE),
+    ('Data processing', 'Filter and de-duplicate logs; price usage; read-only summaries; rank posts and convert game resources.', TEAL, LIGHTTEAL),
+    ('Data storage', 'Room holds local records. The server-side store holds user sync, budgets, game state and the assistant ledger; public posts are separate.', NAVY, LIGHTBLUE),
+    ('Data output', 'Costs, heatmap, sessions, budgets and AI evidence; forum lists and real-time battle feedback.', AMBER, LIGHTAMBER),
 ]
 cw, gap = (CW - 3 * 0.20) / 4, 0.20
 for i, (head, body, hc, fill) in enumerate(aspects):
-    card(s, MARGIN + i * (cw + gap), 2.92, cw, 1.62, head=head, body=body,
+    card(s, MARGIN + i * (cw + gap), 3.34, cw, 1.56, head=head, body=body,
          fill=fill, head_color=hc, size=10.5, head_size=12.5, pad=0.14)
-card(s, MARGIN, 4.76, CW, 1.05, head='Where it stops',
-     body='Model responses report usage only for calls the caller observed, so imported agent logs are the primary '
-          'input and the agent cannot see a live coding session without a separate event feed. The external model '
-          'receives selected summaries — never API secrets or prompt text.',
+card(s, MARGIN, 5.04, CW, 1.02, head='Where it stops',
+     body='Verify the log version and the billing mode; DSH may need JSONL or Zstandard decoding. The five tools '
+          'enforce the caller\'s UID with bounded queries, and models receive summaries — never secrets or raw agent '
+          'prompts. Missing logs mean no personalised cost claim, and there is no coding-agent control.',
      fill=LIGHTROW, head_color=NAVY, size=11.5, head_size=12.5)
-tf = tb(s, MARGIN, 5.98, CW, 0.4)
+tf = tb(s, MARGIN, 6.22, CW, 0.4)
 para(tf, True, 'The same four aspects (input, processing, storage, output) run through the written outline, the '
                'implementation report, the code comments and the final demonstration.',
      size=10.5, color=MUTE, after=0)
 
 # ============================================================ 12. proposed UI
-s = slide('5 · Proposed interface', 'Three screens, opening on the analytics dashboard')
+s = slide('5 · Proposed interface', 'Home leads with analytics and the assistant entry')
 s.shapes.add_picture(os.path.join(BASE, 'fig_ui.png'), Inches((PAGE_W - 11.1) / 2), Inches(1.52), width=Inches(11.1))
 tf = tb(s, MARGIN, 6.26, CW, 0.4)
-para(tf, True, 'The app opens on the dashboard — the statistics home screen with Activity, Sessions, Compare and '
-               'Budget, and the advice agent entered from it. A bottom bar reaches the game and the forum. Inspired '
-               'by dsh-context and dsh-pet. Log-dependent sections show an empty state when records are unavailable.',
+para(tf, True, 'Tap "Ask AI" to open the panel, or hold to dictate and confirm the transcript. Sessions expose '
+               'source, date and token classes only where logs support them, and comparisons use matching filters. '
+               'Forum and Game are supporting tabs, and assistant API costs are excluded from the home total.',
      size=10.5, color=MUTE, after=0)
 
 # ============================================= 13. functional requirements
 s = slide('5 · Proposed features', 'Functional requirements mapped to what already exists')
 table(s, MARGIN, 1.60, [0.45, 2.30, 7.55, 1.593],
-      [['Ser', 'Existing features', 'Proposed improvements / new features', 'Remarks'],
-       ['1', 'Cross-model cost dashboards',
-        'Three providers priced from dated official rates, de-duplicated, each figure carrying source and coverage', 'Improvement'],
-       ['2', 'Chat-history viewers',
-        'Per-call and per-session token-class breakdown, cache read and write split', 'Improvement'],
-       ['3', 'Desktop context dashboards',
-        'Android client with Firebase Auth and UID-scoped rules', 'Improvement'],
-       ['4', 'Provider billing consoles',
-        'One cross-provider monthly budget with threshold alerts and a per-session breakdown', 'Improvement'],
-       ['5', 'Community forums',
-        'Official model and pricing posts plus user tips, ranked for the advice agent', 'Improvement'],
-       ['6', 'Interactive pet with feeding (dsh-pet)',
-        'Monthly tower-defence season in which tokens already spent convert into build resources, with one-direction base growth and a wave the user starts', 'New feature'],
-       ['7', 'General chat assistants',
-        'Advice agent on the home screen with function calling over read-only tools, reading usage records and hot forum posts', 'New feature']],
-      row_h=0.62, head_h=0.48, size=10.5)
+      [['Ser', 'Existing feature', 'TokenTrail improvement / addition', 'Type'],
+       ['1', 'Cost dashboards',
+        'Cross-provider dated estimates with source and coverage', 'Improved'],
+       ['2', 'Session viewers',
+        'Log-supported sessions and token-class breakdowns', 'Improved'],
+       ['3', 'Billing budgets',
+        'Cross-provider estimated budget and advisory alerts', 'Improved'],
+       ['4', 'AI assistants',
+        'Home AI: text and voice, usage evidence and a separate API ledger', 'New'],
+       ['5', 'Forums',
+        'Linked official news, posts and replies, and context for the advice', 'Improved'],
+       ['6', 'Tower defence',
+        'Monthly game resources from verified coding-agent API logs', 'New']],
+      row_h=0.62, head_h=0.48, size=11)
+tf = tb(s, MARGIN, 5.98, CW, 0.4)
+para(tf, True, 'Six rows, in the same order as section 11 of the written outline. Only rows 4 and 6 are new; the '
+               'rest improve a view the providers already offer one account at a time.',
+     size=10.5, color=MUTE, after=0)
 
 # =============================================================== 14. plan
 s = slide('6 · Approach and work plan', 'Checkpoints from this week to the final submission')
 table(s, MARGIN, 1.60, [1.42, 6.55, 3.923],
       [['Course weeks', 'Work', 'Checkpoint / acceptance'],
-       ['1-3', 'Confirm API-key agent use cases and UI; set up Firebase Auth and Firestore rules; document usage-log access and pricing dimensions.',
-        'Neither test account sees the other\'s records; token-source limits documented.'],
-       ['4-7', 'Implement agent profiles, usage-log import, Room/Firestore records, versioned pricing, CNY display and the analytics home screen.',
-        'Each provider\'s sample calls are priced at the correct dated rate and de-duplicated.'],
-       ['8-9 · Alpha', 'Deliver a working login → add agent → import log → estimated cost → analytics path; separate real logs from sample data.',
-        'Source, description, GitHub link and MP4 per submission guidance.'],
-       ['10-12 · Beta', 'Add budgets and sessions; build the tower-defence loop (season, token-to-resource conversion, user-started waves); add the agent panel to the home screen and connect one model to three read-only tools.',
-        'The agent answers a usage question with evidence and admits missing data; a wave starts and resolves without blocking the UI.'],
-       ['13-15 · Final', 'Evaluate advice accuracy and API cost, balance the season, improve accessibility, verify account isolation and document estimation limits.',
-        'End-to-end demo, report and video; no agent answer invents usage or controls coding agents.']],
-      row_h=0.86, head_h=0.46, size=10.5)
-tf = tb(s, MARGIN, 6.48, CW, 0.4)
+       ['1-3', 'Verify Codex/ZCode/DSH samples, billing modes, rate dimensions and UI; define access rules.',
+        'Verified sources; isolated accounts.'],
+       ['4-7', 'Build import, storage, dated pricing and analytics; define the five read-only tool contracts.',
+        'Correct rates; idempotent import.'],
+       ['8-9 · Alpha', 'Login → profile → import → cost → home.',
+        'Separate real and sample data; source, GitHub link and MP4.'],
+       ['10-12 · Beta', 'Wang: assistant and forum using Zhang\'s queries. Liu: settlement and the real-time game.',
+        'Cited evidence; typing fallback; ranked posts; smooth waves.'],
+       ['13-15 · Final', 'Validate advice, cost separation, game balance, accessibility and isolation; complete the documentation.',
+        'Demo, tests, report and video; licence records.']],
+      row_h=0.80, head_h=0.46, size=11)
+tf = tb(s, MARGIN, 6.28, CW, 0.4)
 para(tf, True, 'The team commits to GitHub throughout and adjusts scope based on tested progress.',
      size=10.5, color=MUTE, after=0)
 
 # ============================================== 15. team, demo, validation
 s = slide('6 · Evidence of completion', 'Who builds what, and how we will know it works')
 team = [
-    ('Zhang Li · 24107757', 'The data side — authentication, usage-log import, Room/Firestore, versioned pricing, budgets and the dashboard.', LIGHTBLUE, NAVY),
-    ('Wang Tingdong · 24107759', 'The forum, including its post data and ranking.', LIGHTTEAL, TEAL),
-    ('Liu Zongrun · 24107745', 'The tower-defence game, the server-side agent service, its read-only tools and advice evaluation.', LIGHTAMBER, AMBER),
+    ('Zhang Li · 24107757', 'Authentication, log import and storage, dated pricing, budgets, the dashboard and the data-query interfaces.', LIGHTBLUE, NAVY),
+    ('Wang Tingdong · 24107759', 'The home-screen AI assistant, its text/voice panel, the Java advice service, the five read-only tools and the assistant API ledger; forum news, posts, replies and ranking.', LIGHTTEAL, TEAL),
+    ('Liu Zongrun · 24107745', 'The tower-defence engine and UI, resource settlement, monthly state, placement and upgrades, and enemy waves.', LIGHTAMBER, AMBER),
 ]
 cw, gap = (CW - 2 * 0.24) / 3, 0.24
 for i, (head, body, fill, hc) in enumerate(team):
-    card(s, MARGIN + i * (cw + gap), 1.70, cw, 1.52, head=head, body=body,
+    card(s, MARGIN + i * (cw + gap), 1.70, cw, 1.72, head=head, body=body,
          fill=fill, head_color=hc, size=11, head_size=12.5, pad=0.15)
-card(s, MARGIN, 3.36, CW, 1.32, head='Demo path',
-     body='Account isolation → tracked Codex, ZCode and DeepSeek-side profiles → three provider estimates from dated '
-          'token logs → heatmap and budget warning → an agent question asked from that screen, such as "Why did cost '
-          'rise?", answered with a queried summary, evidence and its own estimated API cost → a season in which those '
-          'tokens became build resources.',
+card(s, MARGIN, 3.56, CW, 1.26, head='Demo path',
+     body='Account isolation → tracked Codex, ZCode and DSH profiles → dated estimates from token logs → heatmap and '
+          'budget warning → "Why did cost rise?" asked by text or confirmed speech, answered with evidence and its own '
+          'assistant API cost → forum posts and replies → a player-started game wave.',
      fill=LIGHTROW, size=11.5, head_size=12.5)
-card(s, MARGIN, 4.82, CW, 1.32, head='Validation',
-     body='Tests cover token accounting, price-version boundaries, missing usage, de-duplication and read-only tool '
-          'limits, with the Firebase Emulator verifying access. Agent replies are checked against tool data, and the '
-          'game is checked for a resource balance unreachable without logged usage. Published rates can differ from '
-          'paid amounts; all figures remain estimates.',
+card(s, MARGIN, 4.96, CW, 1.34, head='Validation',
+     body='Test plan exclusion, log formats, token classes, dated and time-based rates, missing data, de-duplication '
+          'and account/tool isolation. Replies are checked against evidence, text fallback and ledger separation, and '
+          're-importing logs grants no duplicate game resources. Sample data never enters real totals.',
      fill=LIGHTROW, size=11.5, head_size=12.5)
-tf = tb(s, MARGIN, 6.26, CW, 0.4)
+tf = tb(s, MARGIN, 6.42, CW, 0.4)
 para(tf, True, [('Repository: ', True, NAVY), (GH, False, TEAL, False, GH),
                 ('   ·   UI/UX, accessibility and integration are shared across all three members.', False, MUTE)],
      size=11, after=0)

@@ -67,8 +67,8 @@ public class MainActivity extends AppCompatActivity {
     private static final long TOKENS_PER_UNIT = 1_000_000L / 100L;
 
     /**
-     * 预览期用的账号。真正的登录还没做，等接了 Firebase Auth 再换成
-     * {@code FirebaseAuth.getCurrentUser().getUid()}。
+     * 预览期用的账号。真正的登录还没做，等接了自建账号服务再换成
+     * 登录态里那个 uid（服务端从会话 token 解出来的那个，不是客户端传的）。
      */
     private static final String DEMO_UID = "demo-user";
 

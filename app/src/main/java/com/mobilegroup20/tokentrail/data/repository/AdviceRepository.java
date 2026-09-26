@@ -8,7 +8,7 @@ import com.mobilegroup20.tokentrail.contract.model.AdviceRequest;
 /**
  * 建议 agent 的调用口。<b>游戏侧（刘宗润）实现，界面只依赖这个接口。</b>
  *
- * <p>实现里做三件事：拿当前登录用户的 Firebase ID token、请求服务端、把结果转成
+ * <p>实现里做三件事：拿当前登录用户的会话 token、请求服务端、把结果转成
  * {@link AdviceAnswer}。真正的模型调用和工具循环在服务端，客户端<b>不持有</b>任何
  * 模型 API key——key 只在服务端，这是大纲 §8 明写的。
  *

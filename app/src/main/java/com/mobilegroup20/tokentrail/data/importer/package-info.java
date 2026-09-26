@@ -1,5 +1,5 @@
 /**
- * 日志导入：把 Codex / GLM / DeepSeek 的用量日志读进来，变成
+ * 日志导入：把 Codex / ZCode / DSH 的用量日志读进来，变成
  * {@link com.mobilegroup20.tokentrail.contract.model.UsageCall}。<b>负责人：张莉。</b>
  *
  * <p>每家一个解析器，都实现同一个接口，导入流程不关心是谁的日志：

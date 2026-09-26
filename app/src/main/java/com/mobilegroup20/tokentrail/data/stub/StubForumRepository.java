@@ -28,8 +28,8 @@ public class StubForumRepository implements ForumRepository {
     @Override
     public LiveData<List<ForumPost>> officialPosts(int limit) {
         List<ForumPost> posts = new ArrayList<>();
-        posts.add(official("GLM-4.6 发布：长上下文价格下调",
-                "输入价格下调，缓存读维持原价。完整价目表见官方页面。", "glm-4.6"));
+        posts.add(official("MiMo v2.6 发布：缓存写入限时免费",
+                "缓存写入限时免费，缓存读仍按低价计费。完整价目表见官方页面。", "mimo-v2.6-pro"));
         posts.add(official("OpenAI 调整推理模型计费口径",
                 "推理 token 计入输出，账单上的输出量会明显变大。", "gpt-5"));
         return live(trim(posts, limit));
@@ -39,7 +39,7 @@ public class StubForumRepository implements ForumRepository {
     public LiveData<List<ForumPost>> hotPosts(String since, int limit) {
         List<ForumPost> posts = new ArrayList<>();
         posts.add(community("把系统提示词放前面，缓存命中率能到七成",
-                "同样的提示词前缀重复调用会命中缓存，实测输入成本降到三分之一。", "glm-4.6", 214, 0.92));
+                "同样的提示词前缀重复调用会命中缓存，实测输入成本降到三分之一。", "mimo-v2.6-pro", 214, 0.92));
         posts.add(community("长会话记得定期开新会话",
                 "上下文越长，每一轮都要重新计费，单次成本会滚雪球。", null, 158, 0.81));
         posts.add(community("deepseek-reasoner 的思考 token 也在账单里",
@@ -62,10 +62,10 @@ public class StubForumRepository implements ForumRepository {
         out.asOfEpochMillis = System.currentTimeMillis();
 
         List<ForumPost> all = new ArrayList<>();
-        all.add(official("GLM-4.6 发布：长上下文价格下调",
-                "输入价格下调，缓存读维持原价。完整价目表见官方页面。", "glm-4.6"));
+        all.add(official("MiMo v2.6 发布：缓存写入限时免费",
+                "缓存写入限时免费，缓存读仍按低价计费。完整价目表见官方页面。", "mimo-v2.6-pro"));
         all.add(community("把系统提示词放前面，缓存命中率能到七成",
-                "同样的提示词前缀重复调用会命中缓存，实测输入成本降到三分之一。", "glm-4.6", 214, 0.92));
+                "同样的提示词前缀重复调用会命中缓存，实测输入成本降到三分之一。", "mimo-v2.6-pro", 214, 0.92));
         all.add(community("长会话记得定期开新会话",
                 "上下文越长，每一轮都要重新计费，单次成本会滚雪球。", null, 158, 0.81));
 
@@ -154,7 +154,7 @@ public class StubForumRepository implements ForumRepository {
         post.title = "缓存写是不是只在第一次调用才产生？";
         post.body = "连着调了三次，只有第一次的缓存写不为零，是我理解错了吗？";
         post.source = ForumPost.Source.COMMUNITY;
-        post.modelTag = "glm-4.6";
+        post.modelTag = "mimo-v2.6-pro";
         post.authorName = "我";
         post.authorUid = STUB_UID;
         post.createdAtEpochMillis = System.currentTimeMillis() - 86_400_000L * 2;

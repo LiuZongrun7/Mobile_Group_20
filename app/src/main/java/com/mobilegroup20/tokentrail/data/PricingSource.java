@@ -12,7 +12,7 @@ import com.mobilegroup20.tokentrail.contract.model.Provider;
  * 也没必要为一次内部查价搭一套 LiveData。所以内部这条路径要一个同步的口。
  *
  * <p>谁来提供实现：短期的价目表是手抄的常量（{@code data/local/BundledPricingSource}），
- * 长期是 Firestore 上那张 {@code pricing/rates/...}。换的时候只动
+ * 长期是服务端那张 {@code pricing/rates/...}。换的时候只动
  * {@code RepositoryProvider} 里接哪一个是，滚汇总的代码一行不用改。
  */
 public interface PricingSource {

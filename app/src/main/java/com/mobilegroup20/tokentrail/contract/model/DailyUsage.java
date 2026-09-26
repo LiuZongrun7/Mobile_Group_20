@@ -25,7 +25,7 @@ public class DailyUsage {
     /**
      * 归属的日历天，格式固定 {@code yyyy-MM-dd}，时区固定 {@code Asia/Shanghai}。
      *
-     * <p>用字符串而不是日期对象，是为了让 Firestore 字段、JSON、数据库列三边长得
+     * <p>用字符串而不是日期对象，是为了让服务端字段、JSON、数据库列三边长得
      * 一样，也避免因为两端时区不同而把同一天算成两天。
      */
     public String day;

@@ -179,7 +179,7 @@ public class DailyRollupTest {
      */
     @Test
     public void unknownModelLeavesCostUncomputableRatherThanFree() {
-        UsageCall c = call("a", Provider.GLM, "glm-4.6", "2026-09-26T02:00:00Z", 1_000_000, 0, 0, 0);
+        UsageCall c = call("a", Provider.MIMO, "mimo-v2.6-pro", "2026-09-26T02:00:00Z", 1_000_000, 0, 0, 0);
 
         List<DailyUsage> rows = DailyRollup.rollup(UID, Collections.singletonList(c), null);
 
@@ -203,12 +203,12 @@ public class DailyRollupTest {
         };
         List<UsageCall> calls = Arrays.asList(
                 call("a", Provider.OPENAI, "gpt-5", "2026-09-26T02:00:00Z", 1_000_000, 0, 0, 0),
-                call("b", Provider.GLM, "glm-4.6", "2026-09-26T02:00:00Z", 1_000_000, 0, 0, 0));
+                call("b", Provider.MIMO, "mimo-v2.6-pro", "2026-09-26T02:00:00Z", 1_000_000, 0, 0, 0));
 
         List<DailyUsage> rows = DailyRollup.rollup(UID, calls, onlyOpenAi);
 
         assertNotNull(rowOf(rows, Provider.OPENAI).rateVersion);
-        assertNull(rowOf(rows, Provider.GLM).rateVersion);
+        assertNull(rowOf(rows, Provider.MIMO).rateVersion);
     }
 
     /** 上限是「一定不会崩、不会漏算一半」，脏记录不该让整批滚汇总失败。 */
@@ -234,10 +234,10 @@ public class DailyRollupTest {
     @Test
     public void orderIsDayThenProviderThenModel() {
         List<UsageCall> calls = Arrays.asList(
-                call("a", Provider.GLM, "glm-4.6", "2026-09-27T02:00:00Z", 1, 0, 0, 1),
+                call("a", Provider.MIMO, "mimo-v2.6-pro", "2026-09-27T02:00:00Z", 1, 0, 0, 1),
                 call("b", Provider.OPENAI, "gpt-5", "2026-09-26T02:00:00Z", 1, 0, 0, 1),
                 call("c", Provider.OPENAI, "gpt-5-mini", "2026-09-26T02:00:00Z", 1, 0, 0, 1),
-                call("d", Provider.GLM, "glm-4.6", "2026-09-26T02:00:00Z", 1, 0, 0, 1));
+                call("d", Provider.MIMO, "mimo-v2.6-pro", "2026-09-26T02:00:00Z", 1, 0, 0, 1));
 
         List<DailyUsage> rows = DailyRollup.rollup(UID, calls, flatRate());
 
@@ -245,7 +245,7 @@ public class DailyRollupTest {
         assertEquals(Provider.OPENAI, rows.get(0).provider);
         assertEquals("gpt-5", rows.get(0).model);
         assertEquals("gpt-5-mini", rows.get(1).model);
-        assertEquals(Provider.GLM, rows.get(2).provider);
+        assertEquals(Provider.MIMO, rows.get(2).provider);
         assertEquals("2026-09-27", rows.get(3).day);
     }
 

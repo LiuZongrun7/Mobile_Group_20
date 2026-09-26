@@ -44,19 +44,31 @@
 > 这张表是**接之前**的预判。2026-09-26 拿到真实导出验过之后，有几条要改
 > （列名、币种、切天口径、以及「不用自己维护价目表」）——**以 §4 为准**。
 
-### GLM / 智谱 —— 接不上
+### Xiaomi MiMo / ZCode —— 接不上
+
+> **本节是社区资料拼出来的，我们一条都没验过。** 小米只公开了
+> [价目表](https://mimo.mi.com/docs/en-US/price/pay-as-you-go) 和
+> [首次调用](https://mimo.mi.com/docs/en-US/quick-start/summary/first-api-call) 这类页面，
+> 用量端点官方文档里**没有**。底下的 base URL、控制台路径、cookie 名字来自第三方插件和博客
+> （CodexBar 的 `docs/mimo.md`、cc-switch 的用量查询、skillsmp 上的 mimo-usage skill）。
+> 报告里要按「未验证的社区发现」讲，别说成官方接口；**等拿到一个真 key 要重新核一遍**。
 
 | | |
 | --- | --- |
-| **用户填** | API key（**原样**放 `Authorization`，**不加 `Bearer`**）+ `bigmodel-organization: org-xxx` + `bigmodel-project: proj_xxx`，URL 还要带 `?type=1\|2` |
-| **我们打** | `https://open.bigmodel.cn/api/monitor/usage/quota/limit` |
-| **拿到什么** | **只有套餐额度 / 剩余量，没有按模型、按天的 token 明细**。填不满 `UsageCall` |
-| **官方吗** | ❌ 未公开接口 |
-| **坑** | 少发 org / project 头 → 返回空 `data:{}`；少发 `type` → 报「当前用户不存在 coding plan」。社区那批插件一大半就栽在这两个头上 |
-| **结论** | **这条接不上**。要么放弃 GLM 的自动拉取，要么它走手动导入 |
+| **用户填** | 目前**没得填**（走手动导入）。按量付费和 Token Plan 是两套 key：`sk-...` 打 `https://api.xiaomimimo.com/v1`，`tp-...` 打 `https://token-plan-cn.xiaomimimo.com/v1` |
+| **我们打** | 按量付费和 Token Plan 那两个 base 都**没有**用量端点。控制台侧社区在用 `https://platform.xiaomimimo.com/api/v1/balance` 和 `/api/v1/tokenPlan/usage` |
+| **拿到什么** | 余额 + Token Plan 的套餐用量。**没有按模型、按天的 token 明细**，填不满 `UsageCall` |
+| **官方吗** | ❌ 官方 API Reference 里没有任何用量 / 消费端点。上面那两条控制台路径是社区逆出来的 |
+| **四桶** | 价目表里 input / cacheRead / output 都有单价；**cacheWrite 限时免费**，所以那一栏填 0 是有依据的，不是缺数据 |
+| **坑** | 控制台接口用 **cookie** 鉴权（`api-platform_serviceToken` + `userId`），约 24 小时过期、登出即失效——比 DeepSeek 那个登录态 token 还脆。和 DeepSeek 一样，拿它打控制台接口在 ToS 上站不住 |
+| **结论** | **这条接不上，走手动导入。** 而且注意：社区有文档的用量端点只有 **Token Plan** 那个，而大纲 §2 第 88 行明确要求**排除 Token Plan 用量**、只算按量付费——**就算硬接上，拿到的也不是我们要的那类数据** |
+
+价目表上的模型名（定价用得到，别写错）：`mimo-v2.6-pro`、`mimo-v2.6-flash`、
+`mimo-v2.6-pro-ultraspeed`、`mimo-v2.5`、`mimo-v2.5-pro`（将下线）、
+以及 `mimo-v2.5-asr` / `mimo-v2.5-tts-*` 那些语音模型。桩里用的是 `mimo-v2.6-pro`。
 
 **一句话**：能自动拉的只有 OpenAI；DeepSeek 是「技术上能做、代价是替用户存一个登录态 token」；
-GLM 拿不到明细。
+MiMo 拿不到明细，而且它唯一有文档的用量端点是 Token Plan，正好是大纲要求排除的那个。
 
 ---
 
@@ -87,7 +99,7 @@ bucket:<provider>:<桶起点毫秒>:<model>:<projectId>
 Sessions 那类图表要过滤掉，否则会以为数据丢了。
 
 顺带一笔：`Source.IMPORTED` 这个名字现在也覆盖拉取来的数据。**不改枚举**
-（改它要动 `contract`、Firestore 值、桩数据三处），报告里说明一句就行。
+（改它要动 `contract`、服务端字段、桩数据三处），报告里说明一句就行。
 
 ---
 
@@ -108,9 +120,9 @@ Sessions 那类图表要过滤掉，否则会以为数据丢了。
 - **凭据只落设备本机，明文存 `SharedPreferences`，不加密。** 这是**有意的取舍**，
   不是漏做：课程项目把力气花在体验上——用户填完立刻能用，不该为了防一个本地攻击面
   多引一个库、多一层失败可能。评审要是问，就答"取舍已记录在案"。
-- **但绝不同步到 Firestore。** 这条**不是**隐私换体验，是两头都更差：
-  同步对我们零收益（唯一好处是用户换手机），代价是我们替全班同学保管一堆 Admin key，
-  Firestore 规则只要有一个口子就是一起漏；本机存反而更快、离线也能用。
+- **但绝不上传服务端。** 这条**不是**隐私换体验，是两头都更差：
+  上传对我们零收益（唯一好处是用户换手机），代价是我们替全班同学保管一堆 Admin key，
+  服务端只要有一个口子就是一起漏；本机存反而更快、离线也能用。
   所以「随便存」的范围是**设备内**，**不出设备**。
 - 界面上提一句：凭据只存在本机，可以随时在 provider 后台吊销。
 - **不要**把凭据写进 Room、写进日志、或塞进 `UsageCall` 的任何字段。

@@ -4,7 +4,7 @@ package com.mobilegroup20.tokentrail.contract.model;
  * 帖子下面的一条回复。
  *
  * <p>「我的帖子 + 相关回复」是论坛那一侧要提供的第三个桶（前两个是官方帖和热帖）。
- * 回复跟帖子分开存：一个帖子可能几十条回复，塞进帖子文档里会在 Firestore 撞上
+ * 回复跟帖子分开存：一个帖子可能几十条回复，塞进帖子文档里会在服务端撞上
  * 单文档 1MB 的上限，而且每次读帖子都要把回复全拖下来。
  */
 public class ForumReply {

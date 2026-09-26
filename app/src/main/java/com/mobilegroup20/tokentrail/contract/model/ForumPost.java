@@ -4,8 +4,8 @@ package com.mobilegroup20.tokentrail.contract.model;
  * 论坛帖子。官方帖和用户帖共用这一个结构，用 {@link #source} 区分。
  *
  * <p><b>论坛是跨账号的公共内容，用量记录是 per-uid 的私有内容</b>，这两类的
- * Firestore 安全规则完全不同：帖子可以被任何登录用户读，用量只能被本人读。
- * 别把两者放进同一个集合里，否则规则没法写。
+ * 服务端的可见性校验完全不同：帖子可以被任何登录用户读，用量只能被本人读。
+ * 别把两者放进同一处，否则可见性校验没法写。
  */
 public class ForumPost {
 
@@ -18,7 +18,7 @@ public class ForumPost {
     public Source source;
 
     /**
-     * 帖子关联的模型，如 "glm-4.6"。没有明确指向某个模型时留 null。
+     * 帖子关联的模型，如 "mimo-v2.6-pro"。没有明确指向某个模型时留 null。
      * agent 回答「换模型能省多少」时会按这个字段筛帖。
      */
     public String modelTag;

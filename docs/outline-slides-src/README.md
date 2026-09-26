@@ -51,12 +51,36 @@ and shift the figure in the deck:
 | --- | --- | --- |
 | `fig_ui.tex` | 11, 11 | 2393 × 998 |
 | `fig_agent.tex` | 22, 11 | 1028 × 1824 |
-| `fig_flow.tex` | 24, 12 | 2487 × 263 |
+| `fig_game.tex` | 22, 11 | 1028 × 1824 |
+| `fig_flow.tex` | 24, 12 | 2487 × 475 |
 
 The pads are what the committed PNGs were made with; matching them keeps the
 figure the same size in the deck, because `build_deck.py` scales by width for
-`fig_ui` and by height for the other two. `fig_game` is unchanged so far. Keep
-the rendered width above 1000 px so the mockups stay sharp when projected.
+`fig_ui` and by height for the other three. Keep the rendered width above
+1000 px so the mockups stay sharp when projected.
+
+### Checking a figure before you commit it
+
+`check_fig.py` flags ink that spills out of the box it belongs in:
+
+```sh
+.venv/bin/python check_fig.py fig_agent 113 157.5 11.42 \
+  'frame:0,0,6.2,11.4' 'q2:3.30,3.86,5.85,4.66'
+```
+
+The arguments are the figure name (it reads the untrimmed `-1.png`), the page
+origin in pixels, pixels per centimetre, the TikZ y of the page top, then one
+`name:x0,y0,x1,y1` box per region in TikZ centimetres.
+
+It exists because node text in a `fig_*.tex` is placed at explicit coordinates
+and **does not wrap**. A bubble caption two words too long runs straight over
+the phone frame, and neither `xelatex` nor the deck build says a word: `Overfull`
+only covers horizontal boxes in the text flow, not positioned nodes. The first
+draft of `fig_agent` shipped a question bubble running off the right edge with
+a clean log and `Overfull 0`.
+
+Calibrate the origin from a known edge rather than assuming: a 1.2 pt frame
+border is centred on its path, so its ink spans about 4 px either side of it.
 
 The `fig_*.pdf` and `fig_*.aux` / `.log` files XeLaTeX leaves behind are build
 by-products — only the `.tex` and the trimmed `.png` are committed.

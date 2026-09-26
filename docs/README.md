@@ -29,16 +29,30 @@ cd docs && PATH="/Library/TeX/texbin:$PATH" xelatex -interaction=nonstopmode Tok
 cd docs/outline-slides-src && python3 build_deck.py
 ```
 
-**改大纲时容易踩的两个坑**（都踩过）：
+**字体是按机器自动选的**，`.tex` 顶部有一条 `\IfFileExists` / `\IfFontExistsTF`
+链，依次尝：微软雅黑（`msyh.ttc`，装了 Microsoft Word 才有）→ 微软雅黑（按名字，
+Windows）→ `Helvetica Neue`（macOS）→ `Arial` → 留空用 LaTeX 默认。
 
-- 这台 Mac 上字体走的是 `Helvetica Neue`，它**没有 `→` 这个字形**，会渲染成空框。
-  箭头一律写 `$\rightarrow$`，让它从数学字体里取。
-- 字体兜底那一支**不要**写 `\setmainfont{Latin Modern Roman}`——fontspec 不把它当
-  系统字体解析，编译不会报错，但整篇会静默丢掉所有字形（两万多个缺字）。
-  宁可留空。
+**所以同一份 `.tex` 在两台机器上编出来字体不一样，页数都是 4 页。**
+仓库里那份 PDF 是在这台 Mac 上编的（`Helvetica Neue`）；谁在 Windows 上编会得到
+微软雅黑那版。两份都是对的，**别拿字体不一致当 bug 查**。
 
-验证：编译完看 log，`Overfull` / `Missing character` 都应该是 0，
-末尾有 `Output written on ... (4 pages)`。页数上限是 4 页，加内容必须同时删内容。
+**改大纲时容易踩的三个坑**（都踩过）：
+
+- 字体链**兜底那一支不能指回同一个字体**。上一版写成「找不到 `msyh.ttc` 就用
+  `\setmainfont{Microsoft YaHei}`」——那是同一个字体，Mac 上照样没有，fontspec
+  直接报错。**而且它照样输出 4 页、照样 BUILD SUCCESSFUL**，只是在 log 里留一句
+  `LaTeX Font Warning`，正文全变成默认字体。坏的 PDF 就这么发出去了。
+- 兜底**不要**写 `\setmainfont{Latin Modern Roman}`——fontspec 不把它当系统字体解析，
+  编译不报错，但整篇静默丢掉所有字形（两万多个缺字）。宁可留空。
+- `Helvetica Neue` **没有 `→` 这个字形**，会渲染成空框。箭头一律写
+  `$\rightarrow$`，让它从数学字体里取（现在是 0 个缺字，说明写法是对的）。
+
+验证：编译完看 log，**`Overfull` / `Missing character` / `cannot be found` 三个都应该是 0**
+（`grep -c` 一下最快），末尾有 `Output written on ... (4 pages)`。
+页数上限是 4 页，加内容必须同时删内容。字体宽度不同会让某一行从「正好放下」
+变成「溢出 17pt」，`\emergencystretch=3em` 就是为这个留的余量——它只在本来要溢出的
+行上生效，不改别的地方。
 
 ---
 
@@ -53,7 +67,7 @@ app/src/main/java/com/mobilegroup20/tokentrail/
 │   ├── repository/    ★ 五个接口。屏幕和逻辑只认这些，不认实现
 │   ├── stub/          桩实现（编好的假数据），真实现没写完时顶上
 │   ├── local/         张莉：Room
-│   ├── remote/        张莉（用量）、汪庭栋（论坛）：Firestore / HTTP
+│   ├── remote/        张莉（用量）、汪庭栋（论坛）：服务端 HTTP 接口
 │   ├── importer/      张莉：日志解析
 │   └── RepositoryProvider.java   ★ 全项目拿 Repository 的唯一入口
 ├── game/

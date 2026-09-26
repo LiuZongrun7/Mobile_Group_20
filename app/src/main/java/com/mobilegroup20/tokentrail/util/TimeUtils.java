@@ -19,7 +19,7 @@ import java.util.List;
  *   <li>存储里一律用 UTC 毫秒（{@link com.mobilegroup20.tokentrail.contract.model.UsageCall#startedAtEpochMillis}），
  *       只在换算成「哪一天」的时候经过这里；</li>
  *   <li>「天」对外一律是 {@code yyyy-MM-dd} 字符串，跨数据库、跨 JSON、
- *       跨 Firestore 都长得一样，不会因为时区在传输中被重新解释。</li>
+ *       跨接口都长得一样，不会因为时区在传输中被重新解释。</li>
  * </ul>
  */
 public final class TimeUtils {

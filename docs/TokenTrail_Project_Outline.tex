@@ -1,16 +1,33 @@
-% Compile with XeLaTeX and Microsoft YaHei installed:
+% Compile with XeLaTeX:
 % xelatex -interaction=nonstopmode TokenTrail_Project_Outline.tex
 % All diagrams are embedded TikZ code; no external image files are required.
+% The body font is chosen at build time -- see the chain below.
 \documentclass[11pt,a4paper]{article}
 \usepackage[margin=16mm]{geometry}
 \usepackage{fontspec,graphicx,tabularx,booktabs,array,enumitem,hyperref,tikz}
 \usepackage[table]{xcolor}
 \usetikzlibrary{positioning,arrows.meta}
-% Keep the agreed Microsoft YaHei body font on macOS and Windows.
+% Body font. Preferred is Microsoft YaHei; the rest of the chain exists because
+% Microsoft YaHei is a Microsoft font and is NOT on macOS unless Microsoft Word
+% is installed. Do not collapse this back to a two-branch \IfFileExists: an
+% earlier version fell back to \setmainfont{Microsoft YaHei} *by name*, which is
+% the same font that had just been found missing, so on a Mac without Word the
+% fallback failed too. fontspec then aborted, yet the build still reported
+% success and still produced 4 pages -- in the LaTeX default font. The only
+% visible trace was a "LaTeX Font Warning" in a log nobody reads, so a wrong PDF
+% could ship unnoticed. Every branch below is a font we verified exists on the
+% machine that picks it; the last one is deliberately empty, because no text at
+% all is better than text in a font nobody chose.
 \IfFileExists{/Applications/Microsoft Word.app/Contents/Resources/DFonts/msyh.ttc}
   {\setmainfont{msyh.ttc}[Path={/Applications/Microsoft Word.app/Contents/Resources/DFonts/},BoldFont=msyhbd.ttc,AutoFakeSlant=0.2]
    \setsansfont{msyh.ttc}[Path={/Applications/Microsoft Word.app/Contents/Resources/DFonts/},BoldFont=msyhbd.ttc,AutoFakeSlant=0.2]}
-  {\setmainfont{Microsoft YaHei}[AutoFakeSlant=0.2]\setsansfont{Microsoft YaHei}[AutoFakeSlant=0.2]}
+  {\IfFontExistsTF{Microsoft YaHei}
+     {\setmainfont{Microsoft YaHei}[AutoFakeSlant=0.2]\setsansfont{Microsoft YaHei}[AutoFakeSlant=0.2]}
+     {\IfFontExistsTF{Helvetica Neue}
+        {\setmainfont{Helvetica Neue}\setsansfont{Helvetica Neue}}
+        {\IfFontExistsTF{Arial}
+           {\setmainfont{Arial}\setsansfont{Arial}}
+           {}}}}
 \definecolor{navy}{HTML}{315E75}
 \definecolor{teal}{HTML}{2E766E}
 \definecolor{amber}{HTML}{A17431}
@@ -24,6 +41,14 @@
 \hypersetup{colorlinks=true,urlcolor=black,linkcolor=black,pdftitle={TokenTrail Project Outline}}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{3pt}
+% Lets TeX stretch a line's spaces a little further before giving up and letting
+% it run into the margin. Needed because the body font differs between machines
+% (see the chain above) and the fonts are not the same width: the team-work
+% paragraph fits in Microsoft YaHei but overflows by 17pt in Helvetica Neue.
+% Without this the Mac build ships a line poking into the margin -- and it is a
+% warning in the log, not an error, so it ships quietly. Only takes effect on
+% lines that would otherwise overflow, so it changes nothing else.
+\emergencystretch=3em
 \setlist[itemize]{leftmargin=15pt,itemsep=1pt,topsep=2pt}
 \renewcommand{\arraystretch}{1.1}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
@@ -82,7 +107,7 @@ The review compares first-party API billing views with existing cross-model moni
 Data input & Profiles, billing mode, budgets; authorised logs, text/confirmed speech, posts and game actions. & Validate sources and inputs; exclude plan usage; retain text fallback. \\
 \rowcolor{lightrow}
 Data processing & Filter/de-duplicate logs; price usage; read-only summaries; rank posts and convert game resources. & Traceable costs/advice; no duplicate game rewards; labelled community context. \\
-Data storage & Room: local records. Firestore: user sync, budgets, game state and assistant ledger; public posts separate. & Firebase Auth/UID rules isolate accounts; game/assistant records remain separate. \\
+Data storage & Room: local records. Server-side store: user sync, budgets, game state and assistant ledger; public posts separate. & Account-scoped access isolates accounts; game/assistant records remain separate. \\
 \rowcolor{lightrow}
 Data output & Costs, heatmap, sessions, budgets, AI evidence; forum lists and real-time battle feedback. & Explicit estimate/missing-data states; assistant API costs shown separately. \\
 \bottomrule
@@ -193,7 +218,7 @@ PAYG means pay-as-you-go. Verify log version and billing mode; DSH may require J
 Android interface & Java/XML, Material Components, Navigation and ViewModel/LiveData; RecyclerView lists, speech-to-text and typed fallback. \\
 \rowcolor{lightrow}
 Network and work & Retrofit/OkHttp connects the Java advice service; bounded read-only tools and one model API. WorkManager checks prices. \\
-Persistence and security & Room stores usage, prices and history; UID-scoped Firestore supports sync and public posts. Firebase Auth/ID-token checks protect access; the model key stays server-side. \\
+Persistence and security & Room stores usage, prices and history; the team's own server supports sync and public posts. The service authenticates every request and scopes every read to the caller's account; no client holds a model key. \\
 \rowcolor{lightrow}
 Open-source reuse & \href{https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt}{Room} (Apache-2.0): used for local records. \href{https://github.com/PhilJay/MPAndroidChart}{MPAndroidChart} (Apache-2.0): added dependency; charts planned. \href{https://github.com/android/codelab-android-room-with-a-view}{Room with a View} (Apache-2.0): archived architecture reference, no copied code. dsh-context/LiteLLM: comparison only; dsh-pet: entry inspiration only. Game engine: original. Record reused files, versions, licences and art sources. \\
 \bottomrule
@@ -249,6 +274,6 @@ Tower defence & Monthly game resources from verified coding-agent API logs. & Ne
 \sect{12. Sources and project references}
 \textbf{Pricing:} \href{https://developers.openai.com/api/docs/pricing}{OpenAI}; \href{https://mimo.mi.com/docs/en-US/price/pay-as-you-go}{Xiaomi MiMo}; \href{https://api-docs.deepseek.com/quick_start/pricing/}{DeepSeek}. Store dated snapshots; these links are not historical rates.\par
 \textbf{Agents/data:} \href{https://learn.chatgpt.com/docs/auth}{Codex auth}; \href{https://zcode.z.ai/en/docs/configuration}{ZCode configuration}; \href{https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md}{DSH providers}; \href{https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md}{DSH session logs}.\par
-\textbf{Implementation:} \href{https://developers.openai.com/api/docs/guides/function-calling}{Function calling}; \href{https://developers.openai.com/api/docs/libraries}{Java SDK}; \href{https://firebase.google.com/docs/auth/admin/verify-id-tokens}{Firebase ID tokens}; \href{https://firebase.google.com/docs/firestore/security/rules-conditions}{Firestore rules}. Project/source links in \S2 and \S8; \href{https://github.com/PhilJay/MPAndroidChart/blob/master/LICENSE}{MPAndroidChart licence}.
+\textbf{Implementation:} \href{https://developers.openai.com/api/docs/guides/function-calling}{Function calling}; \href{https://developers.openai.com/api/docs/libraries}{Java SDK}; \href{https://developer.android.com/privacy-and-security/security-best-practices}{Android security best practices}. Project/source links in \S2 and \S8; \href{https://github.com/PhilJay/MPAndroidChart/blob/master/LICENSE}{MPAndroidChart licence}.
 
 \end{document}

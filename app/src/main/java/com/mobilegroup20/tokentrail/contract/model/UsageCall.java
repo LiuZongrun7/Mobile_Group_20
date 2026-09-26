@@ -13,7 +13,7 @@ package com.mobilegroup20.tokentrail.contract.model;
  * 回答「为什么这周涨了」——这些都得下钻回单次调用。每日汇总是从这张表滚出来的
  * 派生数据，删了能重算；这张表删了就没了。
  *
- * <p>字段顺序和 Firestore 文档、Room 表列一一对应，改动要同步
+ * <p>字段顺序和服务端文档、Room 表列一一对应，改动要同步
  * {@code docs/CONTRACTS.md}。
  */
 public class UsageCall {
@@ -35,12 +35,12 @@ public class UsageCall {
      */
     public String id;
 
-    /** 账号隔离用。所有查询都带这个条件，Firestore 安全规则也按它写。 */
+    /** 账号隔离用。所有查询都带这个条件，服务端每次读也按它过滤。 */
     public String uid;
 
     public Provider provider;
 
-    /** 模型名，如 "gpt-5"、"glm-4.6"、"deepseek-reasoner"。定价的最小单位。 */
+    /** 模型名，如 "gpt-5"、"mimo-v2.6-pro"、"deepseek-reasoner"。定价的最小单位。 */
     public String model;
 
     /** 调用发生的时刻，UTC 毫秒。不要只存「日期字符串」——日结算是按时区算出来的，

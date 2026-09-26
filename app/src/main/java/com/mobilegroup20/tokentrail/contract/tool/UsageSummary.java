@@ -43,7 +43,7 @@ public class UsageSummary {
         DAY,
         /** 每行一个模型。问「哪个模型贵」用这个。 */
         MODEL,
-        /** 每行一个提供方。问「GPT 和 GLM 比呢」用这个。 */
+        /** 每行一个提供方。问「GPT 和 MiMo 比呢」用这个。 */
         PROVIDER
     }
 

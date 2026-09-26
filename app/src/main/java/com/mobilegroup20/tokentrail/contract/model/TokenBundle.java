@@ -10,7 +10,7 @@ package com.mobilegroup20.tokentrail.contract.model;
  *
  * <p>这个类只用于<b>汇总值</b>（工具返回值、游戏换算的入参）。原始记录
  * {@link UsageCall} 和按天汇总 {@link DailyUsage} 保持四个平铺的 long，
- * 因为那两个结构要直接映射到数据库列和 Firestore 字段，平铺更好对齐。
+ * 因为那两个结构要直接映射到数据库列和服务端字段，平铺更好对齐。
  */
 public class TokenBundle {
 
@@ -27,7 +27,7 @@ public class TokenBundle {
      *  如果导入日志时把它们单独放着，就会漏计费。 */
     public long output;
 
-    /** Gson / Jackson / Firestore 反序列化都要用到无参构造，别删。 */
+    /** Gson / Jackson / 服务端反序列化都要用到无参构造，别删。 */
     public TokenBundle() {
     }
 

@@ -10,7 +10,7 @@ import com.mobilegroup20.tokentrail.contract.model.SeasonState;
 /**
  * {@code season_state} 表：赛季与余额的<b>显示缓存</b>。
  *
- * <p><b>权威副本在 Firestore，这张表不是。</b>原因是结算要按天推进：
+ * <p><b>权威副本在服务端，这张表不是。</b>原因是结算要按天推进：
  * 余额如果只存在本地，重装应用或者换台设备就能把已经结算过的天再领一遍资源。
  * 所以这里的数字是拿来秒开界面的，任何结算决策都必须以服务端那份为准。
  *

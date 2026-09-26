@@ -28,19 +28,28 @@
 
 ## 2. 命名口径
 
-- 提供方统一写 **GLM**（智谱那一侧）。大纲早期写的 “ZCode / Z.ai” 就是它，
-  代码和文档里不要再出现 `zhipu`、`zai`、`zcode`。
-- 枚举值固定 `OPENAI` / `GLM` / `DEEPSEEK`，见 `Provider`。
-- **提供方和模型是两个层级**：定价的最小单位是模型（`glm-4.6`、`glm-4-flash`
-  不是一个价）。所以每条记录 `provider` 和 `model` 都要有。
+- 提供方统一写 **MiMo**（小米那一侧），界面字符串是 `"Xiaomi MiMo"`。
+  大纲早期这里写的是智谱 GLM，跟 MiMo 不是同一家，2026-09-26 按新大纲改掉了；
+  作为**提供方名**，代码和文档里不要再出现 `glm`、`zhipu`、`z.ai`、`zai`。
+- **`ZCode` 是客户端，不是提供方，继续用。** 大纲 §2 的 “ZCode supports
+  Xiaomi MiMo as a model provider” 就是这个层级关系：ZCode 装在用户机器上，
+  MiMo 是它背后计费的提供方。`https://zcode.z.ai/...` 是 ZCode 自己的配置文档，
+  照旧引用，别因为域名里有 `z.ai` 就删。
+- 枚举值固定 `OPENAI` / `MIMO` / `DEEPSEEK`，见 `Provider`。
+- **提供方和模型是两个层级**：定价的最小单位是模型（`mimo-v2.6-pro`、
+  `mimo-v2.6-flash` 不是一个价）。所以每条记录 `provider` 和 `model` 都要有。
 - 界面上显示的字符串一律取 `Provider.displayName`，不要另写。
+- **枚举改名要配一次清库或者迁移。** Room 存的是 `provider.name()`（见
+  `LocalConverters`），所以 `GLM` → `MIMO` 之后，老库里 `provider='GLM'` 的行
+  读出来会抛 `IllegalArgumentException`。目前还没有装出去的版本，卸载重装即可；
+  等有真实用户数据了，这种改名必须配一次 Room 迁移把值一起改掉。
 
 ## 3. 时间口径
 
 | 事项 | 规定 |
 | --- | --- |
 | 时区 | `Asia/Shanghai`，只在 `TimeUtils.ZONE` 定义一次 |
-| 「天」 | 字符串 `yyyy-MM-dd`，跨 DB / JSON / Firestore 都用这个形式 |
+| 「天」 | 字符串 `yyyy-MM-dd`，跨 DB / JSON / 接口都用这个形式 |
 | 「月」 | 字符串 `yyyy-MM` |
 | 存储的时刻 | UTC 毫秒（`long`）。只在换算成「哪一天」时经过 `TimeUtils` |
 | 日边界 | `TimeUtils.today()` / `yesterday()` |
@@ -94,20 +103,35 @@ provider API ──拉取─┐
 
 ## 5. 存储契约
 
-### Firestore
+### 服务端（自建）
 
-| 集合 | 可见性 | 谁写 | 谁读 |
+> **2026-09-26 起不再是 Firebase。** 原来这节写的是 Firestore + Firebase Auth，
+> 现在改成团队自己的服务器（VPS）。**架构上有一处实质变化，别按老写法接**：
+> Firebase 是客户端直连数据库、靠安全规则拦；自建之后**客户端只跟我们自己的
+> HTTP 接口说话**，不再直连任何数据库。所以「安全规则」这个概念没有了，
+> 取而代之的是**服务端每个请求都要验身份、每次读都要按调用者的账号过滤**。
+> 下面的集合名和字段沿用原来的设计（数据形状没变），但**它们是服务端的表/文档，
+> 不是客户端能直接摸到的东西**。
+>
+> 服务器的具体形态（语言、数据库、部署方式）**还没定**——VPS 一时登不上，
+> 等能连上再补这一节。在那之前按「一个验身份的 HTTP 服务」写客户端。
+
+| 资源 | 可见性 | 谁写 | 谁读 |
 | --- | --- | --- | --- |
-| `users/{uid}/usageCalls/{callId}` | 仅本人 | 客户端导入 | 客户端 + 建议服务 |
-| `users/{uid}/dailyUsage/{day}_{provider}_{model}` | 仅本人 | 客户端导入后派生 | 客户端 + 建议服务 |
-| `users/{uid}/seasons/{yyyy-MM}` | 仅本人 | 客户端结算事务 | 客户端 + 建议服务 |
-| `users/{uid}/budgets/{yyyy-MM}` | 仅本人 | 客户端 | 客户端 + 建议服务 |
-| `forum/posts/{postId}` | **所有登录用户可读** | 作者 | 客户端 + 建议服务 |
-| `forum/posts/{postId}/replies/{replyId}` | 同上 | 作者 | 客户端 + 建议服务 |
-| `pricing/rates/{provider}_{model}_{effectiveFrom}` | 所有登录用户可读 | 管理端 / 客户端拉取 | 客户端 + 建议服务 |
+| `users/{uid}/usageCalls/{callId}` | 仅本人 | 服务端（客户端导入时提交） | 客户端（经接口）+ 建议服务 |
+| `users/{uid}/dailyUsage/{day}_{provider}_{model}` | 仅本人 | 服务端派生 | 客户端（经接口）+ 建议服务 |
+| `users/{uid}/seasons/{yyyy-MM}` | 仅本人 | 服务端结算事务 | 客户端（经接口）+ 建议服务 |
+| `users/{uid}/budgets/{yyyy-MM}` | 仅本人 | 客户端（经接口） | 客户端（经接口）+ 建议服务 |
+| `forum/posts/{postId}` | **所有登录用户可读** | 作者 | 客户端（经接口）+ 建议服务 |
+| `forum/posts/{postId}/replies/{replyId}` | 同上 | 作者 | 客户端（经接口）+ 建议服务 |
+| `pricing/rates/{provider}_{model}_{effectiveFrom}` | 所有登录用户可读 | 管理端 / 服务端拉取 | 客户端（经接口）+ 建议服务 |
 
-**用量私有、论坛公开，这两类的规则写法完全不同，集合必须分开。** 把两者混进同一
-集合，就会出现「为了读热帖而把所有人的帖子都放开」这种口子。
+**用量私有、论坛公开，这两类的校验写法完全不同，资源必须分开。** 把两者混进同一
+处，就会出现「为了读热帖而把所有人的帖子都放开」这种口子。
+
+**为什么这个改动反而简单了**：Firebase 那套要求客户端自己算「谁能读什么」，
+错一条规则就是一起漏；自建之后客户端**没有任何直接读库的能力**，过滤只发生在
+服务端一处，漏也漏不到客户端去。
 
 ### Room（本地，只三张表）
 
@@ -115,9 +139,10 @@ provider API ──拉取─┐
 | --- | --- | --- |
 | `usage_call` | **`id` 唯一索引** | 去重的落点：`OnConflictStrategy.IGNORE`，返回 -1 即重复 |
 | `daily_usage` | 主键 `(uid, day, provider, model)` | 索引 `(uid, day)`，游戏和面板读它 |
-| `season_state` | 主键 `uid` | 显示缓存，权威在 Firestore |
+| `season_state` | 主键 `uid` | 显示缓存，权威在服务端 |
 
-**不要存论坛帖子**：Firestore 自带磁盘缓存，再存一份只会多一处不一致。
+**不要存论坛帖子**：论坛是读多写少的公共数据，本来就该由服务端按请求返回，
+在本地再存一份只会多一处不一致。
 
 ## 6. agent 的五个只读工具
 
@@ -140,7 +165,7 @@ provider API ──拉取─┐
 服务端在拼答案时**强制**把缺失的天写进 `AdviceAnswer.missingData`——
 这是「agent 承认自己不知道」的机制保证，不靠提示词。
 
-`uid` **不作为任何工具的参数**：由服务端从 Firebase ID token 里取。
+`uid` **不作为任何工具的参数**：由服务端从请求携带的会话 token 里解出来，不信客户端传的。
 
 ## 7. 结算规则（游戏侧）
 
@@ -201,7 +226,7 @@ provider API ──拉取─┐
 | 日志文件的具体格式（三家各要解析什么） | 张莉 | 导入实现时 |
 | **每家的用量取数方式**（拉取 vs 导入，官方 vs 私有接口） | 数据侧 | **现状已查清**，见 [`DATA_SOURCES.md`](DATA_SOURCES.md)；只差实测那三条 |
 | ~~`UsageCall` 装不装得下「时间桶」粒度的行~~ | 组里 | **已定：装**（方案 A）。表结构不动，`id` 用 `call:` / `bucket:` 前缀区分粒度，见 [`DATA_SOURCES.md`](DATA_SOURCES.md) §2 |
-| ~~用户 provider 凭据在客户端怎么存~~ | 数据侧 | **已定：设备本机明文，不同步 Firestore**。取舍已记录，见 `DATA_SOURCES.md` §3 |
+| ~~用户 provider 凭据在客户端怎么存~~ | 数据侧 | **已定：设备本机明文，不上传服务端**。取舍已记录，见 `DATA_SOURCES.md` §3 |
 | 建议服务部署在哪（本地 / 云） | 刘宗润 | 接服务时 |
 
 **汇率归数据侧**：换算写在 `data/Money`，**全项目只有那一处**。对外只给人民币金额
@@ -223,8 +248,8 @@ provider API ──拉取─┐
 
 | 差异 | 说明 |
 | --- | --- |
-| 工具数量 | 大纲 §5 写 “four read-only tools”，实现里是五个（多了 `getMyThreads`） |
-| 提供方命名 | 大纲 §12 与 PPT 里的 “ZCode / Z.ai”，代码里统一叫 **GLM**（定价链接仍用 Z.ai 那份） |
+| ~~工具数量~~ | **已消失**（2026-09-26）：大纲 §5 第 96 行现在自己写的就是 “five read-only tools”，把 `getMyThreads` 也算进去了，和实现一致 |
+| ~~提供方命名~~ | **已消失**（2026-09-26）：大纲改版后第三家统一叫 **Xiaomi MiMo**（`Provider.MIMO`），代码不再是 `GLM`。`ZCode` 还在，但它是客户端，见 §2 |
 | 游戏 HUD | PPT 上是一个资源数字，实现里是三个计数（输入 / 缓存 / 输出互不通兑） |
 | 敌人来向 | 实现是「只从一侧来袭、塔由玩家在网格上自行放置」，比大纲的示意图更具体 |
 | 战场网格 | PPT 的战场是按手机画的**示意图**（约 10×9 格、塔画成 1 格、一屏看得完）；实现是固定 **40 列 × 18 行**的网格，塔占 **2×2**、核心 **3×3**、城墙 **1×1**，**横向要拖**（手机一屏约 16 列）。核心在示意图里画的正好也是 3 格，这条是一致的 |
