@@ -152,7 +152,7 @@ public static final boolean USE_STUBS = true;
 
 ```bash
 ./gradlew assembleDebug            # 编译，出 APK
-./gradlew testDebugUnitTest        # 跑单元测试（现在 207 个，全过；另有 1 个 @Ignore 的探针）
+./gradlew testDebugUnitTest        # 跑单元测试（现在 223 个，全过；另有 1 个 @Ignore 的探针）
 ./gradlew connectedDebugAndroidTest # 需要连真机/模拟器，目前只有模板测试
 ```
 
@@ -178,7 +178,7 @@ public static final boolean USE_STUBS = true;
 | 整页分层（`activity_main.xml`） | **三层**：第 0 层 `MountainBackgroundView` 岩石底、第 0.5 层 `BattlefieldView` 世界层，**两个都铺满全屏**，第 1 层界面浮在最上面（HUD/按钮/底部导航用 glass 半透明）。两层**共用同一个相机**，拖动/缩放时地上的石头和格子一起动。界面层**只加东西、不加底**：中间那个 `@id/play_area` 是空占位，只负责回答"战场是哪一块、在哪儿"（格子大小由它算）。世界层铺满是必须的——2× 时那片地（2898px）比屏幕（2844px）还高，只给中间一条的话会被裁掉，放多大都出不了框。游戏页是**固定美术、不跟随系统深浅色**，所以没有 `values-night/`。规格见 `ART.md` §5 |
 | 底部导航与落地页（`menu/bottom_nav.xml` + `MainActivity.showTab`） | **骨架通了**：统计 / 游戏 / 论坛 / 我的。**打开 App 落在"统计"**——落地页就是菜单里的第一项，没有第二个开关，换顺序就是换主页。**游戏与论坛已有页面**，统计与我的共用一个空壳（`@id/empty_page`），上面写一句 `Xxx is not built yet`（一片空白分不清"还没做"和"崩了"）。切页时世界层一起 `INVISIBLE`（它铺满全屏，不藏会从空壳下面透出来），**顺带把战斗冻住了**——推进挂在 `onDraw` 上，看不见就不出帧，回来也不补帧。四个坑见 [`TASKS.md`](TASKS.md) |
 | 桩数据（`data/stub/`） | **完成**，可以照着做界面和玩法 |
-| 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行），但 `ui/` 里还只有 `package-info.java`，等三人分头填 |
+| 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行）；`ui/forum` 和 `ui/auth` 也有了真页面（汪庭栋，见上一行），**`ui/game`、`ui/dashboard` 还是空的**（只有 `package-info.java`） |
 | 数据侧真实现 | **进行中**。`data/local` 已经落地：三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 的建表语句导出在 `app/schemas/`。**还没有**：`data/remote` 的 fetcher、`data/importer` 的解析器、`BudgetRepository`（见 `TASKS.md` 的待办）。**价目表是空的**——见 `DATA_SOURCES.md`/`BundledPricingSource`，没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
 | 论坛（汪庭栋） | News / Community、图文发布、点赞评论、已有账号登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md |
 | 游戏与 agent（刘宗润） | 玩法侧**能在真机上跑**（几何、相机、波次、放塔、挪建筑、升级、两种塔的数值、战斗全通，见上面几行）；**只有 agent 逻辑还没开始** |
