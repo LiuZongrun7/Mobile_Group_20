@@ -16,6 +16,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        // Public API endpoint only. Session tokens come from the account module at runtime.
+        val forumBaseUrl = providers.gradleProperty("forumBaseUrl").orElse("").get()
+        buildConfigField("String", "FORUM_BASE_URL", "\"${forumBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -43,6 +46,7 @@ android {
     // no longer call findViewById() and never risk a wrong-cast at runtime.
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     // 把导出的建表语句也当成 androidTest 的 asset 打进去。
@@ -69,6 +73,11 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.lifecycle.livedata)
     implementation(libs.androidx.lifecycle.viewmodel)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.swiperefresh)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.glide)
 
     // Room：数据侧（张莉那块）的本地库。注解处理器必须挂在 annotationProcessor 上，
     // 它在编译期生成建表语句和查询实现，所以列名写错是编译报错而不是运行时崩。
@@ -97,6 +106,8 @@ dependencies {
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.arch.testing)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     // 迁移测试要真机/模拟器（它建的是真的 SQLite 文件），所以挂在 androidTest 上。

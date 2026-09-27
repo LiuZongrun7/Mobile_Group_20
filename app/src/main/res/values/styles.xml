@@ -1,4 +1,16 @@
 <resources>
+    <style name="ForumThemeBase" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#6750A4</item>
+        <item name="colorSurface">#FFFBFE</item>
+        <item name="colorOnSurface">#1D1B20</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#1D1B20</item>
+    </style>
+    <style name="ForumTheme" parent="ForumThemeBase" />
+    <style name="ForumButtonTheme">
+        <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
+    </style>
 
     <!-- Base application theme.
          Material3 ships its own full colour palette (colorPrimary, colorSecondary,
@@ -7,7 +19,7 @@
 
          NoActionBar: the app draws its own top area. To get a title bar back,
          use Theme.Material3.DayNight with a MaterialToolbar in the layout. -->
-    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="AppThemeBase" parent="Theme.Material3.DayNight.NoActionBar">
 
         <!-- 状态栏和手势条：现在**整页都是深岩石**（游戏页的底，见
              game/view/MountainBackgroundView），所以图标一律用浅色。
@@ -25,8 +37,8 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
+    <style name="AppTheme" parent="AppThemeBase" />
 
     <!-- ==================== 游戏页：压在岩石底上的文字 ====================
          游戏页整页是岩石（MountainBackgroundView），不是主题的 surface，

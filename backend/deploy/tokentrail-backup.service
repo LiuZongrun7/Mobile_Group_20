@@ -1,0 +1,17 @@
+[Unit]
+Description=Back up TokenTrail forum data
+
+[Service]
+Type=oneshot
+User=tokentrail
+Group=tokentrail
+WorkingDirectory=/opt/tokentrail/backend
+EnvironmentFile=/etc/tokentrail-forum.env
+ExecStart=/opt/tokentrail/venv/bin/python -m tokentrail_forum.backup
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tokentrail-forum
+TimeoutStartSec=180

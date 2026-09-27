@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect TokenTrail news hourly
+
+[Timer]
+OnBootSec=2min
+OnCalendar=hourly
+RandomizedDelaySec=60
+Persistent=true
+Unit=tokentrail-news.service
+
+[Install]
+WantedBy=timers.target

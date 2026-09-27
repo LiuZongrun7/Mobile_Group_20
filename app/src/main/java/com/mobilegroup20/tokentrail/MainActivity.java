@@ -11,6 +11,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Lifecycle;
+import android.content.res.ColorStateList;
+import com.mobilegroup20.tokentrail.ui.forum.ForumFragment;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.mobilegroup20.tokentrail.contract.model.ResourceBalance;
@@ -141,6 +146,15 @@ public class MainActivity extends AppCompatActivity {
         setUpShop();
         setUpWaveButton();
         setUpBottomNav();
+        binding.accountButton.setOnClickListener(v -> {
+            if (getSupportFragmentManager().findFragmentByTag("account") == null)
+                new com.mobilegroup20.tokentrail.ui.auth.AccountDialog().show(getSupportFragmentManager(), "account");
+        });
+        getSupportFragmentManager().setFragmentResultListener("accountChanged", this, (key, result) -> {
+            MenuItem selected = binding.bottomNav.getMenu().findItem(binding.bottomNav.getSelectedItemId());
+            showTab(selected.getItemId(), selected.getTitle());
+        });
+        if (savedInstanceState != null) binding.bottomNav.setSelectedItemId(savedInstanceState.getInt("selectedTab", R.id.nav_dashboard));
         showSeasonHeader();
         showHud();
     }
@@ -833,46 +847,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 切到某一页。<b>四个板块里只有"游戏"那一页是真的</b>，另外三个共用
-     * {@code @id/empty_page} 那个空壳，文案现填。
-     *
-     * <p>要动的东西有三处，缺一处就露馅：
-     *
-     * <ol>
-     *   <li>{@code game_page} 和 {@code empty_page} 二选一——这一层管的是界面
-     *       （HUD、操作行、空壳上的那句话）；</li>
-     *   <li><b>世界层（{@code battlefield}）也要跟着藏。</b>它是铺满全屏的一层、
-     *       画在界面层下面，而空壳是透明的（底该是同一片岩石），不藏的话
-     *       统计页上会透出一整个战场；</li>
-     *   <li>岩石底（{@code background}）<b>不藏</b>：它是这个 App 的地，
-     *       四页站在同一片地上，这也和"界面层只加东西、不加底"那条对得上。</li>
-     * </ol>
-     *
-     * <p><b>藏战场用 {@code INVISIBLE} 而不是 {@code GONE}。</b>{@code GONE} 会让它
-     * 量不出尺寸，格子几何和相机就得在切回来的时候整个重算（中间那一帧还是 0×0 的，
-     * 取景会跳一下）。{@code INVISIBLE} 照样参与布局、只是不画——顺带把它那套
-     * 逐帧重绘也停了（见 {@code BattlefieldView} 的帧闸门）。
-     *
-     * <p><b>切走了就等于暂停——这是白捡的，不是设计出来的。</b>整场战斗的推进
-     * （{@code Battlefield.advance}）挂在 {@code BattlefieldView.onDraw} 里
-     * （{@code tick}），而 {@code INVISIBLE} 的视图不会有 {@code onDraw}：
-     * 敌人、子弹、波次计时器全冻在原地，回来看接着打。
-     *
-     * <p>回来时也<b>不会"补帧"</b>：攒下的那几十秒被 {@code MAX_FRAME_SECONDS}
-     * （0.05 秒）一刀切掉，第一帧最多走 0.05 秒。所以来回切多少次，
-     * 战局都是干净的，不会一回到游戏就发现敌人已经走过半个屏幕。
-     *
-     * <p>好处是玩到一半去看统计不会输。但要知道它<b>不是</b>一个"暂停功能"：
-     * 没有暂停的图标、也不能在暂停时操作。真要做暂停，得从引擎那一层停
-     * （别再喂 dt），而不是靠"这一页看不见"这件事——那是碰巧。
+     * 游戏、论坛与统计/我的占位页之间切换。论坛使用独立 Fragment 和浅色系统栏；
+     * 游戏保留岩石底、浅色导航图标。隐藏战场时使用 INVISIBLE，保留格子尺寸。
+     * 战斗推进挂在 onDraw 上，所以切走时自然暂停，回来也不会补帧。
+     * 论坛 Fragment 留在 FragmentManager 中，保留两个标签各自的游标与滚动位置。
      */
     private void showTab(int itemId, CharSequence title) {
         boolean game = itemId == R.id.nav_game;
+        boolean forum = itemId == R.id.nav_forum;
+        boolean account = itemId == R.id.nav_profile && !BuildConfig.FORUM_BASE_URL.isEmpty();
+        binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
         binding.gamePage.setVisibility(game ? View.VISIBLE : View.GONE);
-        binding.emptyPage.setVisibility(game ? View.GONE : View.VISIBLE);
+        binding.emptyPage.setVisibility(game || forum ? View.GONE : View.VISIBLE);
+        binding.forumPage.setVisibility(forum ? View.VISIBLE : View.GONE);
         binding.battlefield.setVisibility(game ? View.VISIBLE : View.INVISIBLE);
-        if (!game) {
-            binding.emptyLabel.setText(getString(R.string.nav_not_built, title));
+        binding.background.setVisibility(forum ? View.INVISIBLE : View.VISIBLE);
+        binding.getRoot().setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
+        ColorStateList navColors = ContextCompat.getColorStateList(this, forum ? R.color.forum_nav_item : R.color.nav_item);
+        binding.bottomNav.setItemIconTintList(navColors);
+        binding.bottomNav.setItemTextColor(navColors);
+        binding.bottomNav.setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
+        binding.bottomNav.setItemActiveIndicatorColor(ColorStateList.valueOf(forum ? 0xFFE8DEF8 : 0x40FFFFFF));
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(forum);
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(forum);
+        getWindow().setNavigationBarColor(forum && android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
+        Fragment forumFragment = getSupportFragmentManager().findFragmentByTag("forum");
+        if (forumFragment == null && forum) {
+            getSupportFragmentManager().beginTransaction().add(R.id.forum_page, new ForumFragment(), "forum").commitNow();
+        } else if (forumFragment != null) {
+            androidx.fragment.app.FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
+            if (forum) tx.show(forumFragment); else tx.hide(forumFragment);
+            tx.setMaxLifecycle(forumFragment, forum ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED).commitNow();
         }
+        if (!game && !forum) {
+            com.mobilegroup20.tokentrail.data.TeamAccountSession session = com.mobilegroup20.tokentrail.data.TeamAccountSession.get(this);
+            binding.emptyLabel.setText(account ? session.signedIn() ? getString(R.string.account_signed_in, session.accountName()) : getString(R.string.forum_sign_in) : getString(R.string.nav_not_built, title));
+        }
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putInt("selectedTab", binding.bottomNav.getSelectedItemId());
+        super.onSaveInstanceState(state);
     }
 }

@@ -19,3 +19,10 @@ local.properties
 *.out
 *.toc
 *.synctex.gz
+
+# Python caches and backend RSS staging data
+__pycache__/
+tools/news/runtime/
+backend/runtime/
+backend/.venv/
+.pytest_cache/

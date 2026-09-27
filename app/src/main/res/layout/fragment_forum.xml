@@ -1,0 +1,30 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#FFFBFE" android:theme="@style/ForumTheme">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp"
+        android:gravity="center_vertical" android:paddingHorizontal="20dp">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/nav_forum" android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/new_post"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:contentDescription="@string/forum_new_post" app:icon="@drawable/ic_add_post" />
+    </LinearLayout>
+    <com.google.android.material.tabs.TabLayout android:id="@+id/forum_tabs"
+        android:layout_width="match_parent" android:layout_height="48dp" app:tabMode="fixed" />
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/forum_refresh"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <androidx.recyclerview.widget.RecyclerView android:id="@+id/forum_list"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:clipToPadding="false" android:padding="12dp" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+    <LinearLayout android:id="@+id/forum_status_panel" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical" android:gravity="center" android:padding="16dp">
+        <TextView android:id="@+id/forum_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:textAppearance="?attr/textAppearanceBodyMedium" android:accessibilityLiveRegion="polite" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/forum_retry"
+            style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="@string/forum_retry" />
+    </LinearLayout>
+</LinearLayout>
