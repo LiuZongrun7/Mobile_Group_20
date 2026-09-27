@@ -2,7 +2,6 @@ package com.mobilegroup20.tokentrail.game.view;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -44,42 +43,23 @@ import com.mobilegroup20.tokentrail.game.engine.Viewport;
  * 两边本来就是同一个相机拍同一片地。整页（包括 HUD 背后和手势条背后）
  * 都是这张图的一部分。
  *
- * <p><b>斜纹间距按"格"算，不按 dp 算。</b>按 dp 写死的话，放大时格子变大了、
- * 纹理没变大，两边就对不上了。按格算，它就随缩放一起变，和战场右侧那条
- * 山区永远同疏密（那边是一格一道）。
+ * <h2>纹理</h2>
+ * <p>铺的是 {@link RockTexture} 那张岩石贴图，和战场右侧那条山<b>同一张图、
+ * 同一个锚点、同一个颜色</b>——两边拿的就是同一个 {@code Paint} 对象，
+ * 所以战场上那条山和这里的背景是<b>一片连续不断的石头</b>，中间没有缝、
+ * 也没有色差。锚点钉在布局坐标上，跟着相机一起动。
  *
- * <h2>颜色</h2>
- * <p>比战场里的岩石<b>暗一档</b>（{@code game_mountain_deep} vs
- * {@code game_mountain}）：战场是"近处"，要能从背景里跳出来。
- * 这是这一层和战场唯一的区别，纹理本身是一样的。
- *
- * <p>贴图到位之后这个类会被换成一张平铺的岩石贴图
- * （见 {@code docs/ART.md} §4 的"地面 tile·山区暗版"那张），
- * 也就是把 {@link #onDraw} 里那个循环换成 {@code drawBitmap} 重复绘制。
- * 坐标和相机那几句都不用改。
+ * <p>于是"战场右边界在哪"由<b>草地到石头的界线</b>来说，不由颜色深浅来说。
+ * 这样整页是<b>一张石头底 + 中间一块草地</b>，而不是"暗底 + 嵌一块亮矩形"。
  *
  * <p><b>交接点</b>：这个类是<b>惰性</b>的——相机没接上（布局预览、
  * 或者战场还没量出尺寸）时只铺一层底色，不画纹理。所以它自己不会崩，
- * 但也别指望在 Android Studio 的预览里看到斜纹。
+ * 但也别指望在 Android Studio 的预览里看到石头。
  */
 public class MountainBackgroundView extends View {
 
-    /**
-     * 斜纹间距，单位是<b>格</b>（不是 dp）。
-     *
-     * <p>1 格 = 和战场右侧那条山区一样疏密。为什么不是更细的纹理：
-     * 更细会好看一点（"远山"的空气透视），但会和战场里的斜纹<b>对不上</b>，
-     * 两条边界上会出现疏密不一的接缝。既然这一层是"同一片山铺到屏幕外"，
-     * 那就该用同一套纹理——远近靠颜色深浅区分就够了。
-     */
-    private static final float HATCH_SPACING_CELLS = 1f;
-
-    /** 线宽（dp）。会被相机缩放，和战场里的斜纹一致。 */
-    private static final float HATCH_WIDTH_DP = 1.2f;
-
-    private final Paint hatch = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RockTexture rock;
     private final int baseColor;
-    private final float density;
 
     /** 战场控件：用来算战场面板在屏幕上的位置。 */
     private View panel;
@@ -99,11 +79,8 @@ public class MountainBackgroundView extends View {
     public MountainBackgroundView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
 
-        density = getResources().getDisplayMetrics().density;
         baseColor = context.getColor(R.color.game_mountain_deep);
-
-        hatch.setColor(context.getColor(R.color.game_mountain_deep_shade));
-        hatch.setStrokeWidth(Math.max(1f, HATCH_WIDTH_DP * density));
+        rock = new RockTexture(context);
     }
 
     // ---- 外面接进来的东西 ----
@@ -132,6 +109,9 @@ public class MountainBackgroundView extends View {
     public void setCamera(@Nullable Viewport viewport, @Nullable BoardGeometry board) {
         this.viewport = viewport;
         this.board = board;
+        if (board != null) {
+            rock.setCellPx(board.cellPx());
+        }
         invalidate();
     }
 
@@ -162,8 +142,7 @@ public class MountainBackgroundView extends View {
         float panelLeft = panelLocation[0] - ownLocation[0];
         float panelTop = panelLocation[1] - ownLocation[1];
 
-        float spacing = board.cellPx() * HATCH_SPACING_CELLS;
-        if (spacing <= 0f) {
+        if (board.cellPx() <= 0f) {
             return;
         }
 
@@ -175,19 +154,11 @@ public class MountainBackgroundView extends View {
         canvas.translate(viewport.offsetX(), viewport.offsetY());
         canvas.scale(viewport.zoom(), viewport.zoom());
 
-        // 现在画布是布局坐标。整页四条边换算回布局坐标，就是"这一屏能看到世界的哪一块"
-        float left = viewport.toLayoutX(-panelLeft);
-        float right = viewport.toLayoutX(w - panelLeft);
-        float top = viewport.toLayoutY(-panelTop);
-        float bottom = viewport.toLayoutY(h - panelTop);
-
-        // 45° 斜纹是 x + y = 常数 的一族平行线：一条线从 (c − 顶, 顶) 画到 (c − 底, 底)。
-        // 起点对齐到 spacing 的整数倍，纹理就<b>钉在世界坐标上</b>——
-        // 否则拖动时纹理自己会滑，看起来像背景在追着地图跑。
-        float start = (float) Math.floor((left + top) / spacing) * spacing;
-        for (float c = start; c <= right + bottom; c += spacing) {
-            canvas.drawLine(c - top, top, c - bottom, bottom, hatch);
-        }
+        // 现在画布是布局坐标，贴图就铺在这套坐标上：视口以外也照铺，
+        // 反正整页（HUD 背后、手势条背后）都是这张图的一部分。
+        // 用 drawPaint 而不是算四条边画矩形——贴图本来就无限平铺，
+        // 这里要的就是"把当前画布铺满"。
+        canvas.drawPaint(rock.paint());
 
         canvas.restore();
     }

@@ -10,12 +10,17 @@ import com.mobilegroup20.tokentrail.contract.model.ResourceType;
  * 当前几级决定下一级多少钱，货架上没有这一行。两个都花资源，但一个是商品目录、
  * 一个是单体属性，混在一起以后加"墙升 2 级"就会互相打架。
  *
- * <p><b>三种建筑都有耐久，只有塔有火力。</b>墙是"挡路的"、核心是"要守住的"，
+ * <p><b>每一种建筑都有耐久，两种塔才有火力。</b>墙是"挡路的"、核心是"要守住的"，
  * 两者都不攻击，所以 {@link #damagePerShot}／{@link #fireIntervalSeconds}／
  * {@link #rangeCells} 对它们一律返回 0，{@link #hasRange} 是给界面判断
- * "画不画那个圈"用的。但<b>耐久三种都有</b>（{@link #maxHp}），而且都跟着等级涨
+ * "画不画那个圈"用的。但<b>耐久每种都有</b>（{@link #maxHp}），而且都跟着等级涨
  * ——墙升级涨的是"能多挨几秒"，核心升级涨的是"这一个月的上限有多高"。
- * 三种都能升级（{@link #upgradeCost}），因为三种都有"升级能换来什么"。
+ * 每种都能升级（{@link #upgradeCost}），因为每种都有"升级能换来什么"。
+ *
+ * <p><b>两种塔是两张表，不是一个表加个倍率。</b>箭塔和弩车是反着配的
+ * （快而轻 对 慢而重，见 {@link #BALLISTA_RANGE} 上面那张对比表），
+ * 同一个倍率乘不出这种关系。加第三种塔的时候照做：再一张表，
+ * 别想着"共用一张表、按类型乘个系数"——那正是把两种塔做成同一种的一种方式。
  *
  * <h2>表是按级排的，不是一串 if</h2>
  *
@@ -34,10 +39,45 @@ public final class BuildingStats {
     /** "没有攻击范围"的统一写法，给绘图那边判断用。 */
     private static final double NO_RANGE = 0.0;
 
-    // ---- 塔：下标 = 级数 - 1 ----
+    // ---- 箭塔：下标 = 级数 - 1 ----
 
     /** 打得到几格远，从占地中心算。 */
     private static final double[] TOWER_RANGE = {2.5, 3.0, 3.5};
+
+    /**
+     * 塔的射界：<b>朝左的扇形</b>，这是半角（度）。
+     *
+     * <p>塔<b>不会转</b>（引擎里没有任何朝向状态），全部朝左——敌人从左边
+     * 那条通道进来，往右走，所以"朝左"就是"朝着来敌"。射界是以正左方
+     * （即 -x）为中心、上下各 {@value} 度的一个扇形，见
+     * {@code Battlefield.frontmostInRange} 里的判定和
+     * {@code BattlefieldView.drawRangeSector} 里画的图——两边用的是同一个数，
+     * 所以"画出来的扇形"和"打得到的范围"不会说岔。
+     *
+     * <p>为什么不是整圆：贴图是一根朝左的炮管，配一个三百六十度的圈自相矛盾。
+     * 改成扇形之后，"往哪边摆"这件事才有意义——摆在这条路的左边打来敌，
+     * 摆在右边就白摆了。
+     *
+     * <p><b>这是玩法配平参数，改它要重跑 {@code DemoSceneProbeTest}。</b>
+     * 调大 = 更好守（扇形更宽），调小 = 更依赖摆位。90 就是"整个左半边"，
+     * 也是这个数的上限——<b>只能填 (0, 90]</b>，理由见下面那个 static 块。
+     */
+    public static final double AIM_HALF_ANGLE_DEG = 60.0;
+
+    /** {@link #AIM_HALF_ANGLE_DEG} 的正切。判定里每帧每只敌人都要算，先存下来。 */
+    public static final double AIM_HALF_ANGLE_TAN = Math.tan(Math.toRadians(AIM_HALF_ANGLE_DEG));
+
+    static {
+        // 判定是拿正切当斜率比的，所以这个数必须落在 (0, 90] 里：
+        // 到了 90° 正切是"正无穷"（半个平面），再往上正切翻成负数，
+        // 于是 {@code |dy| <= -dx * tan} 恒不成立——<b>射界会静悄悄地空掉</b>，
+        // 表现为"所有塔都不开火"，排查起来离这个常数很远。这里直接炸掉。
+        if (AIM_HALF_ANGLE_DEG <= 0.0 || AIM_HALF_ANGLE_DEG > 90.0) {
+            throw new IllegalStateException(
+                    "AIM_HALF_ANGLE_DEG 必须落在 (0, 90]，实际 " + AIM_HALF_ANGLE_DEG
+                            + "；超过 90° 正切变负，射界会变成空的");
+        }
+    }
 
     /**
      * 每一发打掉多少血。
@@ -101,6 +141,48 @@ public final class BuildingStats {
      */
     private static final float[] TOWER_HP = {100f, 130f, 160f};
 
+    // ---- 弩车：下标 = 级数 - 1 ----
+    //
+    // 和箭塔是**一对反着来的数**，写在两张表里是为了让这个对比一眼看得见：
+    //
+    //              射程          单发      间隔        DPS
+    //   箭塔   2.5/3.0/3.5   14/18/21   1.0/0.9/0.75   14/20/28
+    //   弩车   3.0/3.5/4.0   34/45/58   2.6/2.4/2.2   13.1/18.8/26.4
+    //
+    // **弩车的 DPS 比箭塔低**，换来的是两样：射程远半格，单发重一倍半。
+    // 这个交换在玩法上是成立的，不是凑数：塔是"多打几下"，弩车是"一发一个"——
+    // 一级弩车 34 点一发带走快兵（28 血），二级 45 点一发带走杂兵（45 血），
+    // 而一级箭塔打这两样分别要 2 发和 4 发。慢射速还有个副作用是**浪费少**：
+    // 几座塔一起打同一个目标时，箭塔射得快、目标死了天上还飞着好几发，
+    // 弩车两秒才一发，落空的少。
+    //
+    // 代价写在价格上（{@link ShopCatalog}：弩车差不多是箭塔的两倍）。
+    // 定价之前先想清楚一件事：**射程远 + 单发重，如果 DPS 再高，箭塔就没有存在
+    // 的理由了**。所以 DPS 这一列必须压在箭塔下面，这是这张表的硬约束。
+
+    /** 弩车的射程，比箭塔远半格。远出来的这半格意味着它能摆在更后面还打得到路。 */
+    private static final double[] BALLISTA_RANGE = {3.0, 3.5, 4.0};
+
+    /** 弩车的单发伤害。三级 58 两发带走重甲（160 血）。 */
+    private static final double[] BALLISTA_DAMAGE_PER_SHOT = {34.0, 45.0, 58.0};
+
+    /**
+     * 弩车两发之间隔几秒，比箭塔长一倍多——这是"重弩"这个手感本身。
+     *
+     * <p>三档都在两秒上下：上弦的时间要长得<b>看得见</b>，不然"一发重"这件事
+     * 在屏幕上读不出来（玩家只会觉得"这座塔打得慢"）。
+     */
+    private static final double[] BALLISTA_FIRE_INTERVAL = {2.6, 2.4, 2.2};
+
+    /**
+     * 弩车的耐久。比箭塔还薄一档。
+     *
+     * <p>理由和塔比墙薄是同一个（见 {@link #TOWER_HP}），只是更极端：
+     * 弩车射程远，本来就该摆在箭塔后面，挨打的机会更少；真被摸到了，
+     * 掉得比箭塔快才对——不然"射程远"就成了纯粹的白拿。
+     */
+    private static final float[] BALLISTA_HP = {80f, 105f, 130f};
+
     /**
      * 墙的耐久。下标 = 级数 - 1。
      *
@@ -156,7 +238,7 @@ public final class BuildingStats {
     }
 
     /**
-     * 这一级满血多少。<b>三种建筑都走这张表</b>（墙和核心以前是一个定值，
+     * 这一级满血多少。<b>每种建筑都走这张表</b>（墙和核心以前是一个定值，
      * 现在也按级涨了——见 {@link #WALL_HP}／{@link #CORE_HP}）。
      *
      * <p>等级越界按最近的一级算，理由同 {@link #rangeCells}。
@@ -167,6 +249,8 @@ public final class BuildingStats {
                 return CORE_HP[clamp(level) - 1];
             case WALL:
                 return WALL_HP[clamp(level) - 1];
+            case BALLISTA:
+                return BALLISTA_HP[clamp(level) - 1];
             default:
                 return TOWER_HP[clamp(level) - 1];
         }
@@ -182,7 +266,8 @@ public final class BuildingStats {
         if (!hasRange(type)) {
             return 0.0;
         }
-        return TOWER_DAMAGE_PER_SHOT[clamp(level) - 1];
+        return (type == BuildingType.BALLISTA ? BALLISTA_DAMAGE_PER_SHOT : TOWER_DAMAGE_PER_SHOT)
+                [clamp(level) - 1];
     }
 
     /**
@@ -197,7 +282,8 @@ public final class BuildingStats {
         if (!hasRange(type)) {
             return 0.0;
         }
-        return TOWER_FIRE_INTERVAL[clamp(level) - 1];
+        return (type == BuildingType.BALLISTA ? BALLISTA_FIRE_INTERVAL : TOWER_FIRE_INTERVAL)
+                [clamp(level) - 1];
     }
 
     /**
@@ -218,12 +304,18 @@ public final class BuildingStats {
         if (!hasRange(type)) {
             return NO_RANGE;
         }
-        return TOWER_RANGE[clamp(level) - 1];
+        return (type == BuildingType.BALLISTA ? BALLISTA_RANGE : TOWER_RANGE)[clamp(level) - 1];
     }
 
-    /** 这种建筑会不会攻击。决定详情面板里画不画那个范围圈。 */
+    /**
+     * 这种建筑会不会攻击。决定详情面板里画不画那个范围圈。
+     *
+     * <p><b>两种塔都会攻击，而且共用同一个射界</b>（{@link #AIM_HALF_ANGLE_DEG}
+     * 那个朝左的扇形）——引擎里没有任何"朝向"状态，所以"多一种塔"这件事
+     * 在这条判定上只多一个或号，不多一套逻辑。
+     */
     public static boolean hasRange(BuildingType type) {
-        return type == BuildingType.TOWER;
+        return type == BuildingType.TOWER || type == BuildingType.BALLISTA;
     }
 
     /**
@@ -239,7 +331,7 @@ public final class BuildingStats {
     /**
      * 从这一级升到下一级要花多少；到顶了返回 {@code null}。
      *
-     * <p><b>三种建筑都能升</b>，因为三种都有"升级换来什么"：塔换火力射程、
+     * <p><b>每种建筑都能升</b>，因为每种都有"升级换来什么"：两种塔换火力射程、
      * 墙换耐久、核心换耐久（见 {@link #maxHp}）。所以这个方法的 {@code null}
      * 现在只有一个意思——<b>到顶了</b>。界面上因此只需要一个"fully upgraded"
      * 的说法，不用再解释"这种建筑这个版本还不能升"。
@@ -274,6 +366,12 @@ public final class BuildingStats {
                 return firstStep
                         ? Cost.of(ResourceType.CACHE, 30).plus(ResourceType.OUTPUT, 12)
                         : Cost.of(ResourceType.CACHE, 50).plus(ResourceType.OUTPUT, 20);
+            case BALLISTA:
+                // 吃和建造价同一种资源（CACHE + OUTPUT），只是贵一档——
+                // 建造价贵一倍，升级价也只贵不便宜，不然"先铺便宜的箭塔再升"就绕过了弩车的定价
+                return firstStep
+                        ? Cost.of(ResourceType.CACHE, 36).plus(ResourceType.OUTPUT, 14)
+                        : Cost.of(ResourceType.CACHE, 62).plus(ResourceType.OUTPUT, 24);
             default:
                 return firstStep
                         ? Cost.of(ResourceType.CACHE, 20).plus(ResourceType.OUTPUT, 8)

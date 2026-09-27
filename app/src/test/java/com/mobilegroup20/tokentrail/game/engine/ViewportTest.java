@@ -300,9 +300,9 @@ public class ViewportTest {
     public void spriteScaleIncludesTheZoom() {
         BoardGeometry g = BoardGeometry.fit(PANEL_W, PANEL_H);
 
-        // 一格 86.56px，素材按 256px 画，所以放到最大也才 0.68
-        assertEquals(0.338f, g.spriteScale(1f), 0.001f);
-        assertEquals(0.676f, g.spriteScale(Viewport.MAX_ZOOM), 0.001f);
+        // 一格 88.84px，素材按 256px 画，所以放到最大也才 0.69
+        assertEquals(0.347f, g.spriteScale(1f), 0.001f);
+        assertEquals(0.694f, g.spriteScale(Viewport.MAX_ZOOM), 0.001f);
         // 放到最大也还是缩小显示，素材不用再画大
         assertTrue(g.spriteScale(Viewport.MAX_ZOOM) < 1f);
     }
@@ -356,8 +356,8 @@ public class ViewportTest {
         Viewport v = new Viewport(PANEL_W, PANEL_H, g.boardWidthPx(), g.contentHeightPx());
 
         assertEquals(BoardGeometry.COLS, g.cols());
-        // 40 格 × 86.56px = 3462px，面板 1016px，单边可拖 (3462-1016)/2
-        assertEquals(1223.2f, v.maxPanX(), 0.5f);
+        // 40 格 × 88.84px = 3553px，面板 1016px，单边可拖 (3553-1016)/2
+        assertEquals(1268.8f, v.maxPanX(), 0.5f);
         assertTrue("战场上比屏幕宽，横向必须拖得动", v.maxPanX() > 0f);
 
         // 纵向仍然拖不动：18 行正好装下，这是硬约束

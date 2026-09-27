@@ -92,6 +92,45 @@ public class ShopCatalogTest {
         assertNull(ShopCatalog.find(null));
     }
 
+    /**
+     * <b>弩车比箭塔贵，而且是"同一种资源、更贵一档"。</b>
+     *
+     * <p>弩车的定位全押在"贵"这件事上：它的射程比箭塔远、单发比箭塔重，
+     * 换来的代价必须是买得更贵、而且每秒伤害更低（后者由
+     * {@code CostTest.ballistaTradesDamageRateForReach} 盯着）。价格这一头要是塌了，
+     * 弩车就变成"加钱买全面更强"，商店里箭塔那一行就成了摆设。
+     *
+     * <p>吃哪种资源也必须和箭塔一致：三种资源互不通兑，弩车要是改吃 INPUT，
+     * 玩家攒的 CACHE / OUTPUT 就没处花，而且升级价（{@code BuildingStats}）
+     * 也得跟着改——那种"造得起、升不起"的局面正是这条要拦的。
+     */
+    @Test
+    public void ballistaCostsMoreThanTheTowerInTheSameResources() {
+        ShopCatalog.Item tower = ShopCatalog.find(BuildingType.TOWER);
+        ShopCatalog.Item ballista = ShopCatalog.find(BuildingType.BALLISTA);
+
+        // 两种资源都要更贵，不能"一种贵、另一种反而便宜"（那样能靠刷另一种绕过定价）
+        assertTrue("弩车该比箭塔多花 CACHE",
+                ballista.costOf(ResourceType.CACHE) > tower.costOf(ResourceType.CACHE));
+        assertTrue("弩车该比箭塔多花 OUTPUT",
+                ballista.costOf(ResourceType.OUTPUT) > tower.costOf(ResourceType.OUTPUT));
+
+        for (ResourceType resource : ResourceType.values()) {
+            assertEquals("弩车和箭塔该吃同样两种资源（" + resource + " 上不一样）",
+                    tower.costOf(resource) > 0, ballista.costOf(resource) > 0);
+        }
+
+        // 升级价跟着建造价走：花得起 CACHE + OUTPUT 的两座塔，升级也不该冒出第三种资源
+        for (int level = 1; level < BuildingStats.MAX_LEVEL; level++) {
+            Cost upgrade = BuildingStats.upgradeCost(BuildingType.BALLISTA, level);
+            assertNotNull("弩车第 " + level + " 级该有价", upgrade);
+            assertTrue("弩车升级也该吃 CACHE", upgrade.amount(ResourceType.CACHE) > 0);
+            assertTrue("弩车升级也该吃 OUTPUT", upgrade.amount(ResourceType.OUTPUT) > 0);
+            assertEquals("弩车升级不该冒出新的一种资源",
+                    0, upgrade.amount(ResourceType.INPUT));
+        }
+    }
+
     // ---- 买得起吗 ----
 
     /** 钱够就是够。 */

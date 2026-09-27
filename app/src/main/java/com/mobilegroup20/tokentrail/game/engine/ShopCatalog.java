@@ -30,8 +30,9 @@ import java.util.List;
  * <ul>
  *   <li><b>墙吃 INPUT</b>：INPUT 是四个 token 桶里最大的一块（桩数据里占一半以上），
  *       需要一个能大量消耗它的地方。墙 1×1、可以砌很多，正好；</li>
- *   <li><b>塔吃 CACHE + OUTPUT</b>：输出 token 是最贵的一档（$15/1M，是输入的 5 倍），
- *       换来的资源也最金贵，压在唯一的防御建筑上，让"少说废话"这件事在玩法里有回报；</li>
+ *   <li><b>两种塔都吃 CACHE + OUTPUT</b>：输出 token 是最贵的一档（$15/1M，是输入的
+ *       5 倍），换来的资源也最金贵，压在防御建筑上，让"少说废话"这件事在玩法里有回报。
+ *       弩车比箭塔贵一倍，因为射程和单发都更强；</li>
  *   <li><b>核心不要钱</b>：开局就有一座，商店里这一项是<b>挪</b>不是买第二座
  *       （{@code Battlefield.moveCore}）。</li>
  * </ul>
@@ -95,7 +96,8 @@ public final class ShopCatalog {
     }
 
     /**
-     * 货架。顺序就是商店里的显示顺序：先塔（主要防守），再墙（补缺口），最后核心。
+     * 货架。顺序就是商店里的显示顺序：先两种塔（主要防守，便宜的箭塔在前），
+     * 再墙（补缺口），最后核心。
      *
      * <p><b>数值的来路</b>：1 个单位资源 = 1 万 token（{@code MainActivity} 里的
      * {@code TOKENS_PER_UNIT}，即每 100 万 token 换 100 个）。桩数据下一个月的量
@@ -111,6 +113,13 @@ public final class ShopCatalog {
         items.add(new Item(BuildingType.TOWER)
                 .cost(ResourceType.CACHE, 25)
                 .cost(ResourceType.OUTPUT, 10));
+
+        // 弩车：吃和箭塔一样的两种资源，差不多两倍的价。
+        // **贵在射程和单发上**（见 BuildingStats 里那张对比表），
+        // 而且它的 DPS 比箭塔低——所以这不是"高级版箭塔"，是另买一种打法。
+        items.add(new Item(BuildingType.BALLISTA)
+                .cost(ResourceType.CACHE, 45)
+                .cost(ResourceType.OUTPUT, 18));
 
         items.add(new Item(BuildingType.WALL)
                 .cost(ResourceType.INPUT, 5));

@@ -287,15 +287,49 @@ public class MainActivity extends AppCompatActivity {
             place(field, BuildingType.TOWER, 14, row);
         }
 
-        // 故意留一座 2 级的（桩数据不是"全新开局"）：一级塔和二级塔的范围圈并排
+        // 弩车：三座一排，摆在塔群**后面**（第 32 列，紧挨核心）。
+        //
+        // 为什么不是摆在塔群前面：弩车薄（80/105/130，比箭塔还少一档），射界又只朝
+        // 左边那 60°，摆在敌人必经的那条路上就是站在最前面挨打——炮台还没轮上开火
+        // 就先没了。实测（第 26 列那版，见 TASKS.md）三座弩车全场只打出 12 发，
+        // 两座在敌人手里活不过一分钟；挪到塔后面同一套场面是 54 发，三座里两座
+        // 活到最后。这也正是 BuildingStats 里写的"弩车射程远，本来就该摆在箭塔后面"。
+        //
+        // 第 32 列刚好：右边一列就是核心（第 34 列起），左边一列是守核心的箭塔
+        // （第 30 列），弩车的尖正好从塔的缝隙里伸出去。
+        for (int row : new int[]{5, 9, 13}) {
+            place(field, BuildingType.BALLISTA, 32, row);
+        }
+
+        // 故意留升级过的（桩数据不是"全新开局"）：一级塔和二级塔的范围圈并排
         // 在屏幕上，升级到底改了什么都看得见。全是 1 级的话，详情面板上
         // "Level 1" 那个数字看起来就只是个装饰。
+        //
+        // 弩车那一排也是**一级、二级、三级各一座**，摆成一条：
+        // 三级的弩车只有在这儿才看得到，而且三张贴图并排最容易看出"升级换的是外观"。
+        // 这不是平衡过的开局，是个展示台——真关卡配平在 TASKS.md 里还挂着。
         Building veteran = field.buildingAt(new Cell(14, 3));
         if (veteran != null) {
             field.upgrade(veteran);
         }
+        upgradeToLevel(field, new Cell(32, 9), 2);
+        upgradeToLevel(field, new Cell(32, 13), 3);
 
         return field;
+    }
+
+    /**
+     * 把 (col, row) 那座建筑一路升到 {@code level} 级。
+     *
+     * <p>开场摆的是"已经打了几波"的局面，所以要能直接摆出高级建筑。
+     * {@code upgrade} 在引擎里是不收钱的（花钱的是界面上点升级那一下），
+     * 所以这里可以直接连着调。升一级回满血，所以顺序无所谓。
+     */
+    private void upgradeToLevel(Battlefield field, Cell at, int level) {
+        Building building = field.buildingAt(at);
+        while (building != null && building.level < level && field.upgrade(building)) {
+            // 条件里已经在升级了，循环体留空
+        }
     }
 
     /** 在某一列砌满城墙，{@code gaps} 里的行留空当缺口。 */

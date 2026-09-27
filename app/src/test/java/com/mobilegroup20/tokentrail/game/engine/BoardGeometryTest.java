@@ -53,15 +53,15 @@ public class BoardGeometryTest {
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        // 面板高度是量出来的，±1px 的误差就会让 dp 数在 23.8/23.9 之间跳，
+        // 面板高度是量出来的，±1px 的误差就会让 dp 数在 24.47/24.48 之间跳，
         // 所以这里给 0.05 的容差，不咬着小数点后一位
-        assertEquals(23.85f, g.cellPx() / 3.375f, 0.05f);
-        assertEquals(15.64f, g.visibleCols(), 0.02f);
-        assertEquals(2.56f, g.cols() / g.visibleCols(), 0.01f);
+        assertEquals(24.47f, g.cellPx() / 3.375f, 0.05f);
+        assertEquals(15.24f, g.visibleCols(), 0.02f);
+        assertEquals(2.62f, g.cols() / g.visibleCols(), 0.01f);
     }
 
     /**
-     * 典型大屏手机 411×891 @2.625：面板 387×643dp，一格 32.97dp，一屏可见 11.7 列。
+     * 典型大屏手机 411×891 @2.625：面板 387×643dp，一格 33.84dp，一屏可见 11.4 列。
      *
      * <p>和真机那组对比着看：格子大小<b>只跟面板高度走</b>，和宽度无关。
      */
@@ -71,9 +71,9 @@ public class BoardGeometryTest {
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        assertEquals(86.558f, g.cellPx(), 0.01f);
-        assertEquals(32.97f, g.cellPx() / 2.625f, 0.01f);
-        assertEquals(11.74f, g.visibleCols(), 0.01f);
+        assertEquals(88.836f, g.cellPx(), 0.01f);
+        assertEquals(33.84f, g.cellPx() / 2.625f, 0.01f);
+        assertEquals(11.44f, g.visibleCols(), 0.01f);
     }
 
     /**
@@ -135,8 +135,8 @@ public class BoardGeometryTest {
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        assertEquals(52.92f, g.cellPx() / 2f, 0.1f);
-        assertEquals(14.66f, g.visibleCols(), 0.01f);
+        assertEquals(54.32f, g.cellPx() / 2f, 0.1f);
+        assertEquals(14.29f, g.visibleCols(), 0.01f);
         assertTrue(g.contentHeightPx() <= 1032f * 2f + EPS);
     }
 
@@ -161,32 +161,48 @@ public class BoardGeometryTest {
     // ---- 不变量 ----
 
     /**
-     * 最高的素材是 2×2 的箭塔（footprint 2 格 + 探出 1.5 格 = 3.5 格）。
-     * 放在最上面一行时，塔尖也必须还在内容盒里——这条挂了就是"第 0 行的塔被裁掉"。
+     * 最高的素材放在最上面一行时也必须还在内容盒里——这条挂了就是"第 0 行被裁掉"。
+     *
+     * <p>哪个最高不写死：从 {@link BuildingType} 里挑，换了美术规格这条跟着走。
      */
     @Test
-    public void tallestTowerOnTheTopRowIsNeverClipped() {
+    public void theTallestSpriteOnTheTopRowIsNeverClipped() {
+        BuildingType tallest = BuildingType.CORE;
+        for (BuildingType t : BuildingType.values()) {
+            if (t.spriteHeightCells() > tallest.spriteHeightCells()) {
+                tallest = t;
+            }
+        }
+
         float[][] devices = {
                 {336f, 600f, 3f}, {369f, 620f, 2.75f}, {387f, 643f, 2.625f},
                 {388f, 660f, 3.5f}, {776f, 1032f, 2f}, {200f, 300f, 1f},
         };
         for (float[] d : devices) {
             BoardGeometry g = panel(d[0], d[1], d[2]);
-            float spriteHeight = (2 + BoardGeometry.MAX_OVERHANG_CELLS) * g.cellPx();
-            float spriteTop = g.anchorY(0, 2) - spriteHeight;
-            assertTrue("塔尖跑到内容盒外了: " + g, spriteTop >= -EPS);
+            float spriteTop = g.anchorY(0, tallest.rows)
+                    - tallest.spriteHeightCells() * g.cellPx();
+            assertTrue(tallest.label + " 跑到内容盒外了: " + g, spriteTop >= -EPS);
         }
     }
 
-    /** 3×3 的核心（footprint 3 格 + 探出 1 格 = 4 格）同理。 */
+    /**
+     * 3×3 的核心（footprint 3 格 + 探出 1 格 = 4 格）不只是"不被裁"，而是
+     * <b>正好顶到面板上沿</b>：顶上那条余量就是照它裁的，所以贴图上沿落在 0 上，
+     * 不裁掉也不留缝。
+     *
+     * <p>塔不再往上探之后，顶上那条余量从 1.5 格收到了 1 格（由核心决定，
+     * 见 {@link BoardGeometry#MAX_OVERHANG_CELLS}），"上面还余着半格"那句话
+     * 就不成立了——留白变成零，这一条改盯"零"这个数：
+     * 谁再动 {@code MAX_OVERHANG_CELLS}，这里会立刻说清楚差在哪。
+     */
     @Test
-    public void coreOnTheTopRowIsNeverClipped() {
+    public void coreOnTheTopRowSitsExactlyOnTheTopEdge() {
         BoardGeometry g = panel(387f, 643f, 2.625f);
 
         float spriteHeight = (3 + 1f) * g.cellPx();
-        assertTrue(g.anchorY(0, 3) - spriteHeight >= -EPS);
-        // 核心只探出 1 格，所以上面还余着半格
-        assertTrue(g.anchorY(0, 3) - spriteHeight > 0f);
+        assertEquals("核心贴图上沿应该正好落在面板上沿（0），不多不少",
+                0f, g.anchorY(0, 3) - spriteHeight, EPS);
     }
 
     /**
@@ -295,10 +311,10 @@ public class BoardGeometryTest {
     // ---- 每种建筑的贴图都不会被裁 ----
 
     /**
-     * <b>上方那 1.5 格余量正好是为最高的贴图留的。</b>
+     * <b>上方那 1 格余量正好是为最高的贴图留的。</b>
      *
      * <p>这条把美术规格和几何算死了：哪个建筑向上探出多少格写在
-     * {@link BuildingType#overhangCells} 里，探出最多的那个必须正好用满余量——
+     * {@link BuildingType#overhangUpCells} 里，探出最多的那个必须正好用满余量——
      * 多一分会被裁，少一分就是白留。
      */
     @Test
@@ -308,15 +324,75 @@ public class BoardGeometryTest {
         for (BuildingType type : BuildingType.values()) {
             float spriteTop = g.anchorY(0, type.rows) - type.spriteHeightCells() * g.cellPx();
             assertTrue(type.label + " 放在第 0 行会被裁掉", spriteTop >= -EPS);
-            assertTrue(type.label + " 探出超过了给美术的上限",
-                    type.overhangCells <= BoardGeometry.MAX_OVERHANG_CELLS);
+            assertTrue(type.label + " 向上探出超过了给美术的上限",
+                    type.overhangUpCells <= BoardGeometry.MAX_OVERHANG_CELLS);
         }
 
-        // 余量不是白留的：探出最多的那个（2×2 的塔，塔尖 1.5 格）正好用满
-        assertEquals(BoardGeometry.MAX_OVERHANG_CELLS, BuildingType.TOWER.overhangCells, EPS);
-        assertEquals(3.5f, BuildingType.TOWER.spriteHeightCells(), EPS);
+        // 余量不是白留的：向上探出最多的那个（3×3 的核心，楼的顶 1 格）正好用满
+        assertEquals(BoardGeometry.MAX_OVERHANG_CELLS, BuildingType.CORE.overhangUpCells, EPS);
         assertEquals(4f, BuildingType.CORE.spriteHeightCells(), EPS);
+        assertEquals(2f, BuildingType.TOWER.spriteHeightCells(), EPS);
+        // 弩车和塔一样是 2×2、向上不探——两张图等高，火焰图才对得齐（见 BuildingSprites）
+        assertEquals(2f, BuildingType.BALLISTA.spriteHeightCells(), EPS);
         assertEquals(1.5f, BuildingType.WALL.spriteHeightCells(), EPS);
+    }
+
+    /**
+     * <b>横向探出不会被裁</b>，所以它不占 {@link BoardGeometry#fit} 的余量——
+     * 但它得小于"最靠边能放建筑的那一列"，否则摆在最边上的那座，
+     * 炮管（往左）或者炮尾（往右）会伸到战场外面去。
+     *
+     * <p>最靠左能放的是可建区第一列（{@link Battlefield#firstBuildableCol()}，
+     * 就是敌人通道那 4 格的右边一列）；最靠右那一列的右边还隔着 3 格山区。
+     */
+    @Test
+    public void horizontalOverhangFitsInsideTheBoard() {
+        BoardGeometry g = panel(387f, 643f, 2.625f);
+
+        for (BuildingType type : BuildingType.values()) {
+            assertTrue(type.label + " 向左探出超过了给美术的上限",
+                    type.overhangLeftCells <= BoardGeometry.MAX_OVERHANG_LEFT_CELLS);
+            assertTrue(type.label + " 向右探出超过了给美术的上限",
+                    type.overhangRightCells <= BoardGeometry.MAX_OVERHANG_RIGHT_CELLS);
+            assertEquals(type.cols + type.overhangLeftCells + type.overhangRightCells,
+                    type.spriteWidthCells(), EPS);
+        }
+
+        // 塔：炮管往左 1 格、炮尾往右 0.3 格，画布一共 3.3 格宽
+        assertEquals(BoardGeometry.MAX_OVERHANG_LEFT_CELLS,
+                BuildingType.TOWER.overhangLeftCells, EPS);
+        assertEquals(BoardGeometry.MAX_OVERHANG_RIGHT_CELLS,
+                BuildingType.TOWER.overhangRightCells, EPS);
+        assertEquals(3.3f, BuildingType.TOWER.spriteWidthCells(), EPS);
+
+        // 弩车：占地和塔一样是 2×2，探出却是另一套数——弓臂几乎和底座一样宽，
+        // 往左只探 0.9 格（塔是炮管，探满 1 格），往右 0.2 格，画布 3.1 格宽。
+        //
+        // 这几个数是**从图上量出来的**（art/cut_ballista.py 量的踩地那一段），
+        // 不是"给塔抄一份"。所以塔用得满的余量，弩车用不满——上面那个循环
+        // 只查了"不超过上限"，这里把实际值钉住，改图的时候才会发现。
+        assertEquals(0.9f, BuildingType.BALLISTA.overhangLeftCells, EPS);
+        assertEquals(0.2f, BuildingType.BALLISTA.overhangRightCells, EPS);
+        assertEquals(3.1f, BuildingType.BALLISTA.spriteWidthCells(), EPS);
+        assertEquals("两种塔占地该一样", BuildingType.TOWER.cols, BuildingType.BALLISTA.cols);
+        assertEquals(BuildingType.TOWER.rows, BuildingType.BALLISTA.rows);
+        assertTrue("弩车的图该比箭塔窄——占地相同、图不同，这正是探出量的意义",
+                BuildingType.BALLISTA.spriteWidthCells() < BuildingType.TOWER.spriteWidthCells());
+
+        // 两种塔摆在最边上都不能探出战场。最靠左能放的是可建区第一列，
+        // 最靠右是最后一列（右边还隔着 3 格山区）——弩车比塔窄，但这条对它一样管用：
+        // 哪天给它换个更宽的弩弓，这里会先炸，而不是等玩家把塔摆到边上才看出来。
+        for (BuildingType tower : new BuildingType[]{BuildingType.TOWER, BuildingType.BALLISTA}) {
+            float spriteLeft = g.leftX(Battlefield.ENEMY_LANE_COLS)
+                    - tower.overhangLeftCells * g.cellPx();
+            assertTrue(tower.label + " 的武器伸到战场左边缘外面去了", spriteLeft > 0f);
+
+            int lastBuildable = BoardGeometry.COLS - Battlefield.MOUNTAIN_COLS - 1;
+            float spriteRight = g.leftX(lastBuildable + tower.cols)
+                    + tower.overhangRightCells * g.cellPx();
+            assertTrue(tower.label + " 的尾巴伸到战场右边缘外面去了",
+                    spriteRight < g.boardWidthPx());
+        }
     }
 
     // ---- 手指点的那一格 → 占地左上角 ----

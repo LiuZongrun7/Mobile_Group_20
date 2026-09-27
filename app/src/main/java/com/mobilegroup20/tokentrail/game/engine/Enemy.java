@@ -42,6 +42,24 @@ public final class Enemy {
     public float y;
 
     /**
+     * 从出场到现在一共走了多少格——<b>是路程，不是位移</b>。
+     *
+     * <p>只写不读的地方是渲染：{@code BattlefieldView} 拿它翻走路的两帧
+     * （每 {@code ENEMY_STRIDE_CELLS} 格换一张），所以<b>上下换行的时候腿也迈得起来</b>。
+     * 早先那个版本是拿 {@link #x} 直接除的，看着像够用——{@link #x} 一直在涨，
+     * 走路也确实主要在往右走。但敌人换行是<b>竖着走</b>的（见 {@link PathField}），
+     * 那几格 {@link #x} 一动不动，于是整只敌人平移着上去了，腿一下都不迈。
+     *
+     * <p>拿 {@code x + y} 之类凑一个数不行：敌人拐弯的时候是斜着过去的
+     * （{@code stepToward} 朝的是下一格的中心，没走到中心就拐就是斜线），
+     * 两个坐标同时涨，凑出来的数涨得比真的路程快。所以<b>路程得在动的地方记</b>
+     * ——{@link Battlefield#advance} 里那唯一一处改坐标的地方。
+     *
+     * <p>被挡住啃东西的时候不涨（没动就是没动），这也是对的：那时候画的是挥击。
+     */
+    public float travelled;
+
+    /**
      * 还剩多少血。<b>可写</b>：{@link Battlefield#advance} 里被塔扣。
      *
      * <p>掉到 0 以下不用自己处理——清场那一步统一把不喘气的移走，

@@ -1,6 +1,7 @@
 package com.mobilegroup20.tokentrail.game.view;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.DashPathEffect;
@@ -36,20 +37,22 @@ import java.util.Random;
 /**
  * 战场：把 {@link Battlefield} 画出来，并处理缩放、拖动、点一下放建筑。
  *
- * <h2>现在画的是纯色块，不是贴图</h2>
- * <p>这一版<b>故意不加载任何图片</b>：每个建筑画成一个纯色矩形，
- * 位置、占地、高度全部按真贴图将来会占的地方画。这样做的目的是
+ * <h2>先画色块定尺寸，再一张张换成贴图</h2>
+ * <p>这个类最早<b>一个图片都不加载</b>：每个东西画成一个纯色矩形，
+ * 位置、占地、高度全部按真贴图将来会占的地方画。目的是
  * <b>在画图之前先把尺寸和锚点确认掉</b>——如果 2×2 的塔在这个画面上看着
  * 大小合适、站在格子上不陷不飘，那美术按 {@code docs/ART.md} §2.1 出图就一定对。
  *
  * <p>所以这个类里每一处坐标都不是随手写的，全部来自
  * {@link BoardGeometry}：占地用 {@code leftX/topY}，锚点用
  * {@code anchorX/anchorY}（占地的<b>底边中点</b>），贴图高度用
- * {@link BuildingType#spriteHeightCells()}。换成真贴图时，
- * 把 {@code drawBlock(...)} 换成 {@code canvas.drawBitmap(...)} 就行，
- * 坐标一个都不用改。
+ * {@link BuildingType#spriteHeightCells()}。换真贴图时确实只动了画法：
+ * {@link #drawBuilding} 里 {@code drawBitmap} 铺的就是 {@code drawBlock} 原来
+ * 那个矩形，几何和触摸逻辑一行没改。
  *
- * <p>贴图来了之后，这个类里只有画法会变，几何和触摸逻辑不动。
+ * <p><b>贴图是一张张补上来的，所以两种画法现在并存</b>：有图的走
+ * {@link BuildingSprites}（两种塔各三级）和 {@link EnemySprites}（三种敌人各三种动作），
+ * 没图的（核心、城墙）还是色块 + 标签。
  *
  * <h2>它铺满全屏，但"战场在哪儿"是外面告进来的</h2>
  * <p>这个 View 是 {@code match_parent} 的，因为那片地本来就该能糊满整屏：
@@ -91,10 +94,10 @@ public class BattlefieldView extends View {
     /** 一帧最多推进多少秒。掉帧时别让敌人瞬移。 */
     private static final float MAX_FRAME_SECONDS = 0.05f;
 
-    /** 范围圈里面那层填充的不透明度。压得太实会把地上的格子和斜纹盖掉。 */
+    /** 射界扇形里面那层填充的不透明度。压得太实会把地上的格子和斜纹盖掉。 */
     private static final int RANGE_FILL_ALPHA = 46;
 
-    /** 范围圈那道线的不透明度。比填充实，圈才看得出边界在哪儿。 */
+    /** 射界扇形那道线的不透明度。比填充实，才看得出射界从哪儿到哪儿。 */
     private static final int RANGE_LINE_ALPHA = 200;
 
     /** 手指下面那块预放位置的填充。填了才知道"要放的是这一块"。 */
@@ -124,6 +127,71 @@ public class BattlefieldView extends View {
     /** 血条离贴图顶端多远，单位格。贴着画会像建筑自己的一部分。 */
     private static final float BAR_GAP_CELLS = 0.14f;
 
+    /**
+     * 敌人走多远算迈了一步，单位格。走路的两个姿势按<b>走过的距离</b>翻，不按时间。
+     *
+     * <p>按时间翻的话三种兵共用一个步频：快兵（1.6 格/秒）和重甲（0.55 格/秒）
+     * 迈腿一样快，快兵看起来在"飘"——脚不动、人平移，是最典型的廉价感。
+     * 按距离翻就不用管速度了：走得快自然迈得勤，<b>而且脚不打滑</b>。
+     *
+     * <p>0.7 格一步：杂兵（0.9 格/秒）约 1.3 步/秒，和真人走路差不多；
+     * 重甲 0.8 步/秒，看着就沉。
+     *
+     * <p><b>距离用的是 {@link Enemy#travelled}（引擎记的路程），不是 {@code enemy.x}。</b>
+     * 拿 {@code x} 除的时候，往右走看着一切正常——直到敌人<b>竖着换行</b>：
+     * 那几格 {@code x} 一动不动，整只敌人平移着上去，腿一下都不迈。
+     * 而敌人拐弯是常事（{@link PathField}），这是引擎唯一一处改坐标的地方记的账，
+     * 斜着走和竖着走都算得准。
+     */
+    private static final float ENEMY_STRIDE_CELLS = 0.7f;
+
+    /**
+     * 啃建筑时抡一下键盘要多久（毫秒），以及这一下里"挥出去"占几成。
+     *
+     * <p>被挡住的时候引擎只给得出"卡住了"（{@code Enemy.blocked}），给不出
+     * "啃到第几口了"——伤害是每帧连续扣的，没有"这一口"这个时刻。所以挥击这个动作
+     * <b>是本机时钟驱动的装饰</b>，不来自引擎。走路那个不一样，它挂在位移上
+     * （见 {@link #ENEMY_STRIDE_CELLS}），一分钱时钟都不用花。
+     *
+     * <p>剩下那四成显示站姿，读作"抡起来之前的收势"。一直显示挥击的话，
+     * 那只敌人会<b>举着键盘僵在半空</b>——它一啃就是好几秒，看着像画面卡住了。
+     */
+    private static final long ENEMY_SWING_PERIOD_MS = 620L;
+
+    /** 见 {@link #ENEMY_SWING_PERIOD_MS}。 */
+    private static final float ENEMY_SWING_ATTACK_SHARE = 0.62f;
+
+    /**
+     * 敌人脚下那个椭圆的宽和高，占身位的比例。
+     *
+     * <p><b>它不是装饰，是三种敌人唯一的区分手段。</b>三张贴图是同一个人，
+     * 只靠体格分（三种差 1.56 倍）不够——一只重甲单独出现在屏幕边上时，
+     * 玩家认不出它，而"这一只要不要多调一座塔过来"正是要在它进射程之前就看清的事
+     * （见 {@code EnemyType} 的类注释和 {@code colors.xml} 里那三条敌人色）。
+     *
+     * <p>画成脚下的一圈、而不是给贴图染色：贴图是几百种颜色的像素画，
+     * 染一遍会糊成一团。脚下那圈既保住了画，又顺手当了接地阴影——
+     * 没有影子的人看着是浮在草地上的。
+     *
+     * <p>宽 0.82 格（体格 1.0 时）：比人的肩略窄、比两只脚的外沿略宽，
+     * 所以读作"脚踩在地上"而不是"人站在一个圈里"。高只有 0.27 格，
+     * 压扁了才像躺在地上的椭圆，不压扁就成了一个竖着的靶子。
+     */
+    private static final float ENEMY_MARK_WIDTH = 0.82f;
+
+    /** 见 {@link #ENEMY_MARK_WIDTH}。 */
+    private static final float ENEMY_MARK_HEIGHT = 0.27f;
+
+    /**
+     * 椭圆那圈边的粗细，单位 dp（乘 {@link #density}，最小 1.5px）。
+     *
+     * <p>比建筑轮廓（0.8dp）粗：那是"描个边看得清"，这是<b>唯一的种类信号</b>，
+     * 细了在缩到最小倍数时就断成一圈虚线了。环的颜色是种类色，
+     * 里面的填色三种共用一条深色（{@code game_enemy_shadow}）——
+     * 填色也分三种的话，脚下就成了一块实心的大色斑，比人还显眼。
+     */
+    private static final float ENEMY_MARK_RING_DP = 1.1f;
+
     /** 血量高于这个比例算"还很健康"，条是绿的。 */
     private static final float HP_HEALTHY = 0.6f;
 
@@ -144,6 +212,16 @@ public class BattlefieldView extends View {
      * 在绿地上几乎看不见，而"看不看得见在打"是这一层唯一的职责。
      */
     private static final int SHOT_ALPHA = 255;
+
+    /**
+     * 炮口火焰亮多久（秒），从这一发打出去算起，期间线性淡出。
+     *
+     * <p>射速间隔是 1.0 / 0.9 / 0.75 秒（{@code BuildingStats}），取 0.12 秒就是
+     * "每 8 发里有 1 发的时间在亮"——六座塔一起打的时候屏幕上总有火，
+     * 但不会糊成一片。<b>比一个间隔短是硬要求</b>：长了这座塔会一直在亮，
+     * 火焰就从"这一刻在开火"变成了塔身上的第二张贴图。
+     */
+    private static final float FLASH_SECONDS = 0.12f;
 
     /** 战场怎么造出来。界面在拿到真实尺寸之后才知道有多少格子，所以由外面提供。 */
     public interface SceneBuilder {
@@ -308,6 +386,15 @@ public class BattlefieldView extends View {
     private long rejectedAtMs;
 
     private long lastFrameMs;
+
+    /**
+     * 这一帧的时刻，给<b>纯装饰</b>的动画用（现在只有啃建筑的挥击，见
+     * {@link #ENEMY_SWING_PERIOD_MS}）。{@link #tick} 每帧写一次。
+     *
+     * <p>和 {@link #lastFrameMs} 分开：那个是"上一帧是几点"，用来算 dt，<b>不能被读歪</b>
+     * ——它是引擎推进的依据。这个只是"现在几点"，读它的地方要是改了它也顶多让动画错一拍。
+     */
+    private long frameMs;
     // 上一帧报出去的战况。-1 / null 是"还没报过"，所以第一帧一定会报一次。
     private int lastBuildings = -1;
     private int lastEnemies = -1;
@@ -316,20 +403,31 @@ public class BattlefieldView extends View {
     private int lastCoreHp = -1;
     private Battlefield.Outcome lastOutcome;
 
+    /** 山区岩石贴图。和整页背景共用一张，见 {@link RockTexture}。 */
+    private final RockTexture rock;
+
     // 画笔。构造时一次性建好，onDraw 里不 new 对象。
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dashed = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint label = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    /** 建筑贴图。没有贴图的建筑（现在还有核心和城墙）退回 {@link #drawBlock} 的色块。 */
+    private final BuildingSprites sprites;
+
+    /** 敌人贴图。三种动作各一张，三种兵共用——见 {@link EnemySprites}。 */
+    private final EnemySprites enemySprites;
+
     private final RectF rect = new RectF();
+
+    /** 画射界扇形用的外接矩形。单独一个，不和 {@link #rect} 抢。 */
+    private final RectF arcRect = new RectF();
 
     private final float density;
 
     private final int groundA;
     private final int groundB;
     private final int entryLane;
-    private final int mountain;
-    private final int mountainShade;
     private final int gridLine;
     private final int coreColor;
     private final int towerColor;
@@ -351,6 +449,9 @@ public class BattlefieldView extends View {
     private final int badColor;
     private final int rangeColor;
     private final int spriteLine;
+
+    /** 敌人脚下那块深色接地影的底。上面再描一圈种类色，见 {@link #ENEMY_MARK_WIDTH}。 */
+    private final int enemyShadow;
     private final int hpTrack;
     private final int hpGood;
     private final int hpWarn;
@@ -394,9 +495,10 @@ public class BattlefieldView extends View {
         groundA = getContext().getColor(R.color.game_ground_a);
         groundB = getContext().getColor(R.color.game_ground_b);
         entryLane = getContext().getColor(R.color.game_entry_lane);
-        mountain = getContext().getColor(R.color.game_mountain);
-        mountainShade = getContext().getColor(R.color.game_mountain_shade);
         gridLine = getContext().getColor(R.color.game_grid_line);
+        rock = new RockTexture(context);
+        sprites = new BuildingSprites(context);
+        enemySprites = new EnemySprites(context);
         coreColor = getContext().getColor(R.color.game_core);
         towerColor = getContext().getColor(R.color.game_tower);
         wallColor = getContext().getColor(R.color.game_wall);
@@ -410,6 +512,7 @@ public class BattlefieldView extends View {
         badColor = getContext().getColor(R.color.game_bad);
         rangeColor = getContext().getColor(R.color.game_range);
         spriteLine = getContext().getColor(R.color.game_sprite_line);
+        enemyShadow = getContext().getColor(R.color.game_enemy_shadow);
         hpTrack = getContext().getColor(R.color.game_hp_track);
         hpGood = getContext().getColor(R.color.game_hp_good);
         hpWarn = getContext().getColor(R.color.game_hp_warn);
@@ -592,7 +695,7 @@ public class BattlefieldView extends View {
      * 外面（升级成功、建筑被拆）把查看目标换掉或撤掉。
      *
      * <p><b>要传建筑本身，不能只传坐标。</b>升级之后等级变了，
-     * 高亮和范围圈都得按新的等级重画。
+     * 高亮和射界扇形都得按新的等级重画。
      */
     public void setInspected(Building building) {
         this.inspected = building;
@@ -690,6 +793,7 @@ public class BattlefieldView extends View {
         }
 
         board = fitted;
+        rock.setCellPx(fitted.cellPx());
         viewport = new Viewport(w, h, board.boardWidthPx(), board.contentHeightPx());
         rebuildSceneIfPossible();
     }
@@ -1010,8 +1114,8 @@ public class BattlefieldView extends View {
         canvas.translate(viewport.offsetX(), viewport.offsetY());
         canvas.scale(viewport.zoom(), viewport.zoom());
 
-        // 注意这里**不画**上方那 1.5 格余量带。
-        // 余地留是留着的（BoardGeometry.MAX_OVERHANG_CELLS，塔尖要伸进去），
+        // 注意这里**不画**上方那 1 格余量带。
+        // 余地留是留着的（BoardGeometry.MAX_OVERHANG_CELLS，核心楼顶要伸进去），
         // 但**不归这个 View 画**：余量带是"不能放东西的地方"，按全页的规矩
         // 那就是山区，而整页的岩石底（MountainBackgroundView）已经用同一个
         // 相机把石头画在那儿了。这里再铺一块自己的颜色，等于在屏幕上多切一刀：
@@ -1021,6 +1125,7 @@ public class BattlefieldView extends View {
         drawGrid(canvas);
         drawRanges(canvas);
         drawSprites(canvas);
+        drawMuzzleFlashes(canvas);
         // 子弹和血条画在建筑/敌人**上面**（下面那些都是地面上的东西）：
         // 这两个是"这一刻正在发生什么"的读数，被一座塔挡住就等于没画。
         drawProjectiles(canvas);
@@ -1038,6 +1143,7 @@ public class BattlefieldView extends View {
      */
     private void tick() {
         long now = android.os.SystemClock.uptimeMillis();
+        frameMs = now;
 
         // 第一帧只记时间不推进（dt 会是 0，advance 自己会忽略）。
         // 注意不能在这里 return：一旦 return 就漏掉了下面的"排下一帧"，
@@ -1093,43 +1199,40 @@ public class BattlefieldView extends View {
                         rect.set(board.leftX(col + i), top, board.leftX(col + i + 1), top + cell);
                         canvas.drawRect(rect, fill);
                     }
-                } else {
-                    fill.setColor(terrain == Terrain.ENEMY_LANE ? entryLane : mountain);
+                } else if (terrain == Terrain.ENEMY_LANE) {
+                    fill.setColor(entryLane);
                     rect.set(board.leftX(col), top, board.leftX(col + run), top + cell);
                     canvas.drawRect(rect, fill);
-                    if (terrain == Terrain.MOUNTAIN) {
-                        drawRockHatch(canvas, col, run, row);
-                    }
+                } else {
+                    // 山区铺岩石贴图。贴图钉在布局坐标上，所以逐行逐段分开画
+                    // 也不会在接缝处断开——相邻两段拿到的是同一张图的同一块。
+                    //
+                    // 用的笔和整页背景是同一个对象、同一个颜色，所以这条山和
+                    // 它左边的草地之外、它右边的屏幕边缘都是连续的一片石头。
+                    rect.set(board.leftX(col), top, board.leftX(col + run), top + cell);
+                    canvas.drawRect(rect, rock.paint());
                 }
                 col += run;
             }
         }
     }
 
-    /** 山区里那道斜纹。一格一道，方向统一，看着像岩面。 */
-    private void drawRockHatch(Canvas canvas, int col, int run, int row) {
-        stroke.setStrokeWidth(Math.max(1f, 1.2f * density));
-        stroke.setColor(mountainShade);
-        float cell = board.cellPx();
-        float top = board.topY(row);
-        float inset = cell * 0.22f;
-        for (int i = 0; i < run; i++) {
-            float left = board.leftX(col + i);
-            canvas.drawLine(left + inset, top + cell - inset,
-                    left + cell - inset, top + inset, stroke);
-        }
-    }
-
     private void drawGrid(Canvas canvas) {
         stroke.setStrokeWidth(Math.max(1f, 0.6f * density));
         stroke.setColor(gridLine);
-        for (int col = 0; col <= board.cols(); col++) {
+
+        // **山区那几列不画格线。** 格线的意思是"这些是格子"，山不是格子——
+        // 画上去等于说"这里也能放东西"。以前山是浅色，20% 的黑线压上去看不太
+        // 出来；现在山和整页背景是同一个色，那排格线就成了浮在石头上的笼子。
+        // 左边敌人通道照样画：敌人是踩着格子走的。
+        int gridCols = board.cols() - Battlefield.MOUNTAIN_COLS;
+        for (int col = 0; col <= gridCols; col++) {
             canvas.drawLine(board.leftX(col), board.topY(0),
                     board.leftX(col), board.topY(board.rows()), stroke);
         }
         for (int row = 0; row <= board.rows(); row++) {
             canvas.drawLine(board.leftX(0), board.topY(row),
-                    board.leftX(board.cols()), board.topY(row), stroke);
+                    board.leftX(gridCols), board.topY(row), stroke);
         }
     }
 
@@ -1180,55 +1283,170 @@ public class BattlefieldView extends View {
                 break;
         }
 
-        float left = board.leftX(building.col());
-        float right = board.leftX(building.col() + building.type.cols);
+        // 贴图可以比占地大：往左探的是炮管（塔），往右探的是炮尾（塔），
+        // 往上探的是楼顶（核心）。**锚点仍然是占地的底边中点**，探出去的那截
+        // 只是画面上的溢出，所以左/右/上各自往外让，只有下边不让。
+        float footprintLeft = board.leftX(building.col());
+        float left = footprintLeft - building.type.overhangLeftCells * board.cellPx();
+        float right = board.leftX(building.col() + building.type.cols)
+                + building.type.overhangRightCells * board.cellPx();
         float bottom = board.anchorY(building.row(), building.type.rows);
         float top = bottom - building.type.spriteHeightCells() * board.cellPx();
 
+        Bitmap sprite = sprites.get(building.type, building.level);
+        if (sprite != null) {
+            // 贴图刚好铺满上面那个矩形，不做任何偏移：图里的构图（炮管伸在左边、
+            // 底座踩在下沿）就是按这个矩形画的，见 docs/ART.md §2.1。
+            // 比例在 BuildingSprites 构造时校过，所以这里是等比缩放，不会拉变形。
+            rect.set(left, top, right, bottom);
+            canvas.drawBitmap(sprite, null, rect, sprites.paint());
+            return;
+        }
+
         drawBlock(canvas, left, top, right, bottom,
-                board.topY(building.row()), color, building.type.label);
+                footprintLeft, board.topY(building.row()), color, building.type.label);
     }
 
     /**
-     * 一只敌人：<b>一块实心色块，大小和颜色都由种类决定</b>。
+     * 开火那一下的炮口火焰：<b>盖在塔贴图上的一层</b>，只画炮口那一块。
      *
-     * <p><b>为什么不走 {@link #drawBlock}。</b>那个方法是给建筑写的，它身上带着两件
-     * 建筑才有的东西：向上探出的那截画成半透明（"悬在空中"的塔尖）、占地顶边画一条
-     * 虚线（"从这儿往下才是能放东西的格子"）。敌人既没有悬空的部分、也没有占地，
-     * 套用之后每只敌人头上都顶着一条半透明的横带和一条虚线——看着像戴了帽子，
-     * 而且那条虚线在敌人身上什么也不表示。
+     * <p><b>怎么知道"刚开了一炮"。</b>装填计时是"开火时加满、之后每帧减"
+     * （{@code Battlefield.fireTowers} 里那段注释解释了为什么不是"开火时赋值"），
+     * 所以<b>离上一发过去多久 = 射速间隔 - 还剩多少装填</b>。塔在空闲时会把装填夹回 0，
+     * 这个差就等于一整个间隔，比 {@link #FLASH_SECONDS} 大，正好不画——
+     * <b>引擎一个字都不用改</b>，它已经把这个数摆在外面了（{@code Building#cooldownSeconds}）。
      *
-     * <p><b>颜色和体格都在说玩法。</b>三种敌人一眼要能分出来：杂兵红、快兵黄
-     * （细一圈）、重甲紫（比一格还宽）。玩家得在敌人进射程之前就知道
-     * "这一只要不要多调一座塔过来"，而不是等血条掉得慢才发现。
+     * <p><b>位置锚在贴图左沿，不是占地。</b>先算出这座塔贴图的 out 边
+     * （占地左边再往外 {@code overhangLeftCells} 格），再让火焰那个窗口
+     * （{@link BuildingSprites#FlashWindow}）从左沿往两边摊开——窗口的左右沿
+     * 是相对贴图左沿量的，所以两种塔各写各的数就行，这里不用分类讨论。
+     * 纵向用的就是塔贴图的 top/bottom——火焰图和塔贴图一样高。
      *
-     * <p><b>卡住了（{@code blocked}）画成压暗的同色</b>，不换色：颜色本身在回答
-     * "这是哪一种"——那正是敌人贴着你的墙、最需要看清的时候，不能因为"卡住了"
-     * 就把种类信息丢掉。压暗一格就够说明"它停下来了"。
+     * <p><b>画在所有建筑和敌人之上</b>（在 {@link #drawSprites} 之后）：火焰是光，
+     * 被谁挡住都不对。子弹仍然画在火焰上面，因为那是"已经飞出去了"的东西。
+     */
+    private void drawMuzzleFlashes(Canvas canvas) {
+        Paint paint = sprites.flashPaint();
+        float cell = board.cellPx();
+
+        for (Building building : battlefield.buildings()) {
+            Bitmap flash = sprites.flash(building.type, building.level);
+            if (flash == null) {
+                continue;
+            }
+            double interval = BuildingStats.fireIntervalSeconds(building.type, building.level);
+            if (interval <= 0.0) {
+                continue;   // 墙和核心：没有"开火"这回事
+            }
+            float sinceShot = (float) (interval - building.cooldownSeconds);
+            if (sinceShot < 0f || sinceShot > FLASH_SECONDS) {
+                continue;
+            }
+
+            BuildingSprites.FlashWindow window = BuildingSprites.flashWindow(building.type);
+            if (window == null) {
+                continue;
+            }
+
+            float spriteLeft = board.leftX(building.col())
+                    - building.type.overhangLeftCells * cell;
+            float bottom = board.anchorY(building.row(), building.type.rows);
+            rect.set(spriteLeft + window.leftCells * cell,
+                    bottom - building.type.spriteHeightCells() * cell,
+                    spriteLeft + window.rightCells * cell,
+                    bottom);
+            // 越接近"刚开火"越不透明，然后淡出：比亮够时间直接消失少一顿
+            paint.setAlpha((int) (255f * (1f - sinceShot / FLASH_SECONDS)));
+            canvas.drawBitmap(flash, null, rect, paint);
+        }
+
+        // 笔是共用的（它自己一支，见 BuildingSprites.flashPaint），用完还回去
+        paint.setAlpha(255);
+    }
+
+    /**
+     * 一只敌人：<b>一个人，站在他自己那圈颜色上</b>。
+     *
+     * <p><b>锚点是脚底，不是中心。</b>人画在 (x, y) 上方、两只脚踩在
+     * {@code y + 半身位} 那一行——和建筑一样是"底边对齐地面"（{@code drawBuilding}
+     * 的 bottom 也是占地底边）。<b>这一点是贴图能成立的前提</b>：
+     * {@code art/cut_enemy.py} 把原图裁到鞋底那一行为止，所以贴图的底边就是脚底，
+     * 这儿不用再记一个"脚在画布往下百分之几"的偏移量。
+     *
+     * <p><b>贴图比碰撞盒大得多</b>：体格 1.0 的那只，碰撞盒是一格见方，
+     * 画出来的人有一格二高、画布一格三见方。碰撞盒是"脚踩的那块地"，
+     * 人当然比地高——两者本来就该是两个数，见 {@link EnemySprites}。
+     *
+     * <p><b>为什么不走 {@link #drawBlock}。</b>那个方法是给建筑写的，它身上带着
+     * 两件建筑才有的东西：探出占地的那截画成半透明、占地边缘画一条虚线
+     * （"从这儿往下才是能放东西的格子"）。敌人既没有悬空的部分、也没有占地，
+     * 套用之后每只敌人身上都横着一条半透明的带子和一条虚线，
+     * 而那条虚线在敌人身上什么也不表示。
+     *
+     * <p><b>三种兵靠什么分。</b>贴图是同一个人（三种动作），所以分不出来的那部分
+     * 由脚下那圈颜色补——<b>那圈颜色是玩法信息，不是装饰</b>，
+     * 理由写在 {@link #ENEMY_MARK_RING_DP} 上（**为什么不给贴图整体染色**那条）。
+     * 体格也在说同一件事：
+     * 快兵细一圈、重甲比一格还宽，和那圈颜色互相印证。
      */
     private void drawEnemy(Canvas canvas, Enemy enemy) {
         float cell = board.cellPx();
-        float body = enemy.type.bodyCells * cell;
         float centreX = board.xAt(enemy.x);
-        // 身体以 (x, y) 为中心画。y 是连续的行坐标，所以换行途中身体是平滑移过去的
-        float centreY = board.yAt(enemy.y);
-        float top = centreY - body / 2f;
-        float bottom = centreY + body / 2f;
+        // 脚底那一行。y 是身体中心的连续行坐标，加半个身位就是脚，
+        // 换行途中它是平滑移过去的，所以敌人不会在两行之间跳。
+        float feetY = board.yAt(enemy.y + enemy.type.halfBodyCells());
+        float size = EnemySprites.CANVAS_CELLS_PER_BODY * enemy.type.bodyCells * cell;
+        float left = centreX - size / 2f;
 
-        int color = enemyColors[enemy.type.ordinal()];
-        fill.setColor(enemy.blocked ? enemyBlockedColors[enemy.type.ordinal()] : color);
-        fill.setAlpha(255);
-        float radius = body * 0.22f;
-        rect.set(centreX - body / 2f, top, centreX + body / 2f, bottom);
-        canvas.drawRoundRect(rect, radius, radius, fill);
+        // 先画脚下那圈，再画人：圈是"踩在地上"的，压在腿后面才对。
+        float body = enemy.type.bodyCells * cell;
+        rect.set(centreX - body * ENEMY_MARK_WIDTH / 2f,
+                feetY - body * ENEMY_MARK_HEIGHT / 2f,
+                centreX + body * ENEMY_MARK_WIDTH / 2f,
+                feetY + body * ENEMY_MARK_HEIGHT / 2f);
+        // 底：三种共用的一块深色接地影（自带透明度，不用也不能再调 setAlpha）
+        fill.setColor(enemyShadow);
+        canvas.drawOval(rect, fill);
+        // 边：这一种的颜色。卡住了用压暗的那版，见 ENEMY_MARK_RING_DP
+        stroke.setStrokeWidth(Math.max(1.5f, ENEMY_MARK_RING_DP * density));
+        stroke.setColor(enemy.blocked
+                ? enemyBlockedColors[enemy.type.ordinal()]
+                : enemyColors[enemy.type.ordinal()]);
+        canvas.drawOval(rect, stroke);
 
-        stroke.setStrokeWidth(Math.max(1f, 0.8f * density));
-        stroke.setColor(spriteLine);
-        canvas.drawRoundRect(rect, radius, radius, stroke);
+        rect.set(left, feetY - size, left + size, feetY);
+        canvas.drawBitmap(spriteFor(enemy), null, rect, enemySprites.paint());
     }
 
     /**
-     * 把颜色压暗到七成，用来表示"卡住了"。见 {@link #drawEnemy} 里为什么是压暗不是换色。
+     * 这一只这一刻该画哪个姿势。
+     *
+     * <p><b>卡住了 = 在啃东西</b>（{@code Enemy.blocked} 就等于"正在拆身边最近的那座"，
+     * 见那个字段的注释），所以"卡住"和"挥击"是同一件事，不用另外判。
+     *
+     * <p>两种状态各有一个两帧的小循环，帧都是从<b>引擎已经摆在外面的数</b>里取的
+     * ——一个是 {@code enemy.x}，一个是本机时钟，见下面两段。
+     */
+    private Bitmap spriteFor(Enemy enemy) {
+        if (enemy.blocked) {
+            // 挥击和收势交替。用本机时钟而不是引擎里的数：引擎只给得出"卡住了"，
+            // 给不出"啃到第几口了"（伤害是每帧连续扣的），理由见 ENEMY_SWING_PERIOD_MS。
+            long phase = frameMs % ENEMY_SWING_PERIOD_MS;
+            return phase < ENEMY_SWING_PERIOD_MS * ENEMY_SWING_ATTACK_SHARE
+                    ? enemySprites.attack()
+                    : enemySprites.stand();
+        }
+        // 走路的两个姿势按走过几格翻，不按时间——三种兵速度差三倍，
+        // 按时间翻会让快兵"脚不动人平移"，理由见 ENEMY_STRIDE_CELLS。
+        // 用的是路程 enemy.travelled 不是 enemy.x：竖着换行时 x 不动，看 x 就不迈腿了。
+        int step = (int) Math.floor(enemy.travelled / ENEMY_STRIDE_CELLS);
+        return (step & 1) == 0 ? enemySprites.walk() : enemySprites.stand();
+    }
+
+    /**
+     * 把颜色压暗到七成，用来表示"卡住了"。**压暗而不是换第四个颜色**，理由写在
+     * {@code colors.xml} 里 {@code game_enemy_grunt} 那一段的最后一条：
+     * 换色就把"这是哪一种"丢了，而贴着墙啃的时候恰恰最需要看清种类。
      *
      * <p>三种暗色在构造时算一次存进 {@link #enemyBlockedColors}：这个方法本来会出现在
      * 每帧、每只敌人的绘制路径上，而它算出来的东西一局里根本不会变。
@@ -1305,8 +1523,11 @@ public class BattlefieldView extends View {
             }
             // 宽度跟着体格走：大块头配一条一格宽的小条，看着像旁边那只的
             float body = enemy.type.bodyCells * cell;
-            // 条压在头顶：身体上边缘 = 中心 - 半个身位，也就是 drawEnemy 里的 top
-            float top = board.yAt(enemy.y) - body / 2f;
+            // 条压在头顶：头顶 = 脚底往上一个贴图那么高，也就是 drawEnemy 里的 rect.top。
+            // **不能再用"身体中心 ± 半个身位"**了——那是色块时代的算法，
+            // 现在贴图比碰撞盒高得多，那样算出来的条会横在人的胸口上。
+            float feetY = board.yAt(enemy.y + enemy.type.halfBodyCells());
+            float top = feetY - EnemySprites.CANVAS_CELLS_PER_BODY * enemy.type.bodyCells * cell;
             drawBar(canvas, board.xAt(enemy.centreX()), top - gap,
                     body * BAR_WIDTH_RATIO, enemy.hpFraction());
         }
@@ -1365,24 +1586,36 @@ public class BattlefieldView extends View {
     /**
      * 画一个"贴图位"。
      *
-     * <p>分两段：{@code footprintTop} 以下是<b>占地</b>（脚踩的那片地面，实心），
-     * 以上到 {@code top} 是<b>向上探出的部分</b>（半透明 + 虚线）。
-     * 这段半透明区域就是真贴图里塔尖会占的地方——美术出图时的高度按它来。
+     * <p>{@code footprintLeft}／{@code footprintTop} 围出来的是<b>占地</b>
+     * （脚踩的那片地面，实心），框外到 {@code left}／{@code top} 的是
+     * <b>探出占地的部分</b>（半透明 + 虚线）。这块半透明区域就是真贴图会占的地方
+     * ——美术出图时的高度按 {@code top} 来、宽度按 {@code left} 来。
+     * 现在探出的只有两种：核心往<b>上</b>（楼顶）、塔往<b>左</b>（炮管）。
      */
     private void drawBlock(Canvas canvas, float left, float top, float right, float bottom,
-                           float footprintTop, int color, @Nullable String text) {
-        float radius = Math.min(board.cellPx(), (bottom - top)) * 0.12f;
+                           float footprintLeft, float footprintTop,
+                           int color, @Nullable String text) {
+        float radius = Math.min(board.cellPx(), Math.min(bottom - top, right - left)) * 0.12f;
 
-        // 向上探出的部分：半透明，虚线标出它到哪儿为止
+        // 探出占地的部分：半透明，虚线标出它到哪儿为止。
+        // 分两块画（上面一块、左边一块），两块**互不重叠**——左边那块从 top 起、
+        // 上面那块从 footprintLeft 起，所以将来真出现"既往上又往左"的建筑，
+        // 也不会在同一处叠出两层 alpha 变成一块深色。
         fill.setColor(color);
         fill.setAlpha(70);
-        rect.set(left, top, right, footprintTop);
-        canvas.drawRoundRect(rect, radius, radius, fill);
+        if (footprintTop > top) {
+            rect.set(footprintLeft, top, right, footprintTop);
+            canvas.drawRoundRect(rect, radius, radius, fill);
+        }
+        if (footprintLeft > left) {
+            rect.set(left, top, footprintLeft, bottom);
+            canvas.drawRoundRect(rect, radius, radius, fill);
+        }
 
         // 占地：实心
         fill.setColor(color);
         fill.setAlpha(255);
-        rect.set(left, footprintTop, right, bottom);
+        rect.set(footprintLeft, footprintTop, right, bottom);
         canvas.drawRoundRect(rect, radius, radius, fill);
 
         // 整块贴图的轮廓
@@ -1391,9 +1624,12 @@ public class BattlefieldView extends View {
         rect.set(left, top, right, bottom);
         canvas.drawRoundRect(rect, radius, radius, stroke);
 
-        // 占地顶边：这条线以上是"悬在空中"的部分，写实贴图里就是塔身和塔尖
+        // 占地边界：线以外是"悬在空中"的部分，写实贴图里就是炮管和楼顶
         dashed.setStrokeWidth(Math.max(1f, 0.8f * density));
-        canvas.drawLine(left, footprintTop, right, footprintTop, dashed);
+        canvas.drawLine(footprintLeft, footprintTop, right, footprintTop, dashed);
+        if (footprintLeft > left) {
+            canvas.drawLine(footprintLeft, footprintTop, footprintLeft, bottom, dashed);
+        }
 
         if (text != null && !text.isEmpty()) {
             // 文字按屏幕大小画：画布被缩放了 zoom 倍，所以这里先除掉
@@ -1403,7 +1639,9 @@ public class BattlefieldView extends View {
             // 一格只有二十几 dp，而"Wall"这个单词比一格还宽，直接画会糊到隔壁格子上，
             // 把要看的格子边界盖掉。所以放不下就退成首字母，首字母也放不下就干脆不画——
             // 占位阶段方块颜色已经能分清谁是谁，标签只是辅助。
-            float room = (right - left) - 2f * density;
+            // 文字放在**占地**里，不是整块贴图里——探出去的那截是炮管，
+            // 名字写在炮管上就跑到隔壁格子去了。
+            float room = (right - footprintLeft) - 2f * density;
             String shown = label.measureText(text) <= room ? text : text.substring(0, 1);
             if (label.measureText(shown) > room) {
                 shown = null;
@@ -1411,13 +1649,13 @@ public class BattlefieldView extends View {
             if (shown != null) {
                 float centreY = footprintTop + (bottom - footprintTop) / 2f
                         - (label.descent() + label.ascent()) / 2f;
-                canvas.drawText(shown, (left + right) / 2f, centreY, label);
+                canvas.drawText(shown, (footprintLeft + right) / 2f, centreY, label);
             }
         }
     }
 
     /**
-     * 攻击范围圈：<b>正在查看的那座塔</b>，以及手上那座塔的预放位置。
+     * 攻击射界：<b>正在查看的那座塔</b>，以及手上那座塔的预放位置。
      *
      * <p><b>画在建筑底下</b>（在 {@link #drawSprites} 之前），不是盖在上面：
      * 这是"地面上的一块标记"，压在塔身上既糊住塔，半透明色块叠在实心方块上也显脏。
@@ -1428,7 +1666,7 @@ public class BattlefieldView extends View {
      */
     private void drawRanges(Canvas canvas) {
         if (inspected != null) {
-            drawRangeCircle(canvas, inspected.type, inspected.col(), inspected.row(),
+            drawRangeSector(canvas, inspected.type, inspected.col(), inspected.row(),
                     BuildingStats.rangeCells(inspected.type, inspected.level), rangeColor);
         }
         // 正在挪的那一座：**它现在待的地方**也画一圈，一直画到落下去为止。
@@ -1436,14 +1674,14 @@ public class BattlefieldView extends View {
         // "正在挪的是哪一座、它原来在哪儿"，玩家得自己记。两个圈一个说
         // "从这儿"（金）、一个说"到这儿"（绿/红），挪动的得失一眼看得出来。
         if (moving != null) {
-            drawRangeCircle(canvas, moving.type, moving.col(), moving.row(),
+            drawRangeSector(canvas, moving.type, moving.col(), moving.row(),
                     BuildingStats.rangeCells(moving.type, moving.level), rangeColor);
         }
         // 手上拎着塔的时候也画一圈：不然"这座塔放这儿能打到哪条路"只能靠猜，
         // 而摆位是这游戏唯一的策略动作。
         BuildingType ghost = ghostType();
         if (ghostTopLeft != null && ghost != null) {
-            drawRangeCircle(canvas, ghost, ghostTopLeft.col, ghostTopLeft.row,
+            drawRangeSector(canvas, ghost, ghostTopLeft.col, ghostTopLeft.row,
                     BuildingStats.rangeCells(ghost, ghostLevel()), ghostOk ? okColor : badColor);
         }
     }
@@ -1451,7 +1689,7 @@ public class BattlefieldView extends View {
     /**
      * 手指底下那块虚影是哪一类建筑；既没拿东西也没在挪时是 {@code null}。
      *
-     * <p>画虚影的三处（范围圈、占地轮廓、红闪）都得知道"现在这块虚影是谁"，
+     * <p>画虚影的三处（射界扇形、占地轮廓、红闪）都得知道"现在这块虚影是谁"，
      * 而它有两个来路：{@link #selected}（要放新的）和 {@link #moving}（要挪旧的）。
      * 与其在三处各写一遍 {@code moving != null ? ... : ...}，不如收在这一个方法里。
      */
@@ -1472,12 +1710,15 @@ public class BattlefieldView extends View {
     }
 
     /**
-     * 一个圈。{@code rangeCells <= 0}（这种建筑不会攻击）就什么都不画。
+     * 一个<b>射界扇形</b>。{@code rangeCells <= 0}（这种建筑不会攻击）就什么都不画。
      *
      * <p>圆心取占地的<b>正中</b>，不是某一格的中心：2×2 的塔圆心落在四格交点上，
-     * 取任何一格都会让圈整体偏半格，看着像是射程不对称。
+     * 取任何一格都会让扇形整体偏半格，看着像是射界不对称。
+     *
+     * <p><b>是扇形不是圆</b>：塔一律朝左打（{@link BuildingStats#AIM_HALF_ANGLE_DEG}），
+     * 画成整圆就会说成"四面八方都打得到"，和实际判定对不上。
      */
-    private void drawRangeCircle(Canvas canvas, BuildingType type, int col, int row,
+    private void drawRangeSector(Canvas canvas, BuildingType type, int col, int row,
                                  double rangeCells, int color) {
         if (rangeCells <= 0) {
             return;
@@ -1486,14 +1727,23 @@ public class BattlefieldView extends View {
         float centreX = board.xAt(col + type.cols / 2f);
         float centreY = board.yAt(row + type.rows / 2f);
 
+        // 朝左的扇形。Android 的角度是**三点钟方向为 0、顺时针为正**，
+        // 所以正左方是 180°；半角从 BuildingStats 拿，和判定用的是同一个数。
+        double half = BuildingStats.AIM_HALF_ANGLE_DEG;
+        float start = (float) (180.0 - half);
+        float sweep = (float) (2.0 * half);
+        arcRect.set(centreX - radius, centreY - radius, centreX + radius, centreY + radius);
+
+        // useCenter=true 画出来的是一个**扇形**（两条半径 + 一段弧），
+        // 不是弓形——要的就是"这是一个朝左的喇叭口"这个形状本身。
         fill.setColor(color);
         fill.setAlpha(RANGE_FILL_ALPHA);
-        canvas.drawCircle(centreX, centreY, radius, fill);
+        canvas.drawArc(arcRect, start, sweep, true, fill);
 
         stroke.setStrokeWidth(Math.max(1f, 1.6f * density));
         stroke.setColor(color);
         stroke.setAlpha(RANGE_LINE_ALPHA);
-        canvas.drawCircle(centreX, centreY, radius, stroke);
+        canvas.drawArc(arcRect, start, sweep, true, stroke);
 
         // 画笔是共用的，用完把 alpha 还回去：不还的话后面那些不显式设 alpha
         // 的描边（轮廓、网格）会跟着变淡。这个坑 drawGround 顶上就踩过一次。
@@ -1502,7 +1752,7 @@ public class BattlefieldView extends View {
 
     /** 手指下面的预放位置，以及放不下时的红闪。 */
     private void drawOverlay(Canvas canvas) {
-        // 正在查看的那座：**只描边、不填色**。填色和它底下那个范围圈会叠成两层
+        // 正在查看的那座：**只描边、不填色**。填色和它底下那个射界扇形会叠成两层
         // 半透明，把建筑本身糊成灰绿色（真机上撞到过，青色的塔看着像橄榄色）。
         // 而且贴图接上之后，任何一层填色都是盖在美术上的脏东西——
         // "选中"这件事让金边和一个圆去说就够了。

@@ -14,7 +14,7 @@ package com.mobilegroup20.tokentrail.game.engine;
  * <p>关卡<b>固定 18 行高</b>（{@link #ROWS}），列数由屏幕形状决定。算法的顺序是：
  * <ol>
  *   <li>先求出「18 行 + 上方余量」正好装进面板高度的那条边长
- *       （{@code 面板高 / 19.5}）；</li>
+ *       （{@code 面板高 / 19}）；</li>
  *   <li>再看向上取整能排几列——<b>宁可格子略小，也要保证 18 行全在屏幕上</b>；</li>
  *   <li>一格 = 面板宽 / 列数，所以战场横向永远铺满，右边不留缝。</li>
  * </ol>
@@ -41,10 +41,11 @@ package com.mobilegroup20.tokentrail.game.engine;
  *
  * <p><b>锚点是「footprint 的底边中心」</b>，落在格子边界上而不是格子中心：
  * 一个 W×H 格的建筑，锚点在它占的那片矩形的底边中点
- * （{@link #anchorX(int, int)} / {@link #anchorY(int, int)}）。塔往上长，
- * 允许高过自己的 footprint，向上探出，最多 {@link #MAX_OVERHANG_CELLS} 格——
- * 所以战场上方留了同样宽的一条余量（{@link #boardTopPx()}），
- * 否则第 0 行的塔尖会被裁掉。
+ * （{@link #anchorX(int, int)} / {@link #anchorY(int, int)}）。建筑允许画出自己的
+ * footprint，向上最多 {@link #MAX_OVERHANG_CELLS} 格、向左最多
+ * {@link #MAX_OVERHANG_LEFT_CELLS} 格、向右最多 {@link #MAX_OVERHANG_RIGHT_CELLS} 格。
+ * <b>只有向上那个要留余量</b>（{@link #boardTopPx()}，否则第 0 行的楼顶会被裁掉）；
+ * 横向探出伸进的是隔壁的格子，而战场左右两边本来就还有地方。
  *
  * <p>绘制时<b>按行从上往下画</b>（先画第 0 行），后画的自然盖住先画的，
  * 越靠下的物体显示在越前面，和真实前后关系一致，不需要额外的排序。
@@ -112,10 +113,38 @@ public final class BoardGeometry {
     /**
      * 贴图最多高出<b>自己 footprint 顶边</b>多少格。
      *
-     * <p>最高的素材是 2×2 的箭塔：footprint 2 格 + 塔尖探出 1.5 格 = 总高 3.5 格。
+     * <p>现在最高的是 3×3 的核心：footprint 3 格 + 楼的顶探出 1 格 = 总高 4 格。
      * 战场上方因此留出这么多余量。改这个值要同时改美术那边的出图规格（ART.md §2.1）。
+     *
+     * <p>塔原来在这儿占 1.5（塔尖），2026-09-26 改成炮管<b>朝左</b>伸出去了
+     * （{@link BuildingType#overhangLeftCells}），于是余量从 1.5 降到 1，
+     * 让出来的半格还给了格子本身——格子大了约 2.6%。
      */
-    public static final float MAX_OVERHANG_CELLS = 1.5f;
+    public static final float MAX_OVERHANG_CELLS = 1.0f;
+
+    /**
+     * 贴图最多探出<b>自己 footprint 左边</b>多少格。
+     *
+     * <p>只有塔用（炮管朝左伸 1 格）。
+     *
+     * <p>和上面那个常数不一样，这个<b>不参与 {@link #fit} 的尺寸计算</b>：
+     * 横向探出不会让任何东西被裁掉——最靠左能放塔的是可建区第一列
+     * （{@code Battlefield.firstBuildableCol()} = 4），减掉 1 格还在第 3 列，
+     * 离战场左边缘远得很。它存在只是为了给 {@code BoardGeometryTest}
+     * 和美术规格一个能对齐的上限。
+     */
+    public static final float MAX_OVERHANG_LEFT_CELLS = 1.0f;
+
+    /**
+     * 贴图最多探出<b>自己 footprint 右边</b>多少格。
+     *
+     * <p>只有塔用，而且只有 0.3 格：炮尾比底座宽出来的那一点
+     * （见 {@link BuildingType#TOWER}）。和左边那个一样不参与 {@link #fit}。
+     *
+     * <p>往右探比往左探更安全：最靠右能放建筑的是可建区最后一列，右边还隔着
+     * 3 格山区，0.3 格伸过去连山那条边都碰不到。
+     */
+    public static final float MAX_OVERHANG_RIGHT_CELLS = 0.3f;
 
     private final int cols;
     private final float cellPx;
@@ -134,7 +163,7 @@ public final class BoardGeometry {
      *
      * <p><b>只有格子大小是算出来的，行列数是定死的</b>（{@link #COLS} × {@link #ROWS}）。
      *
-     * <p>格子大小只由<b>面板高度</b>决定：让「18 行 + 上方 1.5 格余量」正好装进面板高度。
+     * <p>格子大小只由<b>面板高度</b>决定：让「18 行 + 上方 1 格余量」正好装进面板高度。
      * 面板宽度不参与计算——战场比屏幕宽是常态，宽出来的部分靠拖动看。
      *
      * <p>面板宽高比再极端也不会出现"格子大到装不下 18 行"：装得下是硬约束，
@@ -142,7 +171,7 @@ public final class BoardGeometry {
      *
      * @param panelWidthPx  战场面板的宽（px）。不参与格子大小的计算，
      *                      只用来算 {@link #visibleCols}（一屏看得见几列）
-     * @param panelHeightPx 战场面板的高（px），<b>包含</b>上方那 1.5 格余量，
+     * @param panelHeightPx 战场面板的高（px），<b>包含</b>上方那 1 格余量，
      *                      方法内部会扣掉
      * @throws IllegalArgumentException 任一参数不是正数
      */
@@ -216,8 +245,8 @@ public final class BoardGeometry {
     /**
      * 第 0 行<b>上边缘</b>的 y（px）。也是战场上方留的余量高度。
      *
-     * <p>第 0 行放了最高的贴图（3.5 格高）时，塔尖正好顶到布局坐标的 y=0，
-     * 再往上就没有内容了。渲染时把内容盒整体对齐到面板即可。
+     * <p>第 0 行放了最高的贴图（核心，{@link BuildingType#spriteHeightCells()} = 4 格）时，
+     * 楼顶正好顶到布局坐标的 y=0，再往上就没有内容了。渲染时把内容盒整体对齐到面板即可。
      */
     public float boardTopPx() {
         return MAX_OVERHANG_CELLS * cellPx;

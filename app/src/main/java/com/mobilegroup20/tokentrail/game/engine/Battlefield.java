@@ -602,7 +602,7 @@ public final class Battlefield {
      * <p><b>装填计时用"减 dt、开火时再加回去"，不是"开火时赋值"。</b>
      * 赋值的话，一帧多出来的那点时间（dt 0.05、间隔 0.75 → 每发白丢 0.05÷0.75 ≈ 6.7%）
      * 会一直累积，于是实际射速取决于帧率。<b>空闲时把负数夹回 0</b>：
-     * 不然一只敌人被挡在圈外等了三秒，塔一进圈就补上三发，看着像卡了一下。
+     * 不然一只敌人被挡在射界外等了三秒，塔一进射界就补上三发，看着像卡了一下。
      *
      * <p>{@code while} 而不是 {@code if}：dt 大到跨过一整个间隔时（测试里会
      * {@code advance(5f)}），该补的发数要全补上，射速才和帧率无关。上限见
@@ -629,7 +629,7 @@ public final class Battlefield {
                     break;
                 }
                 projectiles.add(new Projectile(tower, tower.target,
-                        // 出膛点是**占地中心**：范围圈的圆心、判定用的圆心、
+                        // 出膛点是**占地中心**：范围扇形的圆心、判定用的圆心、
                         // 从前那条连线的起点，三处现在还是同一个点
                         tower.col() + tower.type.cols / 2f,
                         tower.row() + tower.type.rows / 2f,
@@ -681,7 +681,7 @@ public final class Battlefield {
      * <p>只算还在天上的，不算"这一帧已经扣掉的"：已经扣掉的已经从
      * {@code hp} 里减了，再减一遍会重复。
      *
-     * <p>复杂度是"塔 × 圈里的敌人 × 天上的子弹"，一帧几十×几十×几十次浮点加法；
+     * <p>复杂度是"塔 × 射界里的敌人 × 天上的子弹"，一帧几十×几十×几十次浮点加法；
      * 和画一遍地面（几十个矩形 + 一整片斜纹）比起来不算什么，所以不为它建表。
      */
     private float damageInFlightAt(Enemy enemy) {
@@ -697,26 +697,26 @@ public final class Battlefield {
     /**
      * 射程里<b>离这座塔最近</b>的那只敌人，没有就 {@code null}。
      *
-     * <p>距离是<b>圆心到圆心</b>，用格子坐标算：建筑取占地矩形的中心，
+     * <p>距离是<b>中心到中心</b>，用格子坐标算：建筑取占地矩形的中心，
      * 敌人取身体的中心（{@link Enemy#centreX()}）。两个中心都在"连续格子坐标"
-     * 这一套里，和界面上画的那个圈用的是同一个圆心——圈画在哪儿就打得到哪儿，
-     * 不会出现"看着在圈里却没挨打"。
+     * 这一套里，和界面上画的那个扇形用的是同一个圆心——扇形画在哪儿就打到哪儿，
+     * 不会出现"看着在扇形里却没挨打"。
      *
-     * <p><b>再加半个身位（{@link EnemyType#halfBodyCells()}），判定改成"圈碰到就算"。</b>
-     * 圈画的是"离我 {@code range} 格以内"，而敌人的判定点是它的<b>中心</b>：
-     * 只按中心算的话，半个身子探进圈里的敌人反而不挨打。
+     * <p><b>再加半个身位（{@link EnemyType#halfBodyCells()}），判定改成"扇形碰到就算"。</b>
+     * 扇形画的是"离我 {@code range} 格以内"，而敌人的判定点是它的<b>中心</b>：
+     * 只按中心算的话，半个身子探进扇形里的敌人反而不挨打。
      *
      * <p>这不是理论问题，真机上就是<b>紧贴城墙的那只</b>：塔摆在墙后面、
-     * 敌人贴在墙左边，圆心到敌人中心正好 {@code 2.5} 格多一点（墙宽 1 格 +
+     * 敌人贴在墙左边，中心到中心正好 {@code 2.5} 格多一点（墙宽 1 格 +
      * 敌人半个身位 + 塔自己的半个占地 = 2.5，再加上纵向错开半格），
      * 差 0.05 格打不着。而城墙的全部价值就是"替后面的塔多争取几秒"
      * （见 {@link BuildingStats#WALL_HP}）——塔不打贴在墙上的那只，
      * 墙就白砌了。加上这半个身位之后，墙后紧贴的那座塔打得着，
-     * 而且画面上"圈碰到了敌人"和"敌人在挨打"这两件事重新对得上。
+     * 而且画面上"扇形碰到了敌人"和"敌人在挨打"这两件事重新对得上。
      *
      * <p>身位是<b>逐只</b>算的，不是全局一个常数：重甲比杂兵宽，所以它能从
      * 更远处就开始挨打。这正好和它"厚"这件事配套——不然画面上一只大块头
-     * 站在圈外挨打，或者小个子快兵冲进圈里还不挨打。
+     * 站在射界外挨打，或者小个子快兵冲进射界里还不挨打。
      *
      * <h2>为什么是"最靠前"而不是"最近"</h2>
      *
@@ -727,7 +727,7 @@ public final class Battlefield {
      * （那次量的是<b>塔瞄谁</b>，敌人当时还是"一路奔核心"；后来敌人也改成了
      * "去最近的建筑"，见上一段。）
      *
-     * <p>"就近"在画面上的好处是说得通（圈只有 2.5 格，塔不会越过贴脸的那只去打
+     * <p>"就近"在画面上的好处是说得通（射界只有 2.5 格，塔不会越过贴脸的那只去打
      * 斜对面的），但代价是塔<b>不再优先拦截最危险的那只</b>：火力被近处、其实
      * 还离核心很远的敌人分走，该拦的那只就多走了几步。塔防里这几步就是漏怪。
      *
@@ -743,6 +743,29 @@ public final class Battlefield {
      * 塔能看见天上飞着什么，所以不会六座塔一起糊一只快兵。
      * 于是"最靠前的那只"实际上读作"最靠前、而且还没被安排掉的那只"。
      */
+    /**
+     * 这一只在不在这座塔的射界里。
+     *
+     * <p>射界是<b>朝左的扇形</b>：塔不转向，全部朝左打，因为敌人从左边那条
+     * 通道进来。{@code dx} 是"敌人在塔的哪一侧"（正数 = 右边），
+     * 所以第一句就把右边的全部挡掉；剩下的按
+     * {@link BuildingStats#AIM_HALF_ANGLE_DEG} 卡上下张角。
+     *
+     * <p>用一个"比斜率"的写法而不是 {@code Math.atan2}：这个方法在每一帧、
+     * 每座塔、每只敌人的三重循环里，{@code atan2} 是不必要的开销。
+     * {@code dx < 0} 保证了下面除法的符号，不用再取绝对值。
+     *
+     * <p><b>正左正右的边界</b>：{@code dx == 0}（敌人正在塔的正上/正下方）
+     * 不算——扇形是"朝着左边"的，正侧面那一线不属于它。这一条窄得几乎碰不到，
+     * 而且真碰到时塔会去打下一只，不会卡住。
+     */
+    private static boolean inAimSector(double dx, double dy) {
+        if (dx >= 0) {
+            return false;
+        }
+        return Math.abs(dy) <= -dx * BuildingStats.AIM_HALF_ANGLE_TAN;
+    }
+
     private Enemy frontmostInRange(Building tower) {
         double range = BuildingStats.rangeCells(tower.type, tower.level);
         if (range <= 0.0) {
@@ -761,6 +784,9 @@ public final class Battlefield {
             double dx = enemy.centreX() - centreX;
             double dy = enemy.centreY() - centreY;
             if (Math.hypot(dx, dy) > reach) {
+                continue;
+            }
+            if (!inAimSector(dx, dy)) {
                 continue;
             }
             // 天上已经有足够的伤害冲着它去了：这一发留给后面那只。
@@ -1007,6 +1033,10 @@ public final class Battlefield {
     /**
      * 朝一个连续坐标点走，最多走 {@code budget} 格。
      *
+     * <p><b>这是全项目唯一一处改敌人坐标的地方</b>，所以"走了多远"也在这儿记
+     * （{@link Enemy#travelled}）：渲染靠它翻走路的帧，记在别处就会漏掉
+     * "竖着换行"那几格——那几格 {@code x} 是不动的。
+     *
      * @return 还剩多少路没走完。走到了（或者已经在那儿了）返回剩下的，
      *         没走到返回 {@code 0}——调用方靠它决定还要不要再走一段。
      */
@@ -1017,10 +1047,12 @@ public final class Battlefield {
         if (distance <= budget || distance < 1e-4f) {
             e.x = targetX;
             e.y = targetY;
+            e.travelled += distance;
             return Math.max(0f, budget - distance);
         }
         e.x += dx / distance * budget;
         e.y += dy / distance * budget;
+        e.travelled += budget;
         return 0f;
     }
 

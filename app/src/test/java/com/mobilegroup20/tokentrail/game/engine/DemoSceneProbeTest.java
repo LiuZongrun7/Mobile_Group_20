@@ -13,8 +13,9 @@ import java.util.Random;
  * <p>它把 {@code MainActivity.buildDemoScene} 那个演示场面原样搬到电脑上，
  * 用固定 dt 和<b>一串固定种子</b>跑完五波，打印每局的结果。存在的理由是
  * <b>真机量一次要点五分钟，而且每局只给一个样本</b>——进哪一行是随机的，
- * 所以从前那张"演示场面"的表里每一行其实都是一个样本，
- * 而 20 个种子里只有 6 个能守住演示场面（见 {@code docs/TASKS.md}）。
+ * 所以从前那张"演示场面"的表里每一行其实都是一个样本。
+ * 现在的演示场面**一个种子都守不住（0/20）**，见 {@code docs/TASKS.md}：
+ * 这个场面是给人看美术和摆位的，不是配平过的开局。
  *
  * <p><b>改动 {@link Waves}、{@link EnemyType}、{@link BuildingStats}
  * 或者演示场面之后，把下面那行 {@code @Ignore} 删掉跑一遍</b>，
@@ -43,11 +44,25 @@ public class DemoSceneProbeTest {
         for (int row : new int[]{3, 11}) {
             field.place(BuildingType.TOWER, 14, row);
         }
+        // 弩车在塔群**后面**（第 32 列），一级/二级/三级各一座。摆法变了要连
+        // 上面那两个 upgrade 的坐标一起改，不然升级会静默落空。
+        for (int row : new int[]{5, 9, 13}) {
+            field.place(BuildingType.BALLISTA, 32, row);
+        }
         Building veteran = field.buildingAt(new Cell(14, 3));
         if (veteran != null) {
             field.upgrade(veteran);
         }
+        upgradeToLevel(field, new Cell(32, 9), 2);
+        upgradeToLevel(field, new Cell(32, 13), 3);
         return field;
+    }
+
+    private static void upgradeToLevel(Battlefield field, Cell at, int level) {
+        Building building = field.buildingAt(at);
+        while (building != null && building.level < level && field.upgrade(building)) {
+            // 条件里已经在升级了，循环体留空
+        }
     }
 
     private static void wallColumn(Battlefield field, int col, int... gaps) {
@@ -62,10 +77,11 @@ public class DemoSceneProbeTest {
         }
     }
 
+    /** 还剩几座**会开火的**。墙和核心不算——它们死光了也照样能输。 */
     private static int towersLeft(Battlefield field) {
         int n = 0;
         for (Building b : field.buildings()) {
-            if (b.type == BuildingType.TOWER) {
+            if (BuildingStats.hasRange(b.type)) {
                 n++;
             }
         }
@@ -103,7 +119,7 @@ public class DemoSceneProbeTest {
                 diedOnWave[Math.max(1, wave)]++;
             }
             System.out.println(String.format(Locale.US,
-                    "PROBE seed=%2d 结果=%-8s 打完 %d 波 漏=%d 塔=%d/%d 时长=%.0fs",
+                    "PROBE seed=%2d 结果=%-8s 打完 %d 波 漏=%d 塔弩=%d/%d 时长=%.0fs",
                     seed, field.outcome(), wave, field.leaks(),
                     towersLeft(field), towersAtStart, seconds));
         }

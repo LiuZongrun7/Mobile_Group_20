@@ -120,25 +120,98 @@ public class CostTest {
 
     // ---- 范围 ----
 
+    /** 只有两种塔会攻击。墙和核心问它们的射程一律是 0，界面靠这个决定画不画范围圈。 */
     @Test
-    public void onlyTheTowerHasARange() {
+    public void onlyTheTwoTowersHaveARange() {
         assertTrue(BuildingStats.hasRange(BuildingType.TOWER));
+        assertTrue(BuildingStats.hasRange(BuildingType.BALLISTA));
         assertFalse(BuildingStats.hasRange(BuildingType.WALL));
         assertFalse(BuildingStats.hasRange(BuildingType.CORE));
 
         assertEquals(0.0, BuildingStats.rangeCells(BuildingType.WALL, 1), 0.0001);
         assertEquals(0.0, BuildingStats.rangeCells(BuildingType.CORE, 3), 0.0001);
+
+        // 不攻击的还得把另外两个数也交代成 0，不然 Battlefield 会照着 0 秒一发去打
+        assertEquals(0.0, BuildingStats.damagePerShot(BuildingType.WALL, 1), 0.0001);
+        assertEquals(0.0, BuildingStats.fireIntervalSeconds(BuildingType.WALL, 1), 0.0001);
+        assertEquals(0.0, BuildingStats.damagePerShot(BuildingType.CORE, 3), 0.0001);
+        assertEquals(0.0, BuildingStats.fireIntervalSeconds(BuildingType.CORE, 3), 0.0001);
     }
 
     /** 升级要真的换来点什么，否则"升级"就只是个花钱的按钮。 */
     @Test
     public void towerRangeGrowsWithEveryLevel() {
-        double l1 = BuildingStats.rangeCells(BuildingType.TOWER, 1);
-        double l2 = BuildingStats.rangeCells(BuildingType.TOWER, 2);
-        double l3 = BuildingStats.rangeCells(BuildingType.TOWER, 3);
+        for (BuildingType tower : new BuildingType[]{BuildingType.TOWER, BuildingType.BALLISTA}) {
+            double l1 = BuildingStats.rangeCells(tower, 1);
+            double l2 = BuildingStats.rangeCells(tower, 2);
+            double l3 = BuildingStats.rangeCells(tower, 3);
 
-        assertTrue("二级该比一级远", l2 > l1);
-        assertTrue("三级该比二级远", l3 > l2);
+            assertTrue(tower.label + " 二级该比一级远", l2 > l1);
+            assertTrue(tower.label + " 三级该比二级远", l3 > l2);
+        }
+    }
+
+    /**
+     * <b>弩车和箭塔是反着配的，这条盯的就是那个"反"。</b>
+     *
+     * <p>三种关系，缺一条弩车就不再是另一种打法了：
+     *
+     * <ul>
+     *   <li><b>射程更远</b>——不然它没有任何理由摆在箭塔后面；</li>
+     *   <li><b>单发更重</b>——不然"一发一个"这个手感不存在；</li>
+     *   <li><b>但每秒伤害更低</b>——这一条最要紧。射程远、单发重、DPS 还高的话，
+     *       箭塔就没有存在的理由了，商店里那一行会变成"买了弩车的人永远赢"。
+     *       弩车贵一倍（见 {@code ShopCatalogTest}），贵的必须是"另一种取舍"，
+     *       不能是"全面更强"。</li>
+     * </ul>
+     *
+     * <p>三级一起比，不是只比一级：两张表要是哪天被改成在某一级交叉
+     * （比如三级弩车的 DPS 反超），只比一级是看不出来的。
+     */
+    @Test
+    public void ballistaTradesDamageRateForReach() {
+        for (int level = 1; level <= BuildingStats.MAX_LEVEL; level++) {
+            double towerRange = BuildingStats.rangeCells(BuildingType.TOWER, level);
+            double ballistaRange = BuildingStats.rangeCells(BuildingType.BALLISTA, level);
+            assertTrue("第 " + level + " 级：弩车该比箭塔远", ballistaRange > towerRange);
+
+            double towerShot = BuildingStats.damagePerShot(BuildingType.TOWER, level);
+            double ballistaShot = BuildingStats.damagePerShot(BuildingType.BALLISTA, level);
+            assertTrue("第 " + level + " 级：弩车该比箭塔打得疼", ballistaShot > towerShot);
+
+            double towerDps = towerShot / BuildingStats.fireIntervalSeconds(BuildingType.TOWER, level);
+            double ballistaDps = ballistaShot
+                    / BuildingStats.fireIntervalSeconds(BuildingType.BALLISTA, level);
+            assertTrue("第 " + level + " 级：弩车的每秒伤害该比箭塔低"
+                            + "（不然弩车是全面更强，箭塔就没用了）",
+                    ballistaDps < towerDps);
+        }
+    }
+
+    /**
+     * <b>弩车的每一发都该"一发一个"。</b>
+     *
+     * <p>这是它和箭塔在手感上真正的区别，也是上面那条"DPS 更低"换来的东西：
+     * 打得慢不要紧，要紧的是每一发都终结掉一只。所以拿 {@code EnemyType} 的血量
+     * 当尺子量一遍——<b>改弩车伤害或改敌人血量，这条会立刻炸</b>，
+     * 这正是它存在的意义（和箭塔那边"打得死杂兵、打不死重甲"一个路子）。
+     */
+    @Test
+    public void everyBallistaShotTakesDownOneGrunt() {
+        float runnerHp = EnemyType.RUNNER.maxHp;
+        float gruntHp = EnemyType.GRUNT.maxHp;
+
+        // 一级：一发带走快兵（快兵血最少，也跑得最快，最需要"发了就死"）
+        assertTrue("一级弩车一发该带走快兵",
+                BuildingStats.damagePerShot(BuildingType.BALLISTA, 1) >= runnerHp);
+        // 二级起：一发带走杂兵。一级打不死是有意的——不然一级就全能了
+        assertTrue("二级弩车一发该带走杂兵",
+                BuildingStats.damagePerShot(BuildingType.BALLISTA, 2) >= gruntHp);
+        assertTrue("三级更不该打不死",
+                BuildingStats.damagePerShot(BuildingType.BALLISTA, 3) >= gruntHp);
+        // 但重甲仍然要好几发：不然"重甲"这个兵种的意义就没了
+        assertTrue("三级弩车也不该一发带走重甲",
+                BuildingStats.damagePerShot(BuildingType.BALLISTA, 3) < EnemyType.BRUTE.maxHp);
     }
 
     /** 等级越界按最近的一级算，不抛异常：这个方法在每帧的绘制路径上。 */
