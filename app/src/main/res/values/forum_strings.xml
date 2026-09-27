@@ -58,4 +58,10 @@
     <string name="account_empty">Enter your username and password.</string>
     <string name="account_credentials_error">Incorrect username or password, or account unavailable.</string>
     <string name="account_rate_limit">Too many attempts. Please wait and try again.</string>
+    <string name="forum_test_enter">免账号测试</string>
+    <string name="forum_test_badge">测试区 · 帖子不进入正式论坛</string>
+    <string name="forum_test_explanation">无需注册或登录。测试身份有效期为 24 小时，可以测试新闻、图文发帖、点赞和评论。</string>
+    <string name="forum_test_identity">论坛测试身份：%1$s</string>
+    <string name="forum_test_leave">退出测试模式</string>
+    <string name="forum_test_unavailable">测试区暂时不可用，请稍后重试。</string>
 </resources>

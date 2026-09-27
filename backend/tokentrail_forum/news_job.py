@@ -3,6 +3,9 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import sqlite3
+import tempfile
+from contextlib import closing
 
 from .store import Store, now_ms
 
@@ -36,6 +39,30 @@ def cleanup_unused_images(store):
                 path.unlink()
 
 
+def export_news(store):
+    """Atomically publish a read-only news snapshot with no forum/account tables.
+
+    A separate test service can read this without writing the production WAL's
+    shared-memory files or gaining access to production post/session records.
+    """
+    descriptor, temporary = tempfile.mkstemp(prefix="news-readonly-", suffix=".sqlite3", dir=store.directory)
+    os.close(descriptor)
+    try:
+        with store.connect() as source, closing(sqlite3.connect(temporary)) as target:
+            target.executescript("""
+                CREATE TABLE news (id TEXT PRIMARY KEY,title TEXT,summary TEXT,source_name TEXT,
+                    original_url TEXT,image_url TEXT,category TEXT,published INTEGER);
+                CREATE INDEX news_order ON news(published DESC,id DESC);
+                CREATE TABLE metadata (key TEXT PRIMARY KEY,value TEXT);
+            """)
+            target.executemany("INSERT INTO news VALUES(?,?,?,?,?,?,?,?)", [tuple(row) for row in source.execute("SELECT * FROM news")])
+            target.executemany("INSERT INTO metadata VALUES(?,?)", [tuple(row) for row in source.execute("SELECT * FROM metadata WHERE key LIKE 'news%'")])
+            target.commit()
+        os.replace(temporary, store.directory / "news-readonly.sqlite3")
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def main():
     source_dir = Path(__file__).resolve().parents[2] / "tools" / "news"
     spec = importlib.util.spec_from_file_location("rss_collector", source_dir / "rss_collector.py")
@@ -48,6 +75,7 @@ def main():
     document = collector.collect(sources, previous)
     collector.atomic_write(staging, document)
     import_articles(store, document)
+    export_news(store)
     cleanup_unused_images(store)
     print(json.dumps({"articles": len(document["items"]), "sourceErrors": document["sourceErrors"]}))
     return 1 if len(document["sourceErrors"]) == len(sources) else 0

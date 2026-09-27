@@ -32,8 +32,8 @@ public class TokenTrailApp extends Application {
         super.onCreate();
         RepositoryProvider.init(this);
         if (!BuildConfig.FORUM_BASE_URL.isEmpty()) {
-            RepositoryProvider.configureForum(BuildConfig.FORUM_BASE_URL,
-                    com.mobilegroup20.tokentrail.data.TeamAccountSession.get(this));
+            com.mobilegroup20.tokentrail.data.TeamAccountSession session = com.mobilegroup20.tokentrail.data.TeamAccountSession.get(this);
+            RepositoryProvider.configureForum(session.forumBaseUrl(), session);
         }
     }
 }

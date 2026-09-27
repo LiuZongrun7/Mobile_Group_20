@@ -24,7 +24,10 @@ public final class TeamAccountSession implements SessionProvider {
 
     private static final class Snapshot {
         final String token, id, name;
-        Snapshot(String token, String id, String name) { this.token = token; this.id = id; this.name = name; }
+        final boolean forumTest;
+        Snapshot(String token, String id, String name, boolean forumTest) {
+            this.token = token; this.id = id; this.name = name; this.forumTest = forumTest;
+        }
     }
     public static synchronized TeamAccountSession get(Context context) {
         if (instance == null) instance = new TeamAccountSession(context.getApplicationContext());
@@ -42,7 +45,9 @@ public final class TeamAccountSession implements SessionProvider {
             if (!BuildConfig.FORUM_BASE_URL.equals(value.getString("origin"))) throw new IllegalStateException("Account endpoint changed");
             String token = value.getString("token"), id = value.getString("id"), name = value.getString("name");
             if (token.isEmpty() || id.isEmpty() || name.isEmpty()) throw new IllegalStateException("Empty session");
-            current = new Snapshot(token, id, name);
+            boolean forumTest = value.optBoolean("forumTest", false);
+            if (forumTest && !BuildConfig.DEBUG) throw new IllegalStateException("Test sessions are debug only");
+            current = new Snapshot(token, id, name, forumTest);
         } catch (Exception ignored) {
             // Keystore keys do not survive a backup restore; require a fresh login.
             preferences.edit().remove("encrypted").apply();
@@ -57,14 +62,22 @@ public final class TeamAccountSession implements SessionProvider {
         return generator.generateKey();
     }
     public synchronized void save(String token, String id, String name) throws Exception {
+        save(token, id, name, false);
+    }
+    public synchronized void saveForumTest(String token, String id, String name) throws Exception {
+        if (!BuildConfig.DEBUG || token == null || !token.startsWith("tt_test_") || id == null || !id.startsWith("test_"))
+            throw new IllegalArgumentException("Invalid test session");
+        save(token, id, name, true);
+    }
+    private void save(String token, String id, String name, boolean forumTest) throws Exception {
         if (token == null || token.isEmpty() || id == null || id.isEmpty() || name == null || name.isEmpty())
             throw new IllegalArgumentException("Account response is incomplete");
-        JSONObject value = new JSONObject().put("origin", BuildConfig.FORUM_BASE_URL).put("token", token).put("id", id).put("name", name);
+        JSONObject value = new JSONObject().put("origin", BuildConfig.FORUM_BASE_URL).put("token", token).put("id", id).put("name", name).put("forumTest", forumTest);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key());
         byte[] encrypted = cipher.doFinal(value.toString().getBytes(StandardCharsets.UTF_8));
         String stored = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":" + Base64.encodeToString(encrypted, Base64.NO_WRAP);
         if (!preferences.edit().putString("encrypted", stored).commit()) throw new IllegalStateException("Could not save session");
-        current = new Snapshot(token, id, name);
+        current = new Snapshot(token, id, name, forumTest);
     }
     public synchronized void clear() {
         current = null; preferences.edit().remove("encrypted").apply();
@@ -73,4 +86,9 @@ public final class TeamAccountSession implements SessionProvider {
     @Override public String accountId() { Snapshot value = current; return value == null ? null : value.id; }
     public String accountName() { Snapshot value = current; return value == null ? null : value.name; }
     public boolean signedIn() { return current != null; }
+    public boolean forumTest() { Snapshot value = current; return value != null && value.forumTest; }
+    public String forumBaseUrl() { return forumTest() ? testBaseUrl() : BuildConfig.FORUM_BASE_URL; }
+    public static String testBaseUrl() {
+        return okhttp3.HttpUrl.get(BuildConfig.FORUM_BASE_URL).newBuilder().encodedPath("/test-api/").build().toString();
+    }
 }

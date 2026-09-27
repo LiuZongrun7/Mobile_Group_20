@@ -4,6 +4,16 @@
 
 服务使用 FastAPI、SQLite WAL 与本地持久图片存储。论坛数据与原 `aibox_backend` 的数据库分开；账号通过原后端的 `/api/users/me` 验证，App 的登录和退出仍调用原来的 `/api/login`、`/api/logout`。没有新的账号数据库、共享测试 token 或关闭证书校验的代码。App 提供已有账号的登录入口，不提供注册入口。
 
+## 免账号测试区
+
+调试 APK 的论坛页面提供“免账号测试”按钮，不需要账号模块、用户名或密码。每台设备获得一个随机临时身份，有效期 24 小时，支持新闻、图文发布、点赞和评论；退出测试模式会撤销该临时身份。临时会话加密保存在手机上，重启 App 后仍进入测试区。身份到期后再次点击入口即可获得新测试身份。
+
+测试接口为 `https://43.140.212.47/test-api/`，由 `tokentrail-forum-test.service` 在 `127.0.0.1:8011` 提供。数据位于 `/var/lib/tokentrail-forum-test`，配置为 `/etc/tokentrail-forum-test.env`，与正式帖子、图片、点赞和评论分开。两台设备的测试帖子在同一个测试池中。正式 `/api/` 接口拒绝测试 token，测试身份不会写入团队账号库。Release APK 隐藏免账号入口并拒绝恢复测试身份。
+
+新闻采集任务将仅含新闻和采集状态的 SQLite 快照原子导出到 `/var/lib/tokentrail-forum/news-readonly.sqlite3`，测试服务只读该快照；它不读取正式帖子表。测试区不在正式数据备份中。关闭测试服务可运行 `sudo systemctl disable --now tokentrail-forum-test`，正式论坛继续运行。
+
+首次启用：上传新版 backend 代码后，以 root 执行 `deploy/install-test-area.sh`。该脚本生成只读新闻快照、启动测试服务并检查、重载 Nginx。`scripts/check_test_area.py` 使用两份临时身份验证公网图文、点赞评论、新闻、测试服务重启持久化、退出撤销和正式接口拒绝测试 token；不调用团队注册/登录接口，并只清理自己创建的测试数据。
+
 ## 服务器目录与进程
 
 | 项目 | 位置 |

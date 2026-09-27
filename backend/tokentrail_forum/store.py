@@ -51,11 +51,16 @@ CREATE TABLE IF NOT EXISTS write_events (
 );
 CREATE INDEX IF NOT EXISTS write_events_lookup ON write_events(uid, action, created);
 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS test_sessions (
+ token_hash TEXT PRIMARY KEY, uid TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+ expires INTEGER NOT NULL
+);
 """
 
 
 class Store:
-    def __init__(self, directory):
+    def __init__(self, directory, public_api_prefix="/api"):
+        self.public_api_prefix = public_api_prefix
         self.directory = Path(directory)
         self.media = self.directory / "media"
         self.media.mkdir(parents=True, exist_ok=True)
@@ -81,7 +86,22 @@ class Store:
             db.close()
 
     def image(self, row, media_base):
-        return {"id": row["id"], "url": f"{media_base}/api/forum/images/{row['id']}"}
+        return {"id": row["id"], "url": f"{media_base}{self.public_api_prefix}/forum/images/{row['id']}"}
+
+    @contextmanager
+    def news_connect(self, database=None):
+        if not database:
+            with self.connect() as db:
+                yield db
+            return
+        # The test forum shares only news reads; its posts/images use its own database.
+        db = sqlite3.connect(Path(database).resolve().as_uri() + "?mode=ro", uri=True, timeout=15)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA query_only=ON")
+        try:
+            yield db
+        finally:
+            db.close()
 
     def post(self, db, post_id, uid, media_base):
         row = db.execute("SELECT * FROM posts WHERE id=?", (post_id,)).fetchone()

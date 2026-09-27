@@ -881,7 +881,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!game && !forum) {
             com.mobilegroup20.tokentrail.data.TeamAccountSession session = com.mobilegroup20.tokentrail.data.TeamAccountSession.get(this);
-            binding.emptyLabel.setText(account ? session.signedIn() ? getString(R.string.account_signed_in, session.accountName()) : getString(R.string.forum_sign_in) : getString(R.string.nav_not_built, title));
+            binding.emptyLabel.setText(account ? session.signedIn() ? getString(session.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in, session.accountName()) : getString(R.string.forum_sign_in) : getString(R.string.nav_not_built, title));
         }
     }
 

@@ -10,14 +10,16 @@ from typing import Annotated
 from urllib.parse import urlsplit
 import uuid
 import warnings
+import ipaddress
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import Identity, TeamAuth
+from .test_sessions import ForumAuth
 from .store import Store, decode_cursor, now_ms, page, rate_limit, reply_json, news_json
 
 
@@ -28,6 +30,9 @@ class Settings:
     auth_url: str = ""
     auth_uid_field: str = "id"
     auth_name_field: str = "username"
+    test_sessions_enabled: bool = False
+    public_api_prefix: str = "/api"
+    news_database: str = ""
 
     @classmethod
     def from_environment(cls):
@@ -35,7 +40,10 @@ class Settings:
                    os.getenv("FORUM_PUBLIC_ORIGIN", ""),
                    os.getenv("FORUM_AUTH_URL", ""),
                    os.getenv("FORUM_AUTH_UID_FIELD", "id"),
-                   os.getenv("FORUM_AUTH_NAME_FIELD", "username"))
+                   os.getenv("FORUM_AUTH_NAME_FIELD", "username"),
+                   os.getenv("FORUM_ENABLE_TEST_SESSIONS", "0") == "1",
+                   os.getenv("FORUM_PUBLIC_API_PREFIX", "/api"),
+                   os.getenv("FORUM_NEWS_DATABASE", ""))
 
 
 class PostDraft(BaseModel):
@@ -117,8 +125,13 @@ def create_app(settings=None, verifier=None):
     parsed = urlsplit(origin)
     if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username:
         raise ValueError("FORUM_PUBLIC_ORIGIN must be an HTTPS origin, e.g. https://43.140.212.47")
-    store = Store(settings.data_dir)
+    if settings.public_api_prefix not in {"/api", "/test-api"}:
+        raise ValueError("Unsupported public API prefix")
+    if settings.test_sessions_enabled and settings.public_api_prefix != "/test-api":
+        raise ValueError("Anonymous test sessions require the isolated /test-api service")
+    store = Store(settings.data_dir, settings.public_api_prefix)
     auth = verifier or TeamAuth(settings.auth_url, settings.auth_uid_field, settings.auth_name_field)
+    forum_auth = ForumAuth(store, auth, settings.test_sessions_enabled)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -139,21 +152,36 @@ def create_app(settings=None, verifier=None):
         return JSONResponse({"code": "INVALID_INPUT", "message": "Invalid request fields"}, 400)
 
     def current_user(authorization: Annotated[str | None, Header()] = None):
-        return auth.verify(authorization)
+        return forum_auth.verify(authorization)
 
     User = Annotated[Identity, Depends(current_user)]
     Limit = Annotated[int, Query(ge=1, le=20)]
 
     @app.get("/health")
     def health():
-        with store.connect() as db:
+        with store.news_connect(settings.news_database) as db:
             db.execute("SELECT 1")
             metadata = dict(db.execute("SELECT key,value FROM metadata"))
             count = db.execute("SELECT COUNT(*) FROM news").fetchone()[0]
         return {"status": "ok", "service": "tokentrail-forum", "newsCount": count,
                 "newsLastCollectedAt": metadata.get("newsLastCollectedAt"),
                 "newsSourceErrors": json.loads(metadata.get("newsSourceErrors", "{}")),
-                "authConfigured": bool(settings.auth_url)}
+                "authConfigured": bool(settings.auth_url), "testSessionsEnabled": settings.test_sessions_enabled}
+
+    @app.post("/api/forum/test-session", status_code=201)
+    def test_session(request: Request):
+        address = request.client.host if request.client else "unknown"
+        if address in {"127.0.0.1", "::1"} and request.headers.get("x-real-ip"):
+            try:
+                address = str(ipaddress.ip_address(request.headers["x-real-ip"]))
+            except ValueError:
+                raise HTTPException(400, "Invalid client IP") from None
+        return forum_auth.issue(address)
+
+    @app.delete("/api/forum/test-session")
+    def leave_test_session(authorization: Annotated[str | None, Header()] = None):
+        forum_auth.revoke(authorization)
+        return {"status": "ok"}
 
     @app.get("/api/forum/posts")
     def posts(user: User, cursor: str | None = None, limit: Limit = 20):
@@ -167,7 +195,7 @@ def create_app(settings=None, verifier=None):
     def news(user: User, cursor: str | None = None, limit: Limit = 20):
         position = decode_cursor(cursor, "news")
         where, parameters = ("", []) if position is None else ("WHERE (published,id)<(?,?)", list(position))
-        with store.connect() as db:
+        with store.news_connect(settings.news_database) as db:
             rows = db.execute(f"SELECT * FROM news {where} ORDER BY published DESC,id DESC LIMIT ?", parameters + [limit + 1]).fetchall()
             return page(rows, limit, "news", news_json, "published")
 
@@ -202,7 +230,7 @@ def create_app(settings=None, verifier=None):
         except BaseException:
             path.unlink(missing_ok=True)
             raise
-        return {"id": image_id, "url": f"{origin}/api/forum/images/{image_id}"}
+        return store.image({"id": image_id}, origin)
 
     @app.get("/api/forum/images/{image_id}")
     def media(image_id: str, authorization: Annotated[str | None, Header()] = None):
@@ -211,7 +239,7 @@ def create_app(settings=None, verifier=None):
         if row is None:
             raise HTTPException(404, "Image not found")
         if row["post_id"] is None:
-            user = auth.verify(authorization)
+            user = forum_auth.verify(authorization)
             if user.uid != row["owner_uid"]:
                 raise HTTPException(403, "Image not available")
         path = store.media / row["filename"]

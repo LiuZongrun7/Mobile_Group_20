@@ -11,6 +11,9 @@
             android:layout_width="48dp" android:layout_height="48dp"
             android:contentDescription="@string/forum_new_post" app:icon="@drawable/ic_add_post" />
     </LinearLayout>
+    <TextView android:id="@+id/forum_test_badge" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp" android:paddingVertical="6dp" android:background="#E8DEF8"
+        android:text="@string/forum_test_badge" android:textAppearance="?attr/textAppearanceLabelLarge" android:visibility="gone" />
     <com.google.android.material.tabs.TabLayout android:id="@+id/forum_tabs"
         android:layout_width="match_parent" android:layout_height="48dp" app:tabMode="fixed" />
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/forum_refresh"
@@ -26,5 +29,8 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/forum_retry"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:text="@string/forum_retry" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/forum_test_enter"
+            style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="@string/forum_test_enter" android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>

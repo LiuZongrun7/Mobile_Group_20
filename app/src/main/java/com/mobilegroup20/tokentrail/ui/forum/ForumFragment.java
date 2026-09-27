@@ -44,6 +44,10 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
             else new ComposePostDialog().show(getChildFragmentManager(), "compose");
         });
         binding.forumRefresh.setOnRefreshListener(() -> model.load(true));
+        binding.forumTestEnter.setOnClickListener(v -> {
+            if (getChildFragmentManager().findFragmentByTag("account") == null)
+                AccountDialog.forForumTest().show(getChildFragmentManager(), "account");
+        });
         binding.forumRetry.setOnClickListener(v -> {
             if ("UNAUTHORIZED".equals(active().error) && !BuildConfig.FORUM_BASE_URL.isEmpty()) showAccount();
             else model.load(active().error != null || active().items.isEmpty());
@@ -67,6 +71,8 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
         TabLayout.Tab tab = binding.forumTabs.getTabAt(model.selectedTab);
         if (tab != null && !tab.isSelected()) { syncingTab = true; tab.select(); syncingTab = false; }
         ForumViewModel.Feed<?> feed = active(); adapter.submit(feed.items);
+        binding.forumTestBadge.setVisibility(TeamAccountSession.get(requireContext()).forumTest() ? View.VISIBLE : View.GONE);
+        binding.forumTestEnter.setVisibility(BuildConfig.DEBUG && !BuildConfig.FORUM_BASE_URL.isEmpty() && "UNAUTHORIZED".equals(feed.error) && !feed.loading ? View.VISIBLE : View.GONE);
         boolean empty = feed.items.isEmpty();
         binding.forumRefresh.setVisibility(empty ? View.GONE : View.VISIBLE);
         android.widget.LinearLayout.LayoutParams statusParams = (android.widget.LinearLayout.LayoutParams) binding.forumStatusPanel.getLayoutParams();
@@ -85,6 +91,8 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
     private void showAccount() {
         if ("UNAUTHORIZED".equals(active().error)) {
             TeamAccountSession.get(requireContext()).clear();
+            TeamAccountSession session = TeamAccountSession.get(requireContext());
+            com.mobilegroup20.tokentrail.data.RepositoryProvider.configureForum(session.forumBaseUrl(), session);
             model.syncSession();
         }
         if (getChildFragmentManager().findFragmentByTag("account") == null)

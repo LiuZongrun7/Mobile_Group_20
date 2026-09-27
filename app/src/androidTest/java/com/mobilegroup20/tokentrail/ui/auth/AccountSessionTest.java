@@ -11,6 +11,24 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class AccountSessionTest {
+    @Test public void testSessionRestoresItsSeparateEndpointAndNormalLoginLeavesTestMode() throws Exception {
+        Context context = ApplicationProvider.getApplicationContext();
+        TeamAccountSession session = TeamAccountSession.get(context); session.clear();
+        TeamAccountSession original = session;
+        try {
+            session.saveForumTest("tt_test_temporary-fixture", "test_fixture", "Tester Fixture");
+            assertTrue(session.forumTest()); assertTrue(session.forumBaseUrl().endsWith("/test-api/"));
+            Field singleton = TeamAccountSession.class.getDeclaredField("instance"); singleton.setAccessible(true); singleton.set(null, null);
+            session = TeamAccountSession.get(context);
+            assertTrue(session.forumTest()); assertTrue(session.forumBaseUrl().endsWith("/test-api/"));
+            session.save("normal-account-session", "42", "Alice");
+            assertFalse(session.forumTest());
+            assertEquals(com.mobilegroup20.tokentrail.BuildConfig.FORUM_BASE_URL, session.forumBaseUrl());
+        } finally {
+            original.clear(); session.clear();
+            com.mobilegroup20.tokentrail.data.RepositoryProvider.configureForum(com.mobilegroup20.tokentrail.BuildConfig.FORUM_BASE_URL, session);
+        }
+    }
     @Test public void sessionIsEncryptedRestorableAndClearedOnSignOut() throws Exception {
         Context context = ApplicationProvider.getApplicationContext();
         TeamAccountSession session = TeamAccountSession.get(context); session.clear();
