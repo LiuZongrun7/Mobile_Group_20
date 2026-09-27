@@ -70,42 +70,32 @@
 
 大纲里的分工：论坛的帖子数据与排序。
 
-### 2.1 要实现的接口
+### 2.1 当前实现与新接口
 
-`data/repository/ForumRepository.java`（8 个方法）。**三个桶的可见性不一样，别合并查询**：
+论坛采用 **News / Community 两标签 + ＋发帖**。所有登录用户共享公共帖子池；“我的帖子”只是作者筛选，不是私密内容。支持最多 9 张图片、点赞、文字评论、分页与失败重试。
 
-| 桶 | 方法 | 可见性 |
-| --- | --- | --- |
-| 官方帖 | `officialPosts(limit)` | 所有人可读，只有官方账号能发 |
-| 热帖 | `hotPosts(since, limit)` | 所有人可读，按热度排序 |
-| 我的帖子 | `myPosts(uid)` / `myThreads(uid, since, limit)` | **只有本人可读**，含收到的回复 |
+新版 UI 通过 `ForumFeedRepository` → `HttpForumRepository`；现有 `ForumRepository` 的 agent 接口保留。完整契约及账号接入步骤见 [`FORUM_API.md`](FORUM_API.md)。媒体新闻是独立 `NewsArticle`，不能混成官方帖子。
 
-前两个喂给 agent 的 `getForumHighlights`，第三个喂给 `getMyThreads`。
-`highlights(modelFilter, since, limit)` 是前两个的合并结果，给界面和 agent 共用。
+### 2.2 排序与数据
 
-### 2.2 排序公式（`rankScore`）
+- 社区页面按发布时间与 ID 倒序；评论按时间与 ID 正序。
+- agent 热帖排序继续由服务端计算 rankScore；现在已有点赞交互，可以纳入真实点赞数据，但不得由客户端自行重排。
+- 用量、预算仍按 uid 私有；论坛帖子与评论跨账号公共可读。
+- RSS 采集工具在 `tools/news/`，每小时由团队后端调度、导入新闻表。新闻英文为主，仅 App 内更新。
 
-**这个由你定**（`CONTRACTS.md` §9 的 TBD）。要求：
+### 2.3 接入状态与验收
 
-- 只看**算得出来的量**——回复数、时间衰减、是否官方。**不要**引入点赞数这种
-  需要额外交互的数据，界面上没有点赞按钮。
-- 公式写成一个纯函数，能脱离网络跑单元测试，并写清楚各项权重和为什么这么定。
-- 排序结果稳定：同样的一批帖子，两次调用顺序一致（时间相同时要有第二排序键）。
+开发期已提供“免账号测试”：调试 APK 进入独立测试区，自动获得临时身份，可以独立于账号负责人测试真实新闻、图文、点赞和评论。测试数据不进入正式帖子池，Release 构建隐藏该入口。
 
-### 2.3 放哪
+Android UI、HTTP 适配、账号登录和 RSS 工具已实现；论坛后端已部署到现有服务器，复用 aibox_backend 的登录账号，公网 HTTPS 双账号联调通过。部署和维护见 [`backend/README.md`](../backend/README.md)。没有 API 配置时显示准备中，不用模拟数据冒充公共池。
 
-`data/remote/`（自建服务端的读写）+ `ui/forum/`（界面）。
-`ui/forum/package-info.java` 里已写好这个包归你。
-
-### 2.4 验收标准
-
-- [ ] `hotPosts` 在数据不变时两次调用顺序一致。
-- [ ] `myThreads` 只返回本人的帖子；换账号之后看到的是另一个人的（且互相看不到）。
-- [ ] 帖子下能取到回复，回复按时间正序。
-- [ ] 发帖 / 回帖后，对应列表**自动刷新**（`LiveData` 该有的行为，不用手动重新加载）。
-- [ ] 排序函数有单元测试：官方帖排在前、越新的权重越高、回复多的靠前。
-
-**卡住了找谁**：`ForumPost` / `ForumReply` 的字段含义找刘宗润（`contract/model/`）。
+- [x] 论坛后端实现 FORUM_API.md 中的接口及持久图片存储。
+- [x] TeamAccountSession 接入 RepositoryProvider.configureForum，复用原账号登录。
+- [x] 双真实账号通过公网接口互相浏览图文、点赞、评论；后端重启后内容仍在。
+- [x] idempotency key 防重复发布；唯一点赞约束防重复计数。
+- [x] 新闻采集定时运行，失败保留旧内容且可监控。
+- [x] 构建、单元测试、UI 交互测试及双账号接口联调通过。
+- [ ] 两台实体手机安装 APK，完成最终演示。
 
 ---
 

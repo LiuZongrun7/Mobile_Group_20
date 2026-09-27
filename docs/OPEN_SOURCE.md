@@ -17,6 +17,39 @@
 | **Room** | `androidx.room:room-runtime`<br>`androidx.room:room-compiler` | 2.8.5 | Apache-2.0 | 数据侧（`data/local/` 三张表） | 去重那条验收标准就是它的 `@Insert(onConflict = IGNORE)`；`@Query` 能直接返回 `LiveData`，正好是五个接口的返回类型 |
 | **MPAndroidChart** | `com.github.PhilJay:MPAndroidChart` | v3.1.0 | Apache-2.0 | 数据侧（`ui/dashboard/`） | Compare / Sessions 的柱状图和折线图，自己用 Canvas 画工作量大 |
 
+### 论坛首版新增（2026-09-26）
+
+| 库 | 依赖坐标 | 固定版本 | 许可证 | 用途 |
+|---|---|---|---|---|
+| Retrofit / Gson converter | `com.squareup.retrofit2:retrofit` / `converter-gson` | 3.0.0 | Apache-2.0 | 类型化 HTTP API 与 JSON 转换 |
+| Glide | `com.github.bumptech.glide:glide` | 4.16.0 | BSD-2-Clause；仓库 LICENSE 含其他组件 notices | 缩略图、预览与图片缓存 |
+| RecyclerView | `androidx.recyclerview:recyclerview` | 1.4.0 | Apache-2.0 | 新闻与社区列表 |
+| SwipeRefreshLayout | `androidx.swiperefreshlayout:swiperefreshlayout` | 1.2.0 | Apache-2.0 | 下拉刷新 |
+| Arch core-testing（仅测试） | `androidx.arch.core:core-testing` | 2.2.0 | Apache-2.0 | LiveData 异步测试 |
+| AndroidX test（仅测试） | `androidx.test.ext:junit` / `espresso-core` | 1.3.0 / 3.7.0 | Apache-2.0 | 页面切换、草稿恢复与失败反馈；旧版本不能在当前 Android 17 模拟器注入点击 |
+| MockWebServer（仅测试） | `com.squareup.okhttp3:mockwebserver` | 4.12.0 | Apache-2.0 | 会话、游标、图片、幂等 key 的 HTTP 契约测试 |
+
+出处：[Retrofit LICENSE](https://github.com/square/retrofit/blob/3.0.0/LICENSE.txt)、[Glide LICENSE](https://github.com/bumptech/glide/blob/v4.16.0/LICENSE)、[AndroidX LICENSE](https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt)、[OkHttp LICENSE](https://github.com/square/okhttp/blob/parent-4.12.0/LICENSE.txt)。版本在 Maven Central / Google Maven 元数据核实；Glide 最新 5.0.9 要求 SDK 37，本工程 SDK 36.1 固定使用兼容的 4.16.0。
+
+Gson converter 的传递依赖 Gson（Apache-2.0）与 Retrofit 的 OkHttp（Apache-2.0）由 Gradle 解析。
+
+新闻采集工具为本项目标准库实现，不含外部项目代码。NewsNow、Miniflux 和 AI News Brief 只作为采集、RSS/API 和新闻源设计的参考；RSSHub 未接入。
+
+### 服务器论坛服务新增（2026-09-27）
+
+以下版本及许可证已从安装包 metadata 核实，固定直接依赖见 `backend/requirements.txt`：
+
+| 库 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| FastAPI | 0.141.1 | MIT | 论坛 HTTP API |
+| Uvicorn | 0.54.0 | BSD-3-Clause | ASGI 进程 |
+| HTTPX | 0.28.1 | BSD-3-Clause | 调用已有账号验证接口 |
+| Pillow | 12.3.0 | MIT-CMU | 检查上传的真实图片格式 |
+| python-multipart | 0.0.32 | Apache-2.0 | multipart 图片上传解析 |
+| pytest（仅测试） | 9.1.1 | MIT | 服务端契约、并发和持久化测试 |
+
+服务器使用系统 Nginx 反向代理及独立环境的 Certbot 5.8.0 管理 IP 证书；SQLite 来自 Python 标准库。没有复制外部论坛或 RSS 项目源码。App 的会话加密使用 Android Keystore API。
+
 ### 出处（写报告时照抄，别转述）
 
 - **Room** —— 它是 AndroidX 的一部分，没有单独的 `LICENSE`，用的是 AndroidX 仓库

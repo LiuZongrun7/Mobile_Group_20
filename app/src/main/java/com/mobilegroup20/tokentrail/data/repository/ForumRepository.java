@@ -12,15 +12,14 @@ import com.mobilegroup20.tokentrail.contract.tool.MyThreads;
 /**
  * 论坛数据的读写口。<b>论坛侧（汪庭栋）实现。</b>
  *
- * <p>论坛分成三个可见性不同的桶，方法也按这个分：
+ * <p>这些是公共帖子池的查询视图，不是三个独立的可见性桶：
  * <ol>
  *   <li>官方帖 —— 公共可读，只有官方账号能发；</li>
  *   <li>热帖 —— 公共可读，按热度排序；</li>
- *   <li>我的帖子 —— <b>只有本人可读</b>，含收到的回复。</li>
+ *   <li>我的帖子 —— 按当前会话作者筛选，帖子本身仍然公共可读，含收到的回复。</li>
  * </ol>
  * 前两个给 agent 的 {@code getForumHighlights}，第三个给 {@code getMyThreads}。
- * 分开不只是为了接口好看：可见性不同，服务端的校验就得分开写，
- * 混在一起会出现「为了读热帖而把所有人的帖子都放开」这种事。
+ * 这些方法为已有 agent 工具保留。新闻与新版社区 UI 见 ForumFeedRepository。
  */
 public interface ForumRepository {
 

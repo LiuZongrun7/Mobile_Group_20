@@ -126,6 +126,8 @@ provider API ──拉取─┐
 | `forum/posts/{postId}/replies/{replyId}` | 同上 | 作者 | 客户端（经接口）+ 建议服务 |
 | `pricing/rates/{provider}_{model}_{effectiveFrom}` | 所有登录用户可读 | 管理端 / 服务端拉取 | 客户端（经接口）+ 建议服务 |
 
+新版论坛的 HTTP 接口、图片、点赞和 RSS 新闻契约见 [`FORUM_API.md`](FORUM_API.md)。所有社区帖子（包括自己的帖子）公共可读；“我的帖子”只是作者筛选。
+
 **用量私有、论坛公开，这两类的校验写法完全不同，资源必须分开。** 把两者混进同一
 处，就会出现「为了读热帖而把所有人的帖子都放开」这种口子。
 

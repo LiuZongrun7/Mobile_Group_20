@@ -9,6 +9,13 @@ package com.mobilegroup20.tokentrail.contract.model;
  */
 public class ForumPost {
 
+    /** Durable server images, in display order. Local content URIs never go on the wire. */
+    public java.util.List<ForumImage> images = new java.util.ArrayList<>();
+
+    public long likeCount;
+    public boolean likedByMe;
+    public long commentCount;
+
     public String id;
 
     public String title;

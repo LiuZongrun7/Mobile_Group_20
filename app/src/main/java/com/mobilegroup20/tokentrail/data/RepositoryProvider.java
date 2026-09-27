@@ -1,6 +1,10 @@
 package com.mobilegroup20.tokentrail.data;
 
 import android.content.Context;
+import com.mobilegroup20.tokentrail.BuildConfig;
+import com.mobilegroup20.tokentrail.data.remote.HttpForumRepository;
+import com.mobilegroup20.tokentrail.data.repository.ForumFeedRepository;
+import com.mobilegroup20.tokentrail.data.repository.SessionProvider;
 
 import androidx.room.Room;
 
@@ -13,7 +17,6 @@ import com.mobilegroup20.tokentrail.data.repository.ForumRepository;
 import com.mobilegroup20.tokentrail.data.repository.SeasonRepository;
 import com.mobilegroup20.tokentrail.data.repository.UsageRepository;
 import com.mobilegroup20.tokentrail.data.stub.StubBudgetRepository;
-import com.mobilegroup20.tokentrail.data.stub.StubForumRepository;
 import com.mobilegroup20.tokentrail.data.stub.StubUsageRepository;
 
 /**
@@ -41,6 +44,9 @@ public final class RepositoryProvider {
 
     private static UsageRepository usage;
     private static ForumRepository forum;
+    private static HttpForumRepository forumHttp;
+    private static String forumBaseUrl = BuildConfig.FORUM_BASE_URL;
+    private static volatile SessionProvider forumSession = SessionProvider.SIGNED_OUT;
     private static BudgetRepository budget;
 
     /**
@@ -123,13 +129,33 @@ public final class RepositoryProvider {
         return usage;
     }
 
-    /** 论坛数据。桩 → {@code com.mobilegroup20.tokentrail.data.remote.HttpForumRepository}。 */
+    /** Existing agent contract now uses the same HTTP service as the forum UI. */
     public static synchronized ForumRepository forum() {
         if (forum == null) {
-            forum = USE_STUBS ? new StubForumRepository() : null;
-            requireReady(forum, "ForumRepository（论坛侧，汪庭栋）");
+            forum = forumHttp();
         }
         return forum;
+    }
+
+    /** Called by the team's account module with its live session provider. No second login. */
+    public static synchronized void configureForum(String baseUrl, SessionProvider session) {
+        if (session == null) throw new IllegalArgumentException("SessionProvider is required");
+        if (baseUrl != null && !baseUrl.isEmpty() && !baseUrl.startsWith("https://"))
+            throw new IllegalArgumentException("Forum API must use HTTPS");
+        forumBaseUrl = baseUrl;
+        forumSession = session;
+        forumHttp = null;
+        forum = null;
+    }
+
+    public static synchronized ForumFeedRepository forumFeed() { return forumHttp(); }
+
+    private static HttpForumRepository forumHttp() {
+        if (forumHttp == null) forumHttp = new HttpForumRepository(forumBaseUrl, new SessionProvider() {
+            public String token() { return forumSession.token(); }
+            public String accountId() { return forumSession.accountId(); }
+        });
+        return forumHttp;
     }
 
     /** 预算数据。桩 → {@code com.mobilegroup20.tokentrail.data.local.RoomBudgetRepository}。 */
@@ -164,6 +190,7 @@ public final class RepositoryProvider {
     public static synchronized void reset() {
         usage = null;
         forum = null;
+        forumHttp = null;
         budget = null;
     }
 

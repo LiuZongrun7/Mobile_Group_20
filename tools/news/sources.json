@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {"name": "OpenAI", "category": "AI", "url": "https://openai.com/news/rss.xml"},
+    {"name": "Google AI", "category": "AI", "url": "https://blog.google/innovation-and-ai/technology/ai/rss/"},
+    {"name": "Hugging Face", "category": "AI", "url": "https://huggingface.co/blog/feed.xml"},
+    {"name": "TechCrunch AI", "category": "AI", "url": "https://techcrunch.com/category/artificial-intelligence/feed/"},
+    {"name": "Ars Technica Technology", "category": "Technology", "url": "https://feeds.arstechnica.com/arstechnica/technology-lab"}
+  ]
+}

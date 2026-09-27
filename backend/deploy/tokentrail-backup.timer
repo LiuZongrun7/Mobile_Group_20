@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up TokenTrail forum daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=5min
+Persistent=true
+Unit=tokentrail-backup.service
+
+[Install]
+WantedBy=timers.target

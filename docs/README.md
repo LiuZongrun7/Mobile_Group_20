@@ -6,6 +6,7 @@
 | 文档 | 讲什么 | 什么时候看 |
 | --- | --- | --- |
 | [`CONTRACTS.md`](CONTRACTS.md) | 接口契约：命名口径、时间口径、存储、结算规则、三种资源、TBD 清单 | **动手前先看一遍**，改字段前再查一次 |
+| [`FORUM_API.md`](FORUM_API.md) | 论坛 UI、后端接口、账号接入与英文 RSS 采集 | 论坛联调与后端实现之前 |
 | [`TASKS.md`](TASKS.md) | 三个人的待办、验收标准、依赖谁 | 认领任务、判断「做完了没」 |
 | [`ART.md`](ART.md) | 游戏贴图的规格：视角、光源、尺寸、命名、抠图流程、来源留痕 | **动手画图之前先看** |
 | [`OPEN_SOURCE.md`](OPEN_SOURCE.md) | 第三方库的清单：许可证、出处、谁在用、怎么加新库 | **加依赖之前先看**，写报告的开源节时照抄 |
@@ -134,13 +135,15 @@ grep -rn "import android\." app/src/main/java/com/mobilegroup20/tokentrail/game/
 public static final boolean USE_STUBS = true;
 ```
 
-- **`true`（现在）**：界面拿到的全是假数据。谁的真实现没写完，谁就不受影响。
+- **`true`（现在）**：用量与预算仍使用桩数据；论坛独立使用真实后端。
 - **`false`（交之前）**：改用真实现。**这时候要顺手把方法体里的 `new XxxImpl(...)`
   填上**，否则会抛 `UnsupportedOperationException`，报错信息里写了该去写哪个类。
 
 改这一个布尔值，全 App 的界面都不用动——这就是上面那条「只认接口」换来的。
 
 **提交之前必须改成 `false`**，否则演示时屏幕上全是编出来的数字。
+
+**论坛是例外**：新论坛与 agent 论坛接口已经统一走 HttpForumRepository，不受 USE_STUBS 控制；TeamAccountSession 已接入现有服务器账号，论坛和“我的”均有登录入口。未配置后端时显示准备中，不返回假帖子。
 
 桩数据里 `importCalls()` 会如实报告「全部被拒」（`rejected` 等于传入条数）：
 桩没有真的存进去。这样谁误以为导入已经能用了，会立刻发现。
@@ -173,11 +176,11 @@ public static final boolean USE_STUBS = true;
 | 商店与资源（`game/engine/ShopCatalog`） | **能在真机上跑**：箭塔 / 弩车 / 城墙 / 核心四件货——两种塔吃 CACHE + OUTPUT、墙吃 INPUT、核心免费（只挪）；买不起的落子会拦下并提示。**弩车差不多是箭塔两倍的价，买的不是"更强"而是另一种打法**：射程远半格、单发重一倍半，但**每秒伤害比箭塔低**（有测试盯着这条，不然箭塔就没存在理由了）。**钱包是月度快照的临时值**，真余额等 `SeasonRepository` |
 | 建筑详情与升级（`game/engine/BuildingStats`） | **能在真机上跑**：点建筑只看不放，弹出等级 / 占地 / **耐久** / 攻击范围 / 升级价 / **Move**；**四种建筑都能升到 3 级**——箭塔升火力（范围 2.5 → 3.0 → 3.5 格）、弩车同理（3.0 → 3.5 → 4.0 格，单发 34/45/58），墙和核心升耐久（墙 150/220/320、核心 600/900/1300），升完按新等级回满；任意建筑都能**免费挪**（等级和已花的钱都带得走）。范围圈和真实判定是同一个数，**两种塔共用同一个扇形**（中心朝正左、上下各 60°，判定另加敌人半个身位）——弩车在引擎里没有多一行逻辑，只是换了一张数值表 |
 | 整页分层（`activity_main.xml`） | **三层**：第 0 层 `MountainBackgroundView` 岩石底、第 0.5 层 `BattlefieldView` 世界层，**两个都铺满全屏**，第 1 层界面浮在最上面（HUD/按钮/底部导航用 glass 半透明）。两层**共用同一个相机**，拖动/缩放时地上的石头和格子一起动。界面层**只加东西、不加底**：中间那个 `@id/play_area` 是空占位，只负责回答"战场是哪一块、在哪儿"（格子大小由它算）。世界层铺满是必须的——2× 时那片地（2898px）比屏幕（2844px）还高，只给中间一条的话会被裁掉，放多大都出不了框。游戏页是**固定美术、不跟随系统深浅色**，所以没有 `values-night/`。规格见 `ART.md` §5 |
-| 底部导航与落地页（`menu/bottom_nav.xml` + `MainActivity.showTab`） | **骨架通了**：统计 / 游戏 / 论坛 / 我的。**打开 App 落在"统计"**——落地页就是菜单里的第一项，没有第二个开关，换顺序就是换主页。**只有"游戏"是真的**，另外三页共用一个空壳（`@id/empty_page`），上面写一句 `Xxx is not built yet`（一片空白分不清"还没做"和"崩了"）。切页时世界层一起 `INVISIBLE`（它铺满全屏，不藏会从空壳下面透出来），**顺带把战斗冻住了**——推进挂在 `onDraw` 上，看不见就不出帧，回来也不补帧。四个坑见 [`TASKS.md`](TASKS.md) |
+| 底部导航与落地页（`menu/bottom_nav.xml` + `MainActivity.showTab`） | **骨架通了**：统计 / 游戏 / 论坛 / 我的。**打开 App 落在"统计"**——落地页就是菜单里的第一项，没有第二个开关，换顺序就是换主页。**游戏与论坛已有页面**，统计与我的共用一个空壳（`@id/empty_page`），上面写一句 `Xxx is not built yet`（一片空白分不清"还没做"和"崩了"）。切页时世界层一起 `INVISIBLE`（它铺满全屏，不藏会从空壳下面透出来），**顺带把战斗冻住了**——推进挂在 `onDraw` 上，看不见就不出帧，回来也不补帧。四个坑见 [`TASKS.md`](TASKS.md) |
 | 桩数据（`data/stub/`） | **完成**，可以照着做界面和玩法 |
 | 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行），但 `ui/` 里还只有 `package-info.java`，等三人分头填 |
 | 数据侧真实现 | **进行中**。`data/local` 已经落地：三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 的建表语句导出在 `app/schemas/`。**还没有**：`data/remote` 的 fetcher、`data/importer` 的解析器、`BudgetRepository`（见 `TASKS.md` 的待办）。**价目表是空的**——见 `DATA_SOURCES.md`/`BundledPricingSource`，没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
-| 论坛真实现（汪庭栋） | 未开始，接口已定 |
+| 论坛（汪庭栋） | News / Community、图文发布、点赞评论、已有账号登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md |
 | 游戏与 agent（刘宗润） | 玩法侧**能在真机上跑**（几何、相机、波次、放塔、挪建筑、升级、两种塔的数值、战斗全通，见上面几行）；**只有 agent 逻辑还没开始** |
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。

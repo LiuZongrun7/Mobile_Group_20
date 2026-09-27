@@ -27,7 +27,7 @@
     3. 操作行   —— **只有两个按钮**：商店、开始波次。选建筑搬进了商店弹窗
                    （见 layout/sheet_shop.xml）——底下一排"选塔/选墙/选核心/只看"
                    已经删掉了，每加一种建筑就会多挤一格、把战场挤小。
-    4. 底部导航 —— 四个板块。这一版只有游戏页是真的，其余三项是占位。
+    4. 底部导航 —— 四个板块。游戏与论坛已有页面，统计与我的仍是占位。
 
   **颜色**：压在岩石上的文字一律用 @style/GameText 或 Game.Text.Dim，
   不要用 ?attr/textAppearanceXxx 自带的颜色（浅色模式下那是近黑，压深岩石上看不见），
@@ -517,18 +517,9 @@
         </LinearLayout>
         <!-- ===== 游戏页到此为止 ===== -->
 
-        <!-- ===== 1.4 还没做的三页（统计 / 论坛 / 我的）=====
-             **三页共用这一个空壳**，不是各写一个：它们现在的内容一模一样
-             （一句话 + 什么都没有），分成三份只会让"改这句提示"要改三处。
-             哪一页该显示什么由 MainActivity.showTab 把文案填进 @id/empty_label。
-
-             **为什么是"一句话"而不是干脆留白。** 一片纯空白的界面分不清
-             "这一页还没做"和"这一页崩了"——用户会以为是后者。写一句
-             "Dashboard is not built yet"就把它变成一条明确的信息。
-
-             **底下那层岩石照样透上来**（所以这里没有背景色）：这三页是
-             同一个 App 的另外一屏，不是弹出来的一个框，底该是同一片地。
-             game_page 和它是兄弟，weight 各占 1，同一时刻只有一个 VISIBLE。 -->
+        <!-- ===== 1.4 统计 / 我的占位页 =====
+             共用空壳，由 MainActivity.showTab 填提示文案。论坛是下方独立容器。
+             占位页底下仍透出岩石；论坛使用不透明浅色背景。 -->
         <FrameLayout
             android:id="@+id/empty_page"
             android:layout_width="match_parent"
@@ -537,6 +528,12 @@
             android:visibility="gone"
             tools:visibility="visible">
 
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="vertical"
+                android:gravity="center">
             <TextView
                 android:id="@+id/empty_label"
                 style="@style/GameText.Dim"
@@ -550,7 +547,22 @@
                 android:paddingBottom="6dp"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 tools:text="Dashboard is not built yet" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/account_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/account_title"
+                android:visibility="gone" />
+            </LinearLayout>
         </FrameLayout>
+
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/forum_page"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone" />
 
         <!-- ===== 1.5 底部导航 =====
              底透明，岩石直接透上来；图标和文字用 nav_item 那套浅色。

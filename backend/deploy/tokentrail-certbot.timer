@@ -1,0 +1,11 @@
+[Unit]
+Description=Check TokenTrail short-lived certificate twice daily
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=tokentrail-certbot.service
+
+[Install]
+WantedBy=timers.target
