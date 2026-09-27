@@ -32,8 +32,8 @@ public class ForumNavigationTest {
         }
     }
     @Test public void composerValidatesAndRetainsTextAcrossRecreationAndFailedPublish() {
-        com.mobilegroup20.tokentrail.data.TeamAccountSession session = com.mobilegroup20.tokentrail.data.TeamAccountSession.get(androidx.test.core.app.ApplicationProvider.getApplicationContext());
-        try { session.save("instrumentation-invalid-session", "instrumentation-user", "Test Account"); }
+        com.mobilegroup20.tokentrail.data.AccountSession session = com.mobilegroup20.tokentrail.data.AccountSession.get(androidx.test.core.app.ApplicationProvider.getApplicationContext());
+        try { session.save("tt_app_instrumentation-invalid-session", "u_" + "9".repeat(16), "Test Account"); }
         catch (Exception error) { throw new AssertionError(error); }
         com.mobilegroup20.tokentrail.data.RepositoryProvider.configureForum("", session);
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {

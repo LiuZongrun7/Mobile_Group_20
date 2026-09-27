@@ -1,8 +1,6 @@
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 
 from fastapi import HTTPException
-import httpx
 
 
 @dataclass(frozen=True)
@@ -11,59 +9,35 @@ class Identity:
     name: str
 
 
-def field(document, path):
-    value = document
-    for key in path.split("."):
-        if not isinstance(value, dict):
-            return None
-        value = value.get(key)
-    return value
+class TableAuth:
+    """用**我们自己的** `accounts` 表验会话。**这是唯一一条鉴权路。**
 
+    §2026-02：这里原来有两个实现§，另一个叫 `TeamAuth`——拿 token 去问
+    `http://127.0.0.1:8000/api/users/me`，也就是那台机器上**别人的**账号服务。
+    它已经删了，理由正是它当年存在的理由的反面：
 
-class TeamAuth:
-    """Verify the existing team's Bearer token with its current-user endpoint.
+    * 这个 APP 里没有「团队」这回事，用户是 APP 的用户，账号该归我们。
+      锁在别人的账号体系上，它的 schema、可用性、策略都牵着我们走，
+      而且「用户是谁」这个答案一直在别人库里。
+    * 它还有一条**读不出答案**的失败模式：对端换了字段名或返回形状，
+      我们这边只会拿到一个 503——而 503 看起来像「我们的服务挂了」。
 
-    No local users, passwords, token signing keys, or development auth bypass.
-    HTTP is permitted only for a verifier on this host's loopback interface.
+    `Identity.uid` 就是账号的 `user_id`——`posts.author_uid` 存的一直是这个值，
+    所以**论坛的数据一个字都不用改**。
     """
-    def __init__(self, url, uid_field="id", name_field="nickname", transport=None):
-        if url:
-            parsed = urlsplit(url)
-            if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}):
-                raise ValueError("Auth verifier must use HTTPS or loopback HTTP")
-            if parsed.username or parsed.password:
-                raise ValueError("Auth verifier URL must not contain credentials")
-        self.url = url
-        self.uid_field = uid_field
-        self.name_field = name_field
-        self.client = httpx.Client(timeout=5, follow_redirects=False, trust_env=False, transport=transport)
+
+    def __init__(self, store, accounts=None):
+        from .accounts import Accounts
+        self.accounts = accounts or Accounts(store)
 
     def verify(self, authorization):
-        if not authorization or not authorization.startswith("Bearer ") or not authorization[7:].strip():
+        identity = self.accounts.resolve(authorization)
+        if identity is None:
+            # 给 401 和 `WWW-Authenticate`，App 侧据此判断该弹登录。
             raise HTTPException(401, "Sign in required", headers={"WWW-Authenticate": "Bearer"})
-        if len(authorization) > 8192:
-            raise HTTPException(401, "Invalid session")
-        if not self.url:
-            raise HTTPException(503, "Team account service has not been configured")
-        try:
-            response = self.client.get(self.url, headers={"Authorization": authorization})
-        except httpx.HTTPError:
-            raise HTTPException(503, "Account service unavailable") from None
-        if response.status_code in {401, 403}:
-            raise HTTPException(response.status_code, "Session expired or account unavailable")
-        if response.status_code != 200:
-            raise HTTPException(503, "Account service unavailable")
-        try:
-            document = response.json()
-            uid = field(document, self.uid_field)
-            name = field(document, self.name_field)
-            if type(uid) not in {str, int} or not str(uid).strip() or len(str(uid)) > 128:
-                raise ValueError()
-            if not isinstance(name, str) or not name.strip() or len(name) > 256:
-                raise ValueError()
-            return Identity(str(uid), name.strip())
-        except (ValueError, TypeError):
-            raise HTTPException(503, "Account service response does not match configured identity fields") from None
+        user_id, username = identity
+        return Identity(user_id, username)
 
     def close(self):
-        self.client.close()
+        """没有要关的资源（我们只是查表）。留着这个方法是因为 `app.py` 的
+        lifespan 会调它——接口统一比省这一行值钱。"""

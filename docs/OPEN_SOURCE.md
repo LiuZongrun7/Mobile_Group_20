@@ -76,8 +76,22 @@ GPL 要谨慎）。**没有 GPL / AGPL 混进来。**
 | [Room with a View](https://github.com/android/codelab-android-room-with-a-view)（Apache-2.0） | *guides storage* | **只参考做法**（Entity / Dao / Database 三段式的分法），一行代码没拷 |
 | 开源塔防样例 | *may supply the wave and placement loop* | **一行都没用**，`game/engine/` 八个类全部手写 |
 | [dsh-pet](https://github.com/zhu1090093659/dsh-pet/blob/main/README.zh.md) | *inspires the agent's entry point* | **只是灵感**（agent 的入口形态），没引代码 |
-| [LiteLLM](https://docs.litellm.ai/docs/simple_proxy)（MIT，`enterprise/` 目录单独授权） | §3 竞品对比表 | **对照物，不引**：它是代理网关，我们不代理流量 |
+| [LiteLLM](https://docs.litellm.ai/docs/simple_proxy)（MIT，`enterprise/` 目录单独授权） | §3 竞品对比表 | **对照物，不引**：它是完整网关；我们的中转只透传不转换（见下） |
 | [dsh-context](https://github.com/bowenliang123/dsh-context/blob/main/README.md) | §3 竞品对比表 | **对照物，不引** |
+
+> **2026-09-27 更正：** 这一节原来写的是「LiteLLM 是代理网关，**我们不代理流量**」。
+> 那句话**不再准确**——我们加了 API 中转（[`RELAY_API.md`](RELAY_API.md)）。
+> 但**仍然不是同一层东西**，报告里要这么区分，别写成「我们也做了个 LiteLLM」：
+>
+> | | LiteLLM | TokenTrail 中转 |
+> |---|---|---|
+> | 协议转换 | 有（多 provider 归一、Anthropic↔OpenAI 等） | **没有**，请求体和响应体原样穿过 |
+> | 路由 / 负载均衡 / 多 key 轮换 / 故障转移 | 有 | **没有**，一个 relay key 对应一个上游 |
+> | 目的 | 做网关 | **只为拿到逐次调用的 usage**（`cacheWrite` 这桶账单文件里没有） |
+> | 是否默认开启 | — | **默认关闭**，不装 env 文件时 `/api/relay/*` 就是 404 |
+>
+> 也就是说：**代码一行没引 LiteLLM**，定位上我们也不是网关——中转是
+> 一个**可选的采集通道**，用户不开启时产品仍然完全不代理流量。
 
 ## 3. 引擎侧仍然是零第三方
 

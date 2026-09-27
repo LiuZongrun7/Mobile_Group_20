@@ -12,7 +12,7 @@ import com.mobilegroup20.tokentrail.contract.model.ForumPost;
 import com.mobilegroup20.tokentrail.databinding.FragmentForumBinding;
 import com.mobilegroup20.tokentrail.BuildConfig;
 import com.mobilegroup20.tokentrail.ui.auth.AccountDialog;
-import com.mobilegroup20.tokentrail.data.TeamAccountSession;
+import com.mobilegroup20.tokentrail.data.AccountSession;
 
 public final class ForumFragment extends Fragment implements ForumAdapter.Actions {
     private FragmentForumBinding binding;
@@ -40,7 +40,7 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
             public void onTabReselected(TabLayout.Tab tab) { }
         });
         binding.newPost.setOnClickListener(v -> {
-            if (!BuildConfig.FORUM_BASE_URL.isEmpty() && !TeamAccountSession.get(requireContext()).signedIn()) showAccount();
+            if (!BuildConfig.FORUM_BASE_URL.isEmpty() && !AccountSession.get(requireContext()).signedIn()) showAccount();
             else new ComposePostDialog().show(getChildFragmentManager(), "compose");
         });
         binding.forumRefresh.setOnRefreshListener(() -> model.load(true));
@@ -71,7 +71,7 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
         TabLayout.Tab tab = binding.forumTabs.getTabAt(model.selectedTab);
         if (tab != null && !tab.isSelected()) { syncingTab = true; tab.select(); syncingTab = false; }
         ForumViewModel.Feed<?> feed = active(); adapter.submit(feed.items);
-        binding.forumTestBadge.setVisibility(TeamAccountSession.get(requireContext()).forumTest() ? View.VISIBLE : View.GONE);
+        binding.forumTestBadge.setVisibility(AccountSession.get(requireContext()).forumTest() ? View.VISIBLE : View.GONE);
         binding.forumTestEnter.setVisibility(BuildConfig.DEBUG && !BuildConfig.FORUM_BASE_URL.isEmpty() && "UNAUTHORIZED".equals(feed.error) && !feed.loading ? View.VISIBLE : View.GONE);
         boolean empty = feed.items.isEmpty();
         binding.forumRefresh.setVisibility(empty ? View.GONE : View.VISIBLE);
@@ -90,8 +90,9 @@ public final class ForumFragment extends Fragment implements ForumAdapter.Action
     }
     private void showAccount() {
         if ("UNAUTHORIZED".equals(active().error)) {
-            TeamAccountSession.get(requireContext()).clear();
-            TeamAccountSession session = TeamAccountSession.get(requireContext());
+            // 401 说明这个会话服务端已经不认了：本地清掉，让用户重新登录。
+            AccountSession.get(requireContext()).clear();
+            AccountSession session = AccountSession.get(requireContext());
             com.mobilegroup20.tokentrail.data.RepositoryProvider.configureForum(session.forumBaseUrl(), session);
             model.syncSession();
         }

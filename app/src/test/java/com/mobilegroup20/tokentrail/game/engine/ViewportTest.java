@@ -17,7 +17,7 @@ import org.junit.Test;
 public class ViewportTest {
 
     private static final float PANEL_W = 387f * 2.625f;
-    private static final float PANEL_H = 643f * 2.625f;
+    private static final float PANEL_H = 631f * 2.625f;
     private static final float EPS = 1e-3f;
 
     private static Viewport viewport() {
@@ -300,9 +300,10 @@ public class ViewportTest {
     public void spriteScaleIncludesTheZoom() {
         BoardGeometry g = BoardGeometry.fit(PANEL_W, PANEL_H);
 
-        // 一格 88.84px，素材按 256px 画，所以放到最大也才 0.69
-        assertEquals(0.347f, g.spriteScale(1f), 0.001f);
-        assertEquals(0.694f, g.spriteScale(Viewport.MAX_ZOOM), 0.001f);
+        // 一格 44.77px（36 行摊进面板，比翻倍那会儿的 88.84px 小一半），
+        // 素材按 256px 画，所以放到最大也才 0.35
+        assertEquals(0.175f, g.spriteScale(1f), 0.001f);
+        assertEquals(0.350f, g.spriteScale(Viewport.MAX_ZOOM), 0.001f);
         // 放到最大也还是缩小显示，素材不用再画大
         assertTrue(g.spriteScale(Viewport.MAX_ZOOM) < 1f);
     }
@@ -347,28 +348,50 @@ public class ViewportTest {
         assertEquals(contentHeight, v.toLayoutY(PANEL_H), 0.01f);   // 内容底边贴住面板底边
     }
 
-    // ---- 40 格宽的世界：横向必须能拖 ----
+    // ---- 80 × 36 格的世界：横向拖，纵向一屏看全 ----
 
-    /** 一块 40 格宽的战场在手机上：不放大时横向就该能拖，而且拖得动 2 屏多。 */
+    /**
+     * 战场 80 × 36 格：<b>横向拖得动，纵向正好一屏装下、拖不动</b>。
+     *
+     * <p>这个组合是 2026-09-27 一天里走到的第二站，中间那一站不是这样：
+     * 那天先把战场从 40 × 18 翻倍到 80 × 36（格子和屏幕上每样东西的大小一个
+     * 像素都没动，代价是纵向也要拖），<b>再把 {@code SCREEN_ROWS} 提到 36</b>，
+     * 靠压界面腾出来的高度把整块战场按回一屏——格子因此小了一半（88.84 → 44.77px）。
+     *
+     * <p>所以这里两条断言是一对，缺一条就说不清现在是哪一种：横向
+     * {@code maxPanX > 0}，纵向 {@code maxPanY == 0}。
+     */
     @Test
     public void wideWorldCanBePannedHorizontallyAtDefaultZoom() {
         BoardGeometry g = BoardGeometry.fit(PANEL_W, PANEL_H);
         Viewport v = new Viewport(PANEL_W, PANEL_H, g.boardWidthPx(), g.contentHeightPx());
 
         assertEquals(BoardGeometry.COLS, g.cols());
-        // 40 格 × 88.84px = 3553px，面板 1016px，单边可拖 (3553-1016)/2
-        assertEquals(1268.8f, v.maxPanX(), 0.5f);
+        // 80 格 × 44.77px = 3581px，面板 1016px，单边可拖 (3581-1016)/2
+        assertEquals(1282.7f, v.maxPanX(), 0.5f);
         assertTrue("战场上比屏幕宽，横向必须拖得动", v.maxPanX() > 0f);
 
-        // 纵向仍然拖不动：18 行正好装下，这是硬约束
-        assertEquals(0f, v.maxPanY(), EPS);
+        // 除数还是 SCREEN_ROWS + MAX_OVERHANG_CELLS，而 SCREEN_ROWS 现在等于 ROWS，
+        // 所以一屏正好是整块战场
+        assertEquals(BoardGeometry.SCREEN_ROWS,
+                Math.round(PANEL_H / g.cellPx() - BoardGeometry.MAX_OVERHANG_CELLS));
+        assertEquals(BoardGeometry.SCREEN_ROWS, BoardGeometry.ROWS);
+        // 内容高 37 格 = 面板 37 格，没有超出的部分，纵向拖不动
+        assertEquals("纵向应该正好装下、拖不动", 0f, v.maxPanY(), EPS);
 
-        // 拖到最左：内容左边缘贴住面板左边缘，左边不留白
+        // 横向：拖到最左，内容左边缘贴住面板左边缘，左边不留白
         v.panBy(1_000_000f, 0f);
         assertEquals(0f, v.toLayoutX(0f), EPS);
         // 拖到最右：内容右边缘贴住面板右边缘
         v.panBy(-1_000_000f, 0f);
         assertEquals(g.boardWidthPx(), v.toLayoutX(PANEL_W), 0.01f);
+
+        // 纵向：拖不动，所以不管怎么划，上下两头都正好是内容边贴面板边——
+        // 第 0 格的上沿（含 1 格余量）在面板顶，最后一行在面板底，拖不出空白
+        v.panBy(0f, 1_000_000f);
+        assertEquals(0f, v.toLayoutY(0f), EPS);
+        v.panBy(0f, -1_000_000f);
+        assertEquals(g.contentHeightPx(), v.toLayoutY(PANEL_H), 0.01f);
     }
 
     /**

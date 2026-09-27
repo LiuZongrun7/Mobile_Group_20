@@ -10,6 +10,18 @@
     <string name="hud_days_left">%1$d days left</string>
     <!-- 大数字和它的说明分两条：合起来"1.24M tokens this month"在手机宽度上排不下大字号。 -->
     <string name="hud_tokens_label">tokens this month</string>
+    <!-- 余额来源。三条文案必须一眼能分开——服务端结算出来的值和本地演示换算
+         出来的值长得很像，不标出来演示时就没人分得清该不该信它。
+
+         **2026-09-27 三条都缩短了。** 它们现在和"9.76M tokens this month"排在
+         同一行，右边只剩约 490px（约 26 个字符），原来那条
+         "Balance: demo estimate (relay not set up)" 要 760px，
+         被 `ellipsize` 从**开头**裁成了"alance: demo estimate…"——正是最该看见的
+         "Balance:" 那截没了。信息没丢：(relay not set up) 那层意思在中继设置
+         弹窗里，这里只要区分得出"信不信这个数"就够了。 -->
+    <string name="wallet_source_server">Balance: from server</string>
+    <string name="wallet_source_demo">Balance: demo estimate</string>
+    <string name="wallet_source_loading">Balance: loading…</string>
 
     <!-- 三个桶，和三种资源一一对应（CONTRACTS.md §8 那张表），加起来正好等于
          上面那个大数字。
@@ -75,7 +87,10 @@
     <!-- 1 资源名 2 余额 -->
     <string name="shop_balance_part">%1$s %2$d</string>
     <!-- 1 名称（Tower / Wall / Core） -->
-    <string name="shop_picked">%1$s selected · tap the field to place it</string>
+    <!-- 1 名称。**"拖"这半句不能省**：建一排是这一版新增的手势，
+         而它是唯一一处会告诉玩家这件事的界面文案——只在代码注释里写的话，
+         没人会去拖一下试试。 -->
+    <string name="shop_picked">%1$s selected · tap to place one, drag for a row</string>
     <string name="shop_picked_core">Core selected · tap a new spot to move it</string>
     <!-- 选中的那件放回货架，手上不留东西 -->
     <string name="shop_look_only">Look only</string>
@@ -116,15 +131,69 @@
     <string name="bld_hp_label">Durability</string>
     <string name="bld_hp_value">%1$.0f / %2$.0f</string>
     <string name="bld_range_label">Attack range</string>
-    <!-- 1 格数。**这里写死复数是有意的**：范围只有 2.5 / 3.0 / 3.5 三档
-         （BuildingStats.rangeCells），永远到不了 1。哪天出现一格的范围，
-         这句就得重写——这台机器上 plurals 用不了，见 shop_size 那段。 -->
+    <!-- 1 格数。**这里写死复数是有意的**：范围最小的一档是弩车一级的 3.0 格
+         （BuildingStats.fireArc），永远到不了 1。哪天出现一格的范围，
+         这句就得重写——这台机器上 plurals 用不了，见 shop_size 那段。
+         **没有盲区的建筑走这一句**（弩车、以及以后任何一种扇形射界）。 -->
     <string name="bld_range_value">%1$.1f cells</string>
+    <!-- 1 内径 2 外径。**有盲区的建筑走这一句**（现在只有大炮：10 格以内打不着）。
+         写成一段区间而不是只报外径，是因为只报"20.0 cells"会把那十格盲区藏起来，
+         而那正是这门炮最容易摆错的地方。 -->
+    <string name="bld_range_band">%1$.1f – %2$.1f cells</string>
+    <!-- 升级价。**它是 2026-09-27 从条子上搬到这儿的**：那三个方框只剩图标，
+         价钱在屏幕上没有地方写了，而"升一级要多少钱"是玩家按下去之前
+         唯一想知道的数。删掉条子上那串价的同时必须在这儿补一行，
+         不然点下去只会收到"资源不够"，无处可查差多少。
+         值那半边复用商店那两条（shop_cost_part / shop_cost_join），
+         价钱的说法全应用只有一处。 -->
+    <string name="bld_cost_label">Upgrade cost</string>
     <!-- 1 下一级的级数 -->
-    <string name="bld_upgrade_to">Upgrade to level %1$d</string>
-    <string name="bld_upgrade_btn">Upgrade</string>
-    <!-- 1 当前等级。到顶了按钮换成"Max level"并且点不动。 -->
-    <string name="bld_at_max">Level %1$d · fully upgraded</string>
+    <!-- ============ 场上那三个小方框（@id/building_bar） ============
+         点一下建筑，三个方框贴在它**下面**冒出来：**详情 / 升级 / 整排**，
+         哪个都不按、直接拖那座建筑就是挪它（部落冲突那套）。
+
+         **条子不是弹窗**，这是整个设计的关键：模态弹窗开着时战场收不到触摸，
+         "拖着建筑走"就做不出来。所以三个动词归条子（就在战场上、够得着），
+         一堆数值归底部弹窗（要一大片地方才铺得开，只有详情按钮才开）。
+
+         **下面这几条一个都不会显示在屏幕上**——方框里只有图标（理由见
+         activity_main.xml 里 @id/building_bar 那段）。它们全是
+         contentDescription，也就是只给读屏软件念。**这不是"顺手加的无障碍"**：
+         图标按钮没有文字，不给这个的话 TalkBack 念出来是"按钮"三个字，
+         三个框听起来一模一样。 -->
+    <string name="bld_bar_info">Details</string>
+    <!-- 1 总价（可能是两种资源拼起来的，见 MainActivity#costText）。
+         **价钱挪进 contentDescription 之后是这里唯一还留着它的地方**：
+         屏幕上不写了（撑宽条子），但读屏的人反而该听到它——
+         看不见代价的按钮，对谁都不该按。 -->
+    <string name="bld_bar_upgrade">Upgrade · %1$s</string>
+    <!-- 1 真会升上去的座数（到顶的那几座不算）2 总价 -->
+    <string name="bld_bar_upgrade_all">Upgrade ×%1$d · %2$s</string>
+
+    <!-- 整排。**入口是条子上这个方框，不是再点一次场上的那座建筑**：
+         条子出现的同时手指已经抬起来了，"再点一下同一座"这一下没有谁接得住。
+         1 这一排有几座。**有整排可选时才出现**，孤零零一座时整格 GONE——
+         按下去只会选中它自己，那个框就是一句空话。 -->
+    <string name="bld_bar_line">Select the whole row of %1$d</string>
+    <!-- 已经是整排时的说法：按一下缩回一座。**图标会跟着换**
+         （ic_bar_row → ic_bar_single）——不换的话玩家分不清现在是整排还是一座，
+         而升级那一下的价钱会从"一座的价"跳到"四座的价"。 -->
+    <string name="bld_bar_line_clear">Select only this one</string>
+    <!-- 选中整排时的标题。1 名称 2 座数 3 等级 -->
+    <string name="bld_title_line">%1$s ×%2$d · Level %3$d</string>
+    <!-- 一排里等级不一样时的那句。1 名称 2 座数 3 最低 4 最高。
+         报成一段区间而不是只报其中一座：一排墙里有一座升过级了，
+         只报"Level 1"会让玩家以为升级白升了。 -->
+    <string name="bld_title_line_mixed">%1$s ×%2$d · Level %3$d–%4$d</string>
+    <!-- 整排升级成功的提示。**每座各涨一级**，到顶的跳过（到顶的那些本来
+         就没得升），所以文案说的是"这一排里的 N 座"，不是"升到第几级"——
+         一排里等级不一样时根本没有一个共同的"第几级"。 -->
+    <string name="bld_upgraded_all">%1$d buildings upgraded</string>
+    <!-- 整排升级时资源只够升其中几座：**全部或全不**，一座都不升。
+         理由和中途卡住的那半排墙一样——升了三座、剩两座没升，
+         玩家自己都记不清哪几座动了。 -->
+    <string name="bld_upgrade_all_need_more">Not enough resources for all %1$d</string>
+    <!-- 到顶了按钮换成这一个，并且点不动。 -->
     <string name="bld_max_btn">Max level</string>
     <string name="bld_close">Close</string>
     <!-- 1 名称 2 新等级 -->
@@ -133,14 +202,19 @@
     <!-- 面板还开着、建筑却没了（比如这一局重开了）。 -->
     <string name="bld_gone">That building is gone</string>
 
-    <!-- 挪动。**不花钱**，所以这一屏上没有价格那一行——写了价钱玩家会以为
-         挪一次要扣一次资源，就不敢摆了。参考部落冲突：摆错了随时能改。 -->
-    <string name="bld_move_btn">Move</string>
-    <!-- 1 名称。进了挪动模式之后的提示：这时候面板已经关了，
-         屏幕上没有任何东西告诉玩家"接下来该干什么"。 -->
-    <string name="bld_move_hint">Tap a new spot for the %1$s</string>
-    <!-- 1 名称。挪不过去：压着别的建筑、压在通道或山区上、或者出界了。 -->
+    <!-- 挪动。**不花钱**，也不再有按钮了：选中的那一座（或一整排）直接拖着走，
+         起点和终点都在战场上（BattlefieldView 的 Drag.RELOCATE）。
+         参考部落冲突：摆错了随时能改。
+         这里只剩"挪不过去"那一句——拖到通道、山区、别人身上或者出界了。 -->
+    <!-- 1 名称。 -->
     <string name="bld_move_blocked">The %1$s cannot go there</string>
+
+    <!-- 打起来了（场上有敌人）就不给动建筑：放新的、挪、升级都锁上。
+         一句通用的就够——三种动作不成立的原因是**同一个**（这一波还没打完），
+         分三句写反而会让人以为是三件不同的事。**不说"换个位置试试"**：
+         换个位置也一样不行，那句话会把人引到错的方向上。
+         解锁条件是场上清空，文案里点出来，玩家才知道要等什么。 -->
+    <string name="bld_in_combat">Cannot change buildings during a wave</string>
 
     <!-- ============ 底部导航 ============ -->
     <string name="nav_game">Game</string>

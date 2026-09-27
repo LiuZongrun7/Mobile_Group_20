@@ -21,14 +21,20 @@ import java.util.Locale;
  * 而"差一点点没打中"在塔防里既不有趣（玩家没法控制）也说不清（同样的局面
  * 帧率不同结果不同）。
  *
- * <h2>目标半路死了怎么办：把剩下的路飞完，然后消失，不掉血</h2>
+ * <h2>目标半路死了怎么办：把剩下的路飞完，然后看是谁打的</h2>
  *
  * <p>不"当场消失"是因为那看着像 bug（一颗子弹在屏幕中间凭空不见）；飞完剩下的路
- * 是"打到那个地方"，只是那儿已经没有活人了。
+ * 是"打到那个地方"。到了那儿之后分两种，由 {@link #splashCells} 决定：
  *
- * <p>这也正是<b>以后加溅射/减速的位置</b>：现在结算的是"落点上那个目标还在不在"，
- * 要加范围伤害就是"落点周围有谁"。所以 {@link #aimX()}／{@link #aimY()} 这两个
- * "打到哪儿"的坐标是公开的，不是内部细节。
+ * <ul>
+ *   <li><b>没有溅射</b>（弩车，{@code splashCells == 0}）：那儿已经没有活人了，
+ *       这一发就白飞了，不减任何人的血。这是塔防里那个直觉——"这根弩箭是冲它去的"；</li>
+ *   <li><b>有溅射</b>（大炮，{@code splashCells > 0}）：<b>弹坑还在</b>，
+ *       落点周围那一圈里站着的照样挨。见 {@code Battlefield.splash}。</li>
+ * </ul>
+ *
+ * <p>所以 {@link #aimX()}／{@link #aimY()} 这两个"打到哪儿"的坐标是公开的——
+ * 它们就是那个落点，不是内部细节。
  *
  * <p>纯 Java，不 import 任何 {@code android.*}：子弹飞得对不对要能在电脑上验，
  * 不用装模拟器。渲染读 {@link #x}／{@link #y} 自己换算成像素，见
@@ -60,6 +66,16 @@ public final class Projectile {
     public final float speedCellsPerSec;
 
     /**
+     * 落地时<b>落点周围几格之内一起挨打</b>；{@code 0} = 只打中的那一只。
+     *
+     * <p>和 {@link #damage} 一样是出膛时就定死的（来源是
+     * {@link BuildingStats.FireArc#splashCells}）：炮被拆了，天上那一发落下来
+     * 还是炸一格。弩车是 0，大炮是 1——这个数就是"两种塔是不是同一种东西"
+     * 在子弹这一层的答案。
+     */
+    public final float splashCells;
+
+    /**
      * 现在在哪儿，<b>连续格子坐标</b>（和 {@link Enemy#x} 同一套，身体中心）。
      *
      * <p>可写：{@link #step} 每帧推它。渲染读它换算成像素——
@@ -79,13 +95,14 @@ public final class Projectile {
      * 子弹是"塔开火"这件事的结果，而开火的时机由 {@code Battlefield} 的帧循环说了算。
      */
     Projectile(Building owner, Enemy target, float x, float y,
-               float damage, float speedCellsPerSec) {
+               float damage, float speedCellsPerSec, float splashCells) {
         this.owner = owner;
         this.target = target;
         this.x = x;
         this.y = y;
         this.damage = damage;
         this.speedCellsPerSec = speedCellsPerSec;
+        this.splashCells = splashCells;
         this.aimX = target != null ? target.centreX() : x;
         this.aimY = target != null ? target.centreY() : y;
     }
@@ -145,6 +162,11 @@ public final class Projectile {
      * <p>调用方（{@code Battlefield.moveProjectiles}）靠它决定"到了之后扣不扣血"。
      * 写成方法而不是让调用方自己拼 {@code target != null && target.alive()}：
      * 这个判断在结算那条路上只该有一份。
+     *
+     * <p><b>只有 {@link #splashCells} 为 0 的时候才有人问它。</b>有溅射的那一发
+     * 到了就炸，出膛时瞄的那只死没死和弹坑没关系，所以调用方在问之前先看
+     * 溅射半径。写在这里免得以后有人看见"有溅射的那一发从不问 lands()"
+     * 以为漏了一句。
      */
     boolean lands() {
         return target != null && target.alive();

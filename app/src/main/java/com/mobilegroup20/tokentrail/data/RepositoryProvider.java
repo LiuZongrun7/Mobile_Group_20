@@ -2,7 +2,9 @@ package com.mobilegroup20.tokentrail.data;
 
 import android.content.Context;
 import com.mobilegroup20.tokentrail.BuildConfig;
+import com.mobilegroup20.tokentrail.data.remote.HttpBudgetRepository;
 import com.mobilegroup20.tokentrail.data.remote.HttpForumRepository;
+import com.mobilegroup20.tokentrail.data.remote.HttpSeasonRepository;
 import com.mobilegroup20.tokentrail.data.repository.ForumFeedRepository;
 import com.mobilegroup20.tokentrail.data.repository.SessionProvider;
 
@@ -48,6 +50,7 @@ public final class RepositoryProvider {
     private static String forumBaseUrl = BuildConfig.FORUM_BASE_URL;
     private static volatile SessionProvider forumSession = SessionProvider.SIGNED_OUT;
     private static BudgetRepository budget;
+    private static SeasonRepository season;
 
     /**
      * 应用级的 Context，只用来建数据库。
@@ -158,25 +161,68 @@ public final class RepositoryProvider {
         return forumHttp;
     }
 
-    /** 预算数据。桩 → {@code com.mobilegroup20.tokentrail.data.local.RoomBudgetRepository}。 */
+    /**
+     * 预算数据。桩 → 服务端（{@code HttpBudgetRepository}）。
+     *
+     * <p>**上限存在服务端**，和余额、结算一样（`CONTRACTS.md` §5）。原来这里
+     * `USE_STUBS=false` 时返回 null，靠 `requireReady` 抛一句「还没实现」——
+     * 现在有真实现了。花销仍然算不出来（没有价目表），那件事由
+     * `BudgetStatus.coverage` 和后端的 `pricingAvailable` 表达，不在这里伪装。
+     */
     public static synchronized BudgetRepository budget() {
         if (budget == null) {
-            budget = USE_STUBS ? new StubBudgetRepository() : null;
+            budget = USE_STUBS ? new StubBudgetRepository()
+                    : new HttpBudgetRepository(forumBaseUrl, relaySession());
             requireReady(budget, "BudgetRepository（数据侧，张莉）");
         }
         return budget;
     }
 
     /**
-     * 赛季与结算（游戏侧，刘宗润）——<b>还没实现</b>。
+     * 赛季与结算（游戏侧，刘宗润）。
      *
-     * <p>这里故意抛异常而不是返回 null：谁先用到它，谁就会在第一次运行时拿到一句
-     * 说清楚该去写哪个类的报错，而不是一个莫名其妙的空指针。
+     * <p><b>余额和结算都在服务端</b>（`CONTRACTS.md` §7 第 5 条），所以实现是
+     * {@code HttpSeasonRepository}，身份用 relay key。没注册中转时返回一个
+     * **什么样的调用都失败的实现**，而不是抛异常——游戏页要能照常打开并显示
+     * 「还没启用中转」，抛异常会让那一页直接崩。
      */
-    public static SeasonRepository season() {
-        throw new UnsupportedOperationException(
-                "SeasonRepository 还没实现。实现类放在 com.mobilegroup20.tokentrail.data.local，"
-                        + "然后在这里返回。结算的四条规则见 SeasonState 的类注释。");
+    public static synchronized SeasonRepository season() {
+        if (season == null) season = new HttpSeasonRepository(forumBaseUrl, relaySession());
+        return season;
+    }
+
+    /**
+     * 用量/赛季/预算这套的身份：**账号会话**，不是 relay key。
+     *
+     * <p>2026-02 改。原来这里用 relay key，`accountId()` 是它的 sha256——
+     * 于是「换个 key 就换个人」，而且没配中转的用户读不到自己的用量。
+     * 现在服务端把这两条路都解到**账号的 `user_id`**（`relay_store.owner_of`），
+     * 所以手机上只要账号 token 就够；relay key 只用来转发
+     * （{@code /api/relay/v1/...}，见 {@link #relayKeyForForwarding()}）。
+     *
+     * <p>做成一个 {@code SessionProvider} 而不是直接把 token 传进仓储，是为了复用
+     * 仓储里那套「中途换了身份就把结果丢掉」的判断——换账号后回来的旧响应
+     * 不能被显示成新账号的余额。
+     */
+    private static SessionProvider relaySession() {
+        return new SessionProvider() {
+            @Override public String token() {
+                return appContext == null ? null : AccountSession.get(appContext).token();
+            }
+            @Override public String accountId() {
+                return appContext == null ? null : AccountSession.get(appContext).accountId();
+            }
+        };
+    }
+
+    /**
+     * 转发用的 relay key（`/api/relay/v1/...` 的 Authorization）。
+     *
+     * <p><b>这是 relay key 在 App 侧唯一的用处。</b>用量、赛季、预算都不用它——
+     * 那些走 {@link #relaySession()} 的账号 token。没配中转时返回 null。
+     */
+    public static String relayKeyForForwarding() {
+        return appContext == null ? null : RelayCredentials.get(appContext).relayKey();
     }
 
     /** 建议 agent 的调用口（游戏侧，刘宗润）——<b>还没实现</b>。 */
@@ -192,6 +238,7 @@ public final class RepositoryProvider {
         forum = null;
         forumHttp = null;
         budget = null;
+        season = null;
     }
 
     private static void requireReady(Object impl, String what) {

@@ -52,6 +52,55 @@ public final class Cost {
         return new Cost(next);
     }
 
+    /**
+     * 同样的开销来 {@code count} 份。
+     *
+     * <p>给"一次建一排"和"整排一起升级"用：手指拖过五格就是五座，
+     * 问价时要问的是五份的价，不是一份。
+     *
+     * <p><b>为什么不是 {@code plus(Cost)} 那种累加。</b>这个方法只乘同一笔开销，
+     * 所以它和 {@link #plus(ResourceType, long)} 那条"同名资源再设一次是改写"的
+     * 规矩不冲突——这里压根没有"两份不同的价"要做主。
+     * 加一整排各不相同的升级价走 {@link #plus(Cost)}。
+     */
+    public Cost times(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("份数不能是负数: " + count);
+        }
+        if (count == 1 || free()) {
+            return this;
+        }
+        long[] next = new long[amounts.length];
+        for (int i = 0; i < amounts.length; i++) {
+            next[i] = amounts[i] * count;
+        }
+        return new Cost(next);
+    }
+
+    /**
+     * 两笔开销加在一起，<b>逐种资源相加</b>。
+     *
+     * <p>只用在"整排一起升级"上：那一排里每一座的升级价各不相同，
+     * 要合成一笔总价去问钱包。
+     *
+     * <p><b>和 {@link #plus(ResourceType, long)} 不是一回事</b>，别混：
+     * 那个是"给这一项设个价"（写重了当笔误，所以是改写），
+     * 这个是"两笔账合起来"（本来就该相加）。名字像，语义反着。
+     */
+    public Cost plus(Cost other) {
+        if (other == null || other.free()) {
+            return this;
+        }
+        if (free()) {
+            return other;
+        }
+        long[] next = amounts.clone();
+        for (int i = 0; i < next.length; i++) {
+            next[i] += other.amounts[i];
+        }
+        return new Cost(next);
+    }
+
     /** 这一笔要花多少某种资源。没用到的那些返回 0。 */
     public long amount(ResourceType resource) {
         return amounts[resource.ordinal()];

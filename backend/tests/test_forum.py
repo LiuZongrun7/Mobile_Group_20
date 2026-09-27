@@ -4,30 +4,20 @@ import json
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-import httpx
 from PIL import Image
 import pytest
 
+from conftest import verifier
 from tokentrail_forum.app import Settings, create_app
-from tokentrail_forum.auth import TeamAuth
 from tokentrail_forum.news_job import cleanup_unused_images, import_articles
 from tokentrail_forum.store import now_ms
 
 
-def auth_handler(request):
-    token = request.headers.get("Authorization")
-    if token in {"Bearer account-a", "Bearer account-b"}:
-        return httpx.Response(200, json={"user_id": token[-1], "username": f"User {token[-1].upper()}"})
-    return httpx.Response(401)
-
-
-def verifier(handler=auth_handler):
-    return TeamAuth("http://127.0.0.1:8000/api/users/me", "user_id", "username", httpx.MockTransport(handler))
-
-
 @pytest.fixture
 def api(tmp_path):
-    app = create_app(Settings(str(tmp_path), "https://forum.example", "http://127.0.0.1:8000/api/users/me"), verifier())
+    """注入假 verifier 的 app。**假实现和登录流程在 `conftest.py` 里**，
+    这里不再自己拼一个——理由见那个文件的说明。"""
+    app = create_app(Settings(str(tmp_path), "https://forum.example"), verifier())
     with TestClient(app) as client:
         yield client
 
@@ -53,14 +43,28 @@ def test_auth_is_required_and_expired_session_rejected(api):
     assert api.get("/api/forum/posts", headers=A).json() == {"items": [], "nextCursor": None}
 
 
-def test_fail_closed_when_auth_missing_or_unavailable(tmp_path):
+def test_fail_closed_when_the_session_is_unknown(tmp_path):
+    """**默认实现是我们自己的 `accounts` 表**（2026-09-27 起不再打外部服务）。
+
+    没登录过、或者 token 是编的 → 401，而且论坛什么都不给。
+    这条盯的是「fail closed」这个性质：不认识的会话绝不能放行。
+    """
     with TestClient(create_app(Settings(str(tmp_path), "https://forum.example"))) as api:
-        assert api.get("/api/forum/posts", headers=A).status_code == 503
-    auth = verifier(lambda req: httpx.Response(200, json={"user_id": 1}))
-    with pytest.raises(HTTPException) as exc:
-        auth.verify("Bearer account-a")
-    assert exc.value.status_code == 503
-    auth.close()
+        assert api.get("/api/forum/posts", headers=A).status_code == 401
+        assert api.get("/api/forum/posts").status_code == 401
+
+
+def test_an_unknown_token_is_refused(tmp_path):
+    """认不出的会话绝不能放行。**fail closed。**
+
+    这条原来测的是外部 verifier（`TeamAuth`）自身出错时返回 503 而不是放行。
+    `TeamAuth` 已经删掉，但性质本身不能丢：现在唯一的鉴权路是查我们自己的
+    `account_sessions` 表，认不出就是 401，**没有任何回退分支**。
+    """
+    with TestClient(create_app(Settings(str(tmp_path), "https://forum.example"), verifier())) as api:
+        assert api.get("/api/forum/posts", headers={"Authorization": "Bearer nonsense"}).status_code == 401
+        assert api.get("/api/forum/posts", headers={"Authorization": "Basic abc"}).status_code == 401
+        assert api.get("/api/forum/posts").status_code == 401
 
 
 def test_two_accounts_share_posts_likes_and_replies(api):
@@ -173,7 +177,7 @@ def test_missing_posts_and_rate_limit(api):
 
 def test_persistence_across_restart(api, tmp_path):
     post = publish(api).json()
-    with TestClient(create_app(Settings(str(tmp_path), "https://forum.example", "http://127.0.0.1:8000/api/users/me"), verifier())) as restarted:
+    with TestClient(create_app(Settings(str(tmp_path), "https://forum.example"), verifier())) as restarted:
         assert restarted.get(f"/api/forum/posts/{post['id']}", headers=B).json() == post
 
 

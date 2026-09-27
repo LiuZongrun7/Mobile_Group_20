@@ -14,11 +14,10 @@
     攻击范围     —— 只有会攻击的建筑（现在只有塔）才有这一行，
                     不攻击的（墙、核心）整行 GONE。**"没有攻击"不写出来**：
                     写一行"Attack range 0"会让人以为它能打、只是打不到人。
-    升级         —— 升到几级、多少钱、按钮。到顶了按钮换成"Max level"并且点不动。
-                    **三种建筑都能升**（墙和核心涨耐久），所以没有"不能升"那一支。
-    挪动 / 关闭  —— 两个次要操作并排。挪动只是"换个地方摆"，不花钱、不改等级，
-                    所以和关闭同一档、同一个样式（理由见下面 Move 按钮上面那段）。
-                    "能关"这件事得有个明说的出口，不然第一次用的人会以为面板粘住了。
+    升级价       —— 升下一级要多少钱。**2026-09-27 从场上的操作条搬进来的**：
+                    那条只剩三个图标方框，价钱在屏幕上没有别的地方写了。
+                    到顶了写"Max level"（那行还在，只是换了内容）。
+    关闭         —— "能关"这件事得有个明说的出口，不然第一次用的人会以为面板粘住了。
 
   为什么点建筑就该出这个面板、而不是接着放东西：见 BattlefieldView.Inspector
   的注释——"想看一眼已有的塔，结果在旁边又冒出一座还扣了钱"。
@@ -123,81 +122,65 @@
             tools:text="Attack range 3.0 cells" />
     </LinearLayout>
 
-    <!-- 升级 -->
-    <TextView
-        android:id="@+id/bld_upgrade_title"
-        style="@style/GameText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:textAppearance="?attr/textAppearanceTitleSmall"
-        tools:text="Upgrade to level 3" />
+    <!-- 升级价。**这一行是 2026-09-27 新加的，因为条子上那串价没了**
+         （三个方框只剩图标）。它还回来的正是"按下去之前唯一想知道的数"。
 
-    <TextView
-        android:id="@+id/bld_upgrade_cost"
-        style="@style/GameText.Dim"
-        android:layout_width="match_parent"
+         用金色那三个资源标记里对应的颜色是做不到的（一排可能同时吃两种资源），
+         所以这里用一个中性的圆点，颜色沿用射界那一格的黄：这一屏上
+         "黄色 = 关于这座建筑还能变成什么样"，耐久那个绿仍然是"现在还剩多少"。
+         到顶了写 "Max level"，不是不显示——**不显示的话玩家不知道
+         是"没有下一级"还是"这里没写"。 -->
+    <LinearLayout
+        android:id="@+id/bld_cost_row"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:textAppearance="?attr/textAppearanceLabelMedium"
-        tools:text="Cache 35 + Output 15" />
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_pill"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
 
-    <!-- 主操作：升级。**整行留给它**——详情面板里最常做的一件事就是升级，
-         和下面两个挤一行的话三个按钮都变窄，"Upgrade" 这种长词会换行。 -->
+        <View
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/bg_circle"
+            android:backgroundTint="@color/game_range" />
+
+        <TextView
+            android:id="@+id/bld_cost"
+            style="@style/GameText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            tools:text="Upgrade cost Cache 20 + Output 8" />
+    </LinearLayout>
+
+    <!-- 剩下只有一个"关闭"。
+
+         **升级 / 整排 / 挪动三个按钮全搬去了场上那条悬浮操作条**
+         （@id/building_bar）。这一屏现在只回答一个问题："这一座现在什么样"。
+
+         分成两处是因为它们本来就要同时在场：悬浮条贴在选中那一座旁边，
+         手指不用离开战场；而数值（耐久、射界、价格）铺开来读需要一大片地方，
+         只有底部弹窗放得下。以前硬挤在一个模态弹窗里，代价是**弹窗开着时
+         战场收不到触摸**——"点一下建筑直接拖着它走"这条手感就没了。 -->
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/bld_upgrade"
-        style="@style/Widget.Material3.Button"
+        android:id="@+id/bld_close"
+        style="@style/Widget.Material3.Button.TonalButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="20dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:layout_marginEnd="20dp"
         android:insetTop="0dp"
         android:insetBottom="0dp"
-        android:text="@string/bld_upgrade_btn"
-        app:backgroundTint="@color/primary_button" />
-
-    <!-- 次要操作。挪动和关闭是同一档的事（都不改变这一座的数值），
-         所以同一个样式、同一行、一样宽。
-
-         挪动**不需要先选、也不需要花钱**：它只改坐标，等级和已经花掉的钱
-         都带得走（Battlefield.move）。所以它也没有"买得起吗"那套变暗逻辑。 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="20dp"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/bld_move"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="@string/bld_move_btn"
-            android:textColor="@color/on_mountain"
-            app:backgroundTint="@color/glass_button" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/bld_close"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="@string/bld_close"
-            android:textColor="@color/on_mountain"
-            app:backgroundTint="@color/glass_button" />
-    </LinearLayout>
+        android:text="@string/bld_close"
+        android:textColor="@color/on_mountain"
+        app:backgroundTint="@color/glass_button" />
 
 </LinearLayout>

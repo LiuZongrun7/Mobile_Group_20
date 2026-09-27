@@ -7,7 +7,8 @@ import pytest
 from tokentrail_forum.app import Settings, create_app
 from tokentrail_forum.store import Store, now_ms
 from tokentrail_forum.news_job import import_articles, export_news
-from test_forum import verifier, png
+from conftest import verifier
+from test_forum import png
 
 
 def make_test_app(path, news_database=""):

@@ -305,8 +305,8 @@ tfa.margin_left = tfa.margin_right = Inches(0.22)
 tfa.vertical_anchor = MSO_ANCHOR.MIDDLE
 para(tfa, True, [('Scope rule.  ', True, WHITE),
                  ('API-cost analytics and the home-screen assistant are core; forum and game are supporting '
-                  'extensions. Token Plan and other subscriptions are excluded, and TokenTrail never runs, '
-                  'routes or controls a coding agent.', False, 'D6E4EB')], size=13, after=0, line=1.15)
+                  'extensions. Token Plan and other subscriptions are excluded, and TokenTrail never runs or '
+                  'controls a coding agent.', False, 'D6E4EB')], size=13, after=0, line=1.15)
 card(s, MARGIN, 5.78, CW, 0.92,
      head='Estimated, never invoiced',
      body='An API key alone cannot recover an agent\'s history, so a call is priced only when a saved rate snapshot '
@@ -356,7 +356,8 @@ card(s, MARGIN, 4.36, left, 2.06, head='What the review told us',
      body=['Every product above is strong inside its own boundary: a first-party console prices one provider, a plugin '
            'reads one harness, a gateway sees only proxied traffic. None of them prices three providers from records '
            'the user already owns, and only dsh-pet treats usage as something to come back to.',
-           'The review also set our boundaries: no proxying, no subscription quotas, and no overlay on another app.'],
+           'The review also set our boundaries: no subscription quotas, and no overlay on another app. An optional '
+           'relay, off by default, reads the token classes exports omit.'],
      fill=LIGHTTEAL, head_color=TEAL, size=12, head_size=13)
 card(s, MARGIN + left + rgap, 4.36, rw, 2.06, head='The opportunity',
      body=['The outline names three contributions:',
@@ -384,7 +385,7 @@ table(s, MARGIN, 1.62,
         'Import usable DSH logs into Android; no live agent control.'],
        [('LiteLLM', 'https://docs.litellm.ai/docs/simple_proxy'),
         'Gateway spend tracking and budgets for proxied calls.',
-        'Imports records without proxying agent traffic.'],
+        'Optional relay as a record source only; no gateway or protocol translation.'],
        [('dsh-pet', 'https://github.com/zhu1090093659/dsh-pet/blob/main/README.zh.md'),
         'Floating companion driven by DSH session events.',
         'Interactive home-screen assistant with questions and evidence-linked advice.']],
@@ -404,9 +405,10 @@ table(s, MARGIN, 1.62, [2.45, 9.443],
         'Retrofit/OkHttp connects the Java advice service; bounded read-only tools and one model API. '
         'WorkManager checks prices.'],
        ['Persistence and security',
-        'Room stores usage, prices and history; the team\'s own server supports sync and public posts. '
-        'The service authenticates every request and scopes every read to the caller\'s account; '
-        'no client holds a model key.'],
+        'The team\'s own server is authoritative: accounts, usage days, resource balance and '
+        'settlement, sync, public posts and an optional relay; Room is a local cache. '
+        'One app account is the single identity, and the relay key is a transport credential '
+        'that only the relay path accepts; no client holds a model key.'],
        ['Open-source reuse',
         [('Room', 'https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt', TEAL),
          (' (Apache-2.0) for local records; ', None),
@@ -468,7 +470,7 @@ bullets = [
     ('Tokens become resources.', 'Input, cache and output tokens already logged convert into separate resource pools at a fixed rate per million tokens.'),
     ('You plan the space yourself.', 'Towers and wall segments are placed and upgraded by hand on a build grid around the data-centre core, which expands in one direction.'),
     ('Enemies arrive from one side.', 'A wave enters from a single edge, so where each tower stands and whether the walls close decide how the wave goes.'),
-    ('A wave starts when you start it.', 'Waves run in real time, so no offline simulation and no scheduled settlement is needed. The season resets each month.'),
+    ('A wave starts when you start it.', 'Waves run in real time, so no offline simulation is needed. The season resets each month, and the server settles each completed day once.'),
 ]
 first = True
 for head, body in bullets:
@@ -498,7 +500,7 @@ for head, body in bullets:
          size=12, after=6, line=1.13)
     first = False
 para(tf, False, [('Boundary.  ', True, TEAL),
-                 ('It can recommend but cannot run, route or interrupt a coding agent, and cannot enforce a hard '
+                 ('It can recommend but cannot run or interrupt a coding agent, and cannot enforce a hard '
                   'spending cap. It compares cost and token use, never answer quality.',
                   False, INK)], size=11.5, after=0, before=5, line=1.15)
 
@@ -508,7 +510,7 @@ s.shapes.add_picture(os.path.join(BASE, 'fig_flow.png'), Inches((PAGE_W - 8.6) /
 aspects = [
     ('Data input', 'Profiles, billing mode and budgets; authorised logs, text or confirmed speech, posts and game actions.', NAVY, LIGHTBLUE),
     ('Data processing', 'Filter and de-duplicate logs; price usage; read-only summaries; rank posts and convert game resources.', TEAL, LIGHTTEAL),
-    ('Data storage', 'Room holds local records. The server-side store holds user sync, budgets, game state and the assistant ledger; public posts are separate.', NAVY, LIGHTBLUE),
+    ('Data storage', 'The server-side store is authoritative: usage days, resource balances and settlement for the account; public posts are separate. Room keeps only a local cache.', NAVY, LIGHTBLUE),
     ('Data output', 'Costs, heatmap, sessions, budgets and AI evidence; forum lists and real-time battle feedback.', AMBER, LIGHTAMBER),
 ]
 cw, gap = (CW - 3 * 0.20) / 4, 0.20
@@ -580,7 +582,7 @@ s = slide('6 · Evidence of completion', 'Who builds what, and how we will know 
 team = [
     ('Zhang Li · 24107757', 'Authentication, log import and storage, dated pricing, budgets, the dashboard and the data-query interfaces.', LIGHTBLUE, NAVY),
     ('Wang Tingdong · 24107759', 'The home-screen AI assistant, its text/voice panel, the Java advice service, the five read-only tools and the assistant API ledger; forum news, posts, replies and ranking.', LIGHTTEAL, TEAL),
-    ('Liu Zongrun · 24107745', 'The tower-defence engine and UI, resource settlement, monthly state, placement and upgrades, and enemy waves.', LIGHTAMBER, AMBER),
+    ('Liu Zongrun · 24107745', 'The tower-defence engine and UI, resource settlement on the server, monthly state, placement and upgrades, and enemy waves.', LIGHTAMBER, AMBER),
 ]
 cw, gap = (CW - 2 * 0.24) / 3, 0.24
 for i, (head, body, fill, hc) in enumerate(team):

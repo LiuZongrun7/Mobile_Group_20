@@ -18,8 +18,8 @@ import java.util.function.ToIntFunction;
  * 自然被划给<b>离它最近的那个</b>，不需要额外写"去哪儿"的判断。
  *
  * <p>这张表<b>只在建筑变了的时候重铺</b>（摆一座、拆掉一座），
- * 不是每帧。摆一座塔是一秒钟一次的操作，铺 720 个格子是微不足道的开销；
- * 每帧铺就成了 60 倍。
+ * 不是每帧。摆一座塔是一秒钟一次的操作，铺 2880 个格子是微不足道的开销；
+ * 每帧铺就成了 60 倍。（战场 2026-09-27 从 40×18 翻倍到 80×36，这个数跟着 ×4。）
  *
  * <h2>建筑不是墙，是"很贵的地"</h2>
  *
@@ -80,7 +80,7 @@ public final class PathField {
         int[] dist = new int[cols * rows];
         Arrays.fill(dist, UNREACHABLE);
 
-        // Dijkstra。代价都是正数，用优先队列是图省事——720 个格子，用什么都一样快。
+        // Dijkstra。代价都是正数，用优先队列是图省事——2880 个格子，用什么都一样快。
         PriorityQueue<int[]> queue = new PriorityQueue<>((a, b) -> Integer.compare(a[0], b[0]));
         for (Cell goal : goals) {
             if (!inside(goal, cols, rows)) {

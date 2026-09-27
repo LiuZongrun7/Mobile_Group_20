@@ -169,3 +169,71 @@ def rate_limit(db, uid, action, maximum):
         raise HTTPException(429, "Please wait before trying again", headers={"Retry-After": "60"})
     db.execute("DELETE FROM write_events WHERE created<?", (current - 86_400_000,))
     db.execute("INSERT INTO write_events VALUES(?,?,?)", (uid, action, current))
+
+
+# ---- 官方帖：把新闻映射成 ForumPost --------------------------------------
+#
+# ## 为什么官方帖直接从 `news` 表来，不另存一份
+#
+# `news` 表已经是「我们官方发布的内容」——它由我们自己的采集任务每小时写入，
+# 来源、分类、图片都在里面。再灌一份进 `posts` 的话，同一个标题存两处，
+# 改一次采集逻辑要改两个地方，而且两边迟早漂移（一边删了另一边还在）。
+#
+# 代价是**官方帖不能被评论**（它们在 `news` 表里，没有 `post_id` 可挂评论）。
+# 这是有意的：官方帖是**公告**，不是讨论区。要讨论就在对应的社区帖里讨论。
+#
+# ## 为什么 `source` 必须填 `OFFICIAL`
+#
+# `ForumPost.Source` 的类注释写了两类帖子的**可信度不一样**：
+# 「官方帖可以当作价格/版本的事实来源，社区帖只能当经验分享」。
+# 客户端已经在用这个字段渲染官方徽章（`ForumAdapter`），
+# agent 也该据此决定措辞。所以这不是装饰字段。
+
+OFFICIAL_AUTHOR_UID = "official"
+OFFICIAL_AUTHOR_NAME = "TokenTrail"
+
+
+def news_as_post(row, media_base=""):
+    """一行 `news` → `ForumPost` 的形状。
+
+    **互动计数一律 0，不是「不知道」**：官方帖不在 `posts` 表里，
+    确实没有评论和点赞可数——这和「算不出来」不是一回事。
+    """
+    article_id = row["id"]
+    image = row["image_url"]
+    return {
+        "id": article_id,
+        "title": row["title"] or "",
+        # 正文用摘要。**不抓全文**：那是别人的版权内容，
+        # 而且摘要已经够回答「这条讲什么」。原文链接放在 `originalUrl` 里。
+        "body": row["summary"] or "",
+        "source": "OFFICIAL",
+        "authorUid": OFFICIAL_AUTHOR_UID,
+        "authorName": OFFICIAL_AUTHOR_NAME,
+        "createdAtEpochMillis": row["published"],
+        "images": ([{"id": article_id, "url": image}] if image else []),
+        "likeCount": 0, "likedByMe": False, "commentCount": 0,
+        "helpfulCount": 0, "viewCount": 0, "rankScore": 0.0,
+        "modelTag": None,
+        # 多出来的字段：客户端反序列化会忽略，但界面和 agent 都用得上。
+        "category": row["category"],
+        "sourceName": row["source_name"],
+        "originalUrl": row["original_url"],
+    }
+
+
+def official_posts(db, limit=20, category=None):
+    """官方帖（新闻）按发布时间倒序。"""
+    query = "SELECT * FROM news"
+    parameters = []
+    if category:
+        query += " WHERE category=?"
+        parameters.append(category)
+    query += " ORDER BY published DESC, id DESC LIMIT ?"
+    parameters.append(max(1, min(limit, 50)))
+    return [news_as_post(row) for row in db.execute(query, parameters)]
+
+
+def official_post(db, article_id):
+    row = db.execute("SELECT * FROM news WHERE id=?", (article_id,)).fetchone()
+    return None if row is None else news_as_post(row)

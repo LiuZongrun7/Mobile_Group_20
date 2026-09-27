@@ -7,7 +7,7 @@ import com.mobilegroup20.tokentrail.BuildConfig;
 import com.mobilegroup20.tokentrail.MainActivity;
 import com.mobilegroup20.tokentrail.R;
 import com.mobilegroup20.tokentrail.data.RepositoryProvider;
-import com.mobilegroup20.tokentrail.data.TeamAccountSession;
+import com.mobilegroup20.tokentrail.data.AccountSession;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,7 +20,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.*;
 public class AccountDialogTest {
     @Test public void loginValidatesAndRetainsUsernameButNotPasswordOnRecreation() {
         Assume.assumeFalse(BuildConfig.FORUM_BASE_URL.isEmpty());
-        TeamAccountSession session = TeamAccountSession.get(ApplicationProvider.getApplicationContext());
+        AccountSession session = AccountSession.get(ApplicationProvider.getApplicationContext());
         session.clear(); RepositoryProvider.configureForum(BuildConfig.FORUM_BASE_URL, session);
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             onView(withId(R.id.nav_profile)).perform(click());

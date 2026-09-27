@@ -27,9 +27,17 @@ public class ProjectileTest {
      */
     private static final Building TOWER = new Building(BuildingType.TOWER, 5, 3);
 
+    /** 一根弩箭：没有溅射。 */
     private static Projectile shotAt(Enemy target, float fromX, float fromY) {
         return new Projectile(TOWER, target, fromX, fromY, 14f,
-                BuildingStats.PROJECTILE_SPEED_CELLS_PER_SEC);
+                BuildingStats.PROJECTILE_SPEED_CELLS_PER_SEC, 0f);
+    }
+
+    /** 一发炮弹：落地炸一格。 */
+    private static Projectile shellAt(Enemy target, float fromX, float fromY) {
+        return new Projectile(TOWER, target, fromX, fromY, 14f,
+                BuildingStats.PROJECTILE_SPEED_CELLS_PER_SEC,
+                BuildingStats.CANNON_SPLASH_CELLS);
     }
 
     /** 飞够时间才到，而且到了就停在瞄点上，不冲过头。 */

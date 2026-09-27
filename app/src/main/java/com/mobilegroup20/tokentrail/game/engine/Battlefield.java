@@ -2,7 +2,9 @@ package com.mobilegroup20.tokentrail.game.engine;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -79,10 +81,14 @@ public final class Battlefield {
      * 看清是哪条路、再决定往哪补塔。留 1 列的话敌人一出现就已经贴着可建区了，
      * 没有反应时间。
      *
-     * <p>通道也是"左边更长"这件事的落点：{@link BoardGeometry#COLS} 是 40 格，
-     * 减掉这 4 格和右边的 {@link #MOUNTAIN_COLS} 格，可建区正好 33 格。
+     * <p>通道也是"左边更长"这件事的落点：{@link BoardGeometry#COLS} 是 80 格，
+     * 减掉这 8 格和右边的 {@link #MOUNTAIN_COLS} 格，可建区正好 66 格。
+     *
+     * <p>2026-09-27 跟着战场翻倍从 4 改成 8。通道的<b>作用</b>不变
+     * （让玩家看清是哪条路再决定补哪儿），格数翻倍只是因为整张地图翻倍了
+     * ——留 8 格和留 4 格在屏幕上是同样长的一段。
      */
-    public static final int ENEMY_LANE_COLS = 4;
+    public static final int ENEMY_LANE_COLS = 8;
 
     /**
      * 最右边几列是 {@link Terrain#MOUNTAIN 山区}（也不能建东西）。
@@ -90,10 +96,13 @@ public final class Battlefield {
      * <p>作用是给地图一个自然的右边界：核心要贴着右边摆，没有这一段的话
      * 核心就像是贴在画面边缘被裁掉了。它同时也是"以后要在这边加东西"的余量。
      *
-     * <p>换成纯玩法的话说：这 3 格是 {@link #terrainAt} 里唯一一处"不能建、
+     * <p>换成纯玩法的话说：这几格是 {@link #terrainAt} 里唯一一处"不能建、
      * 但敌人也不会从这儿进来"的地——它和通道是两回事，所以颜色也不一样。
+     *
+     * <p>2026-09-27 跟着战场翻倍从 3 改成 6，理由和 {@link #ENEMY_LANE_COLS} 一样：
+     * 屏幕上是同样宽的一段石头。
      */
-    public static final int MOUNTAIN_COLS = 3;
+    public static final int MOUNTAIN_COLS = 6;
 
     /**
      * 一座塔一帧最多吐几发。
@@ -160,8 +169,9 @@ public final class Battlefield {
      * 正在拆塔的敌人，而不是拦真正逼近核心的那只。"谁最危险"这个问题问的是
      * 核心，所以得单独有一张只从核心铺出来的表。
      *
-     * <p>代价是建筑一动要铺两遍。铺一遍是 720 个格子的 Dijkstra，摆一座塔
-     * 触发一次，可以忽略。
+     * <p>代价是建筑一动要铺两遍。铺一遍是 2880 个格子的 Dijkstra，摆一座塔
+     * 触发一次，可以忽略。（2026-09-27 战场从 40×18 翻倍到 80×36，铺表规模 ×4；
+     * 仍然是"建筑动一下才铺"，不是每帧。）
      *
      * <p>{@code null} 表示场上没有核心。
      */
@@ -170,7 +180,7 @@ public final class Battlefield {
     /**
      * 上面那张表要不要重铺。
      *
-     * <p><b>只在建筑动了的时候置位</b>，不是每帧。铺一次是 720 个格子的 Dijkstra，
+     * <p><b>只在建筑动了的时候置位</b>，不是每帧。铺一次是 2880 个格子的 Dijkstra，
      * 摆一座塔触发一次可以忽略，每帧一次就是 60 倍的浪费——而地形不动的时候，
      * 铺出来的表一模一样。
      *
@@ -293,6 +303,38 @@ public final class Battlefield {
 
     // ---- 放置 ----
 
+    /**
+     * 现在允不允许动建筑——<b>放新的、挪、升级，三件事一起管</b>。
+     *
+     * <p><b>场上有敌人就不许。</b>打起来之后还能改阵型的话，有几件事说不清楚：
+     * <ul>
+     *   <li>开打之后把塔从这条路口挪到那条路口，等于中途换掉自己刚才的摆位，
+     *       "这一波打得怎么样"就没法归因了——赢也好输也好，都能用"我还没摆完"
+     *       解释掉；</li>
+     *   <li>拖动中的那座建筑<b>在引擎里一直待在原地</b>（画面上那个位移只是画的，
+     *       见 {@code BattlefieldView.carryDCol}）——它一边挨打一边被拎在半空，
+     *       松手落地的那一下该按哪边算？与其定一条"拖起来免疫"的规矩，
+     *       不如不让它在打的时候被拎起来；</li>
+     *   <li>升级最直接：花资源把一座塔当场升一级，<b>耐久回满、射界变大</b>，
+     *       这一波立刻变成另一场仗。参考部落冲突，改阵型永远是开打<b>之前</b>的事。</li>
+     * </ul>
+     *
+     * <p><b>判的是"场上有敌人"，不是"这一局还没结束"。</b>两波之间的空当（以及
+     * 开局那段）本来就是留给玩家摆位和升级的，整局锁死的话这个游戏就只剩看。
+     * 所以看 {@code enemies} 空不空：一波清完到下一波进场之间，随时可以改。
+     *
+     * <p><b>这只是一句问话，不是保险。</b>{@link #place} / {@link #moveAll} /
+     * {@link #upgrade} 自己都不查它。那几个方法同时是<b>摆场景的 API</b>——
+     * {@code MainActivity.buildDemoScene} 和大量测试都拿它们铺初始阵型，
+     * 而铺的时候场上未必干净（测试里经常先放建筑再 {@code spawn} 敌人来试射界）。
+     * 在那几个方法里加一道"有敌人就拒绝"，等于把"摆场景"和"玩家操作"混成一条路，
+     * 一多半现成的用例会当场变红。所以这条规矩由<b>界面来问、界面来挡</b>，
+     * 和 {@link #canPlace}、"买不买得起"是同一层的事。
+     */
+    public boolean canReworkBuildings() {
+        return enemies.isEmpty();
+    }
+
     /** 这个位置能不能放这类建筑。 */
     public boolean canPlace(BuildingType type, int col, int row) {
         return canPlace(type, col, row, null);
@@ -408,6 +450,183 @@ public final class Battlefield {
      */
     public boolean moveCore(int col, int row) {
         return move(core(), col, row);
+    }
+
+    // ---- 整排 ----
+
+    /**
+     * 一座建筑<b>所在的那一整排</b>：跟它同类型、而且首尾相接的那一串。
+     *
+     * <p>界面上"点两下选中整排"要的就是这个：一列墙、一列塔、一行塔。
+     * 选出来的一排可以一起挪、一起升级（{@link #moveAll}）。
+     *
+     * <p><b>竖排优先。</b>两条都成立时（比如一个 2×2 的方块）取竖的那条：
+     * 战场上纵深比宽度金贵，"这一列"是玩家布防时脑子里真正的那条线。
+     *
+     * <p><b>"相接"是按占地算的</b>，不是按左上角差一格。2×2 的塔占
+     * (10,4)-(11,5)，那么第 6 行那座（占 6-7 行）就是挨着的，第 8 行那座也是——
+     * 这符合看到的样子。反过来，中间空了一格就不算一排：断开的两个塔群
+     * 合成一排，一起挪的时候会拉成一条，谁也没想那样。
+     *
+     * <p><b>不比等级。</b>一列墙里有一座升过级了，它还是那一列。玩家眼里的
+     * "一列墙"是摆在那儿的一串，不是"一串一样强的"。一起升级时到顶的会跳过。
+     *
+     * @return 至少含 {@code building} 自己；{@code building} 不在场上（拆过了、
+     *         或者是别的局留下的）时返回空表。调用方不该改这个表。
+     */
+    public List<Building> lineOf(Building building) {
+        if (building == null || !buildings.contains(building)) {
+            return Collections.emptyList();
+        }
+        List<Building> column = runThrough(building, 0, -1, 0, 1);
+        if (column.size() > 1) {
+            return Collections.unmodifiableList(column);
+        }
+        List<Building> row = runThrough(building, -1, 0, 1, 0);
+        if (row.size() > 1) {
+            return Collections.unmodifiableList(row);
+        }
+        return Collections.singletonList(building);
+    }
+
+    /**
+     * 从 {@code origin} 出发，沿一条轴两头都走到头，返回整条线上的建筑。
+     *
+     * @param backCol 朝坐标小的那头找时，每走一座跨几列（上/左方向）
+     * @param backRow 同上，行方向
+     * @param fwdCol  朝坐标大的那头找时，每走一座跨几列（下/右方向）
+     * @param fwdRow  同上
+     */
+    private List<Building> runThrough(Building origin, int backCol, int backRow,
+                                      int fwdCol, int fwdRow) {
+        List<Building> line = new ArrayList<>();
+        Deque<Building> head = new ArrayDeque<>();
+        for (Building cursor = origin; ; ) {
+            Building next = neighbourAlong(cursor, backCol, backRow);
+            if (next == null) {
+                break;
+            }
+            head.addFirst(next);
+            cursor = next;
+        }
+        line.addAll(head);
+        line.add(origin);
+        for (Building cursor = origin; ; ) {
+            Building next = neighbourAlong(cursor, fwdCol, fwdRow);
+            if (next == null) {
+                break;
+            }
+            line.add(next);
+            cursor = next;
+        }
+        return line;
+    }
+
+    /**
+     * {@code building} 在那条轴上紧挨着的下一座同类型建筑，没有就是 {@code null}。
+     *
+     * <p>跨的步子是一个<b>占地</b>（{@code cols}/{@code rows}），不是一格：
+     * 2×2 的塔往上找是 {@code row - 2}，1×1 的墙是 {@code row - 1}。
+     */
+    private Building neighbourAlong(Building building, int dCol, int dRow) {
+        int col = building.col() + dCol * building.type.cols;
+        int row = building.row() + dRow * building.type.rows;
+        if (!board.fits(col, row, building.type.cols, building.type.rows)) {
+            return null;
+        }
+        Building other = occupancy.get(new Cell(col, row));
+        if (other == null || other.type != building.type) {
+            return null;
+        }
+        // 占着这一格还不够，左上角得正好落在这儿。1×1 的墙查自己那格必然成立；
+        // 挡的是"一座更大的建筑从旁边盖过来"——它的左上角在别处，
+        // 按它的占地往回退才是它的上/左邻居，不是按这一格。
+        return other.col() == col && other.row() == row ? other : null;
+    }
+
+    /**
+     * {@link #moveAll} 的<b>试算</b>：这一排挪过去成不成立，一个字都不改。
+     *
+     * <p>分开是因为拖动时的虚影要在手指还没抬起来的时候就知道该画绿还是画红
+     * （同 {@code BuildGate} 的"先问价、后成交"）。挪动不花钱，所以这里
+     * 没有价格那一问，只有"地够不够"。
+     *
+     * @return 整排都挪得过去返回 {@code true}；空表或 {@code null} 返回
+     *         {@code false}（"没东西可挪"不是成功）
+     */
+    public boolean canMoveAll(List<Building> group, int dCol, int dRow) {
+        if (group == null || group.isEmpty()) {
+            return false;
+        }
+        for (Building building : group) {
+            if (!buildings.contains(building)) {
+                return false;
+            }
+            if (dCol == 0 && dRow == 0) {
+                continue;   // 原地：位置不用查，但"它在不在场上"上面查过了
+            }
+            int col = building.col() + dCol;
+            int row = building.row() + dRow;
+            if (!board.fits(col, row, building.type.cols, building.type.rows)) {
+                return false;
+            }
+            for (Cell cell : board.cellsOf(col, row, building.type.cols, building.type.rows)) {
+                if (!terrainAt(cell.col, cell.row).buildable()) {
+                    return false;
+                }
+                Building occupant = occupancy.get(cell);
+                if (occupant != null && !group.contains(occupant)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 把一整排建筑<b>整体挪一个位移</b>。
+     *
+     * <p>和 {@link #move} 一样不花钱，区别只有一个：要么整排都挪过去，要么整排都不动。
+     * 没有"挪过去三座、剩下两座卡住了"这种中间状态——那会让玩家自己都记不清
+     * 哪几座动了。
+     *
+     * <p><b>判定时必须把整排自己都当成空地。</b>一排墙往右挪一格，新格子有一半
+     * 正是这一排里邻座的旧格子；不把它们让开的话"整体平移"这个最常见的用法
+     * 会当场判失败。所以判定循环里问的是"占着这格的人是不是自己人"。
+     *
+     * <p>走法和 {@link #move} 同一个顺序，只是整排一起：先整排 {@code vacate}、
+     * 再整排改坐标、最后整排 {@code occupy}。顺序反过来（挪一座占一座）在
+     * 平移时会两两互卡。
+     *
+     * <p>判定那一段在 {@link #canMoveAll} 里，这一层只管改。分出来是给
+     * 拖动的虚影用的：手指还按着的时候就得知道该画绿还是画红。
+     *
+     * @param group 要挪的那一排，通常是 {@link #lineOf} 的结果
+     * @param dCol  整体横移几列，可以是负数
+     * @param dRow  整体纵移几行，可以是负数
+     * @return 挪成功了返回 {@code true}；整排里只要有<b>任何一座</b>挪不过去
+     *         （不在场上、出界、压到通道或山区、压到排外的建筑）就返回
+     *         {@code false}，且一座都不动。空的 {@code group} 返回 {@code false}。
+     */
+    public boolean moveAll(List<Building> group, int dCol, int dRow) {
+        if (!canMoveAll(group, dCol, dRow)) {
+            return false;
+        }
+        if (dCol == 0 && dRow == 0) {
+            return true;   // 原地：什么也不用做，但这是成功，不是失败
+        }
+
+        // 顺序同 move：先全让开、再全改坐标、最后全占上
+        for (Building building : group) {
+            vacate(building);
+        }
+        for (Building building : group) {
+            building.relocateTo(building.col() + dCol, building.row() + dRow);
+        }
+        for (Building building : group) {
+            occupy(building);
+        }
+        return true;
     }
 
     /**
@@ -610,10 +829,15 @@ public final class Battlefield {
      */
     private void fireTowers(float dtSeconds) {
         for (Building tower : buildings) {
-            double interval = BuildingStats.fireIntervalSeconds(tower.type, tower.level);
-            if (interval <= 0.0) {
+            // "会不会开火"问的是射界在不在——取一次就够，出膛时还要用它的溅射半径。
+            // 从前的守卫是 {@code fireIntervalSeconds(...) <= 0}，和这里是同一件事的
+            // 两种问法；改成射界之后这一支更直接，而且顺带把 arc 拿到手，
+            // 不用在下面再查一遍表。
+            BuildingStats.FireArc arc = BuildingStats.fireArc(tower.type, tower.level);
+            if (arc == null) {
                 continue;   // 墙和核心：压根没有"开火"这回事
             }
+            double interval = BuildingStats.fireIntervalSeconds(tower.type, tower.level);
 
             tower.target = frontmostInRange(tower);
             tower.cooldownSeconds -= dtSeconds;
@@ -629,12 +853,15 @@ public final class Battlefield {
                     break;
                 }
                 projectiles.add(new Projectile(tower, tower.target,
-                        // 出膛点是**占地中心**：范围扇形的圆心、判定用的圆心、
+                        // 出膛点是**占地中心**：射界的圆心、判定用的圆心、
                         // 从前那条连线的起点，三处现在还是同一个点
                         tower.col() + tower.type.cols / 2f,
                         tower.row() + tower.type.rows / 2f,
                         (float) BuildingStats.damagePerShot(tower.type, tower.level),
-                        BuildingStats.PROJECTILE_SPEED_CELLS_PER_SEC));
+                        BuildingStats.PROJECTILE_SPEED_CELLS_PER_SEC,
+                        // 溅射半径出膛时就定死，和伤害一样：这门炮半路被拆了，
+                        // 天上那一发落下来还是炸一格。
+                        arc.splashCells));
                 tower.cooldownSeconds += (float) interval;
             }
         }
@@ -643,10 +870,11 @@ public final class Battlefield {
     /**
      * 天上那些子弹飞一帧，飞到了就结算。
      *
-     * <p><b>打中的是"出膛时瞄的那一只"，不是"落点上现在站着谁"。</b>
+     * <p><b>没有溅射的（弩车）打中的是"出膛时瞄的那一只"，不是"落点上现在站着谁"。</b>
      * 目标半路死了（或者已经被清场移走）这一发就白飞了——不减别人的血，
-     * 也不复活它。留这个规矩是因为它才是塔防里那个直觉："这颗炮弹是冲它去的"。
-     * 以后要加溅射，"落点周围有谁"就是在这一支里往外找（{@link Projectile#aimX()}）。
+     * 也不复活它。留这个规矩是因为它才是塔防里那个直觉："这根弩箭是冲它去的"。
+     *
+     * <p><b>有溅射的（大炮）反过来：结算的是落点。</b>见 {@link #splash}。
      *
      * <p>唯一一处"打到也没用"的情况是<b>从右边缘走出去的那只</b>（场上没核心时
      * 才会发生）：它已经不在 {@link #enemies} 里了，扣它的血不会有任何后果
@@ -664,8 +892,46 @@ public final class Battlefield {
                 continue;   // 还在路上
             }
             it.remove();
-            if (shot.lands()) {
+            if (shot.splashCells > 0f) {
+                splash(shot);
+            } else if (shot.lands()) {
                 shot.target.hp -= shot.damage;
+            }
+        }
+    }
+
+    /**
+     * 一发炮弹落地：<b>落点周围一格之内活着的都吃这一发的伤害</b>，一个不少。
+     *
+     * <p>和上面那支的单体结算有一处关键差别：<b>它不看"出膛时瞄的那只还活着没有"。</b>
+     * 炮弹已经在天上了，落下来就是一响——出膛时瞄的那只半路被别的塔打死了，
+     * 弹坑还在，站在旁边的照样挨。这正是"群伤"这个词的全部意思，
+     * 也是这门炮和弩车的分工：弩车是"点掉一只"，大炮是"这一片都别站着"。
+     *
+     * <p>所以打死的那只<b>不用特判</b>：它 {@code alive()} 是假，自然不在结算之列；
+     * 而它旁边那些还喘气的，一个都不会因为"目标没了"而逃过一劫。
+     *
+     * <p><b>判定"碰到就算"</b>（{@code distance <= 溅射半径 + 半身位}），和射界
+     * 那两条边一个规矩：身子探进弹坑里就吃伤害。重甲比杂兵宽，所以它在弹坑边上
+     * 更容易被扫到——和"厚就要挨更多打"是同一套账，见
+     * {@link BuildingStats.FireArc#catches}。
+     *
+     * <p>遍历整支 {@code enemies} 是刻意的：一发炮弹最多几十次浮点比较，
+     * 而大炮一秒才一发。为它建个空间索引不值得，那种表还会随着敌人移动失效。
+     *
+     * <p>这里直接改 {@code hp}、不调 {@code clearTheDead()}：清场在
+     * {@link #advance} 的最后一步统一做，这里清会让"这一帧刚死的"从列表里消失，
+     * 后面 {@code moveEnemies} 的迭代器就崩了。
+     */
+    private void splash(Projectile shot) {
+        for (Enemy enemy : enemies) {
+            if (!enemy.alive()) {
+                continue;
+            }
+            double dx = enemy.centreX() - shot.x;
+            double dy = enemy.centreY() - shot.y;
+            if (Math.hypot(dx, dy) <= shot.splashCells + enemy.type.halfBodyCells()) {
+                enemy.hp -= shot.damage;
             }
         }
     }
@@ -695,24 +961,32 @@ public final class Battlefield {
     }
 
     /**
-     * 射程里<b>离这座塔最近</b>的那只敌人，没有就 {@code null}。
+     * 射界里<b>最靠前</b>的那只敌人，没有就 {@code null}。
      *
      * <p>距离是<b>中心到中心</b>，用格子坐标算：建筑取占地矩形的中心，
      * 敌人取身体的中心（{@link Enemy#centreX()}）。两个中心都在"连续格子坐标"
-     * 这一套里，和界面上画的那个扇形用的是同一个圆心——扇形画在哪儿就打到哪儿，
-     * 不会出现"看着在扇形里却没挨打"。
+     * 这一套里，和界面上画的那个扇环用的是同一个圆心——画在哪儿就打到哪儿，
+     * 不会出现"看着在射界里却没挨打"。
      *
-     * <p><b>再加半个身位（{@link EnemyType#halfBodyCells()}），判定改成"扇形碰到就算"。</b>
-     * 扇形画的是"离我 {@code range} 格以内"，而敌人的判定点是它的<b>中心</b>：
-     * 只按中心算的话，半个身子探进扇形里的敌人反而不挨打。
+     * <p><b>判定的全部内容就是一句 {@link BuildingStats.FireArc#catches}。</b>
+     * 内径、外径、张角、身位这四件事的相互关系（尤其是"盲区那条边也要把身位算进去"）
+     * 只写在那一处，见 {@link BuildingStats.FireArc}。从前这里是散着的三句
+     * ——"算距离、比射程、比斜率"——大炮加上十格内径之后，那种写法一定会漏掉
+     * 其中一个（漏了内径它就变成二十格的正圆，漏了张角它就变成整圈），
+     * 而两种漏法都不报错。
      *
-     * <p>这不是理论问题，真机上就是<b>紧贴城墙的那只</b>：塔摆在墙后面、
-     * 敌人贴在墙左边，中心到中心正好 {@code 2.5} 格多一点（墙宽 1 格 +
-     * 敌人半个身位 + 塔自己的半个占地 = 2.5，再加上纵向错开半格），
+     * <p><b>"碰到就算"这个规矩是为了紧贴城墙的那只。</b>敌人的判定点是它的
+     * <b>中心</b>，只按中心算的话，半个身子探进射界里的敌人反而不挨打。真机上就是
+     * 摆在墙后面的那座弩车：敌人贴在墙左边，中心到中心正好比它 3.0 格的射程多一点点
+     * （墙宽 1 格 + 敌人半个身位 + 塔自己的半个占地，再加上纵向错开半格），
      * 差 0.05 格打不着。而城墙的全部价值就是"替后面的塔多争取几秒"
-     * （见 {@link BuildingStats#WALL_HP}）——塔不打贴在墙上的那只，
-     * 墙就白砌了。加上这半个身位之后，墙后紧贴的那座塔打得着，
-     * 而且画面上"扇形碰到了敌人"和"敌人在挨打"这两件事重新对得上。
+     * （见 {@link BuildingStats#WALL_HP}）——塔不打贴在墙上的那只，墙就白砌了。
+     * 加上这半个身位之后，墙后紧贴的那座打得着，而且画面上"射界碰到了敌人"和
+     * "敌人在挨打"这两件事重新对得上。
+     *
+     * <p><b>大炮不参与这件事，而且不是漏了。</b>它十格以内是盲区
+     * （{@link BuildingStats#CANNON_INNER_CELLS}），贴在墙上的敌人正好落在盲区里——
+     * 拿大炮守墙是摆错了，该摆的是弩车。所以上面那段"墙后的塔打得着"说的是弩车。
      *
      * <p>身位是<b>逐只</b>算的，不是全局一个常数：重甲比杂兵宽，所以它能从
      * 更远处就开始挨打。这正好和它"厚"这件事配套——不然画面上一只大块头
@@ -727,9 +1001,10 @@ public final class Battlefield {
      * （那次量的是<b>塔瞄谁</b>，敌人当时还是"一路奔核心"；后来敌人也改成了
      * "去最近的建筑"，见上一段。）
      *
-     * <p>"就近"在画面上的好处是说得通（射界只有 2.5 格，塔不会越过贴脸的那只去打
+     * <p>"就近"在画面上的好处是说得通（射界只有几格，塔不会越过贴脸的那只去打
      * 斜对面的），但代价是塔<b>不再优先拦截最危险的那只</b>：火力被近处、其实
      * 还离核心很远的敌人分走，该拦的那只就多走了几步。塔防里这几步就是漏怪。
+     * <b>大炮让这一条更值钱</b>：它一条走廊罩十格深，挑错了目标就白打一整轮。
      *
      * <p>所以这一支认的是"拦最危险的那只"。想让某条路上多拦几只，办法是
      * <b>在那条路上多摆一座塔</b>——只是别指望每座塔自己越位去挑。
@@ -743,32 +1018,9 @@ public final class Battlefield {
      * 塔能看见天上飞着什么，所以不会六座塔一起糊一只快兵。
      * 于是"最靠前的那只"实际上读作"最靠前、而且还没被安排掉的那只"。
      */
-    /**
-     * 这一只在不在这座塔的射界里。
-     *
-     * <p>射界是<b>朝左的扇形</b>：塔不转向，全部朝左打，因为敌人从左边那条
-     * 通道进来。{@code dx} 是"敌人在塔的哪一侧"（正数 = 右边），
-     * 所以第一句就把右边的全部挡掉；剩下的按
-     * {@link BuildingStats#AIM_HALF_ANGLE_DEG} 卡上下张角。
-     *
-     * <p>用一个"比斜率"的写法而不是 {@code Math.atan2}：这个方法在每一帧、
-     * 每座塔、每只敌人的三重循环里，{@code atan2} 是不必要的开销。
-     * {@code dx < 0} 保证了下面除法的符号，不用再取绝对值。
-     *
-     * <p><b>正左正右的边界</b>：{@code dx == 0}（敌人正在塔的正上/正下方）
-     * 不算——扇形是"朝着左边"的，正侧面那一线不属于它。这一条窄得几乎碰不到，
-     * 而且真碰到时塔会去打下一只，不会卡住。
-     */
-    private static boolean inAimSector(double dx, double dy) {
-        if (dx >= 0) {
-            return false;
-        }
-        return Math.abs(dy) <= -dx * BuildingStats.AIM_HALF_ANGLE_TAN;
-    }
-
     private Enemy frontmostInRange(Building tower) {
-        double range = BuildingStats.rangeCells(tower.type, tower.level);
-        if (range <= 0.0) {
+        BuildingStats.FireArc arc = BuildingStats.fireArc(tower.type, tower.level);
+        if (arc == null) {
             return null;
         }
         float centreX = tower.col() + tower.type.cols / 2f;
@@ -780,13 +1032,12 @@ public final class Battlefield {
             if (!enemy.alive()) {
                 continue;   // 这一帧刚被打死的，不该再挨第二座塔的火力
             }
-            double reach = range + enemy.type.halfBodyCells();
             double dx = enemy.centreX() - centreX;
             double dy = enemy.centreY() - centreY;
-            if (Math.hypot(dx, dy) > reach) {
-                continue;
-            }
-            if (!inAimSector(dx, dy)) {
+            // **射界的判定整个在 BuildingStats.FireArc 里**——内径、外径、
+            // 张角、身位四件事的相互关系只该有一份，理由见那个类的注释。
+            // 这里从前是"算距离、比射程、再比一次斜率"三句，现在一句。
+            if (!arc.catches(dx, dy, enemy.type.halfBodyCells())) {
                 continue;
             }
             // 天上已经有足够的伤害冲着它去了：这一发留给后面那只。

@@ -33,28 +33,35 @@ public class DemoSceneProbeTest {
         int cols = field.board().cols();
         int rows = field.board().rows();
 
-        field.place(BuildingType.CORE,
-                cols - Battlefield.MOUNTAIN_COLS - BuildingType.CORE.cols,
-                (rows - BuildingType.CORE.rows) / 2);
-        wallColumn(field, 10, 2, 3, 7, 8, 14, 15);
-        wallColumn(field, 22, 4, 5, 11, 12);
-        for (int row : new int[]{1, 5, 9, 13}) {
-            field.place(BuildingType.TOWER, 30, row);
+        int coreCol = cols - Battlefield.MOUNTAIN_COLS - BuildingType.CORE.cols;
+        int coreRow = (rows - BuildingType.CORE.rows) / 2;
+        field.place(BuildingType.CORE, coreCol, coreRow);
+
+        int guardCol = coreCol - 3;
+        int ballistaCol = coreCol - 1;
+        int wallBackCol = coreCol - 11;
+        int midCol = coreCol - 19;
+        int wallFrontCol = coreCol - 23;
+
+        wallColumn(field, wallFrontCol, 4, 6, 14, 16, 28, 30);
+        wallColumn(field, wallBackCol, 8, 10, 22, 24);
+        for (int row : new int[]{coreRow - 6, coreRow - 2, coreRow + 2, coreRow + 6}) {
+            field.place(BuildingType.TOWER, guardCol, row);
         }
-        for (int row : new int[]{3, 11}) {
-            field.place(BuildingType.TOWER, 14, row);
+        for (int row : new int[]{coreRow - 4, coreRow + 4}) {
+            field.place(BuildingType.TOWER, midCol, row);
         }
-        // 弩车在塔群**后面**（第 32 列），一级/二级/三级各一座。摆法变了要连
+        // 弩车在塔群**后面**（紧挨核心那一列），一级/二级/三级各一座。摆法变了要连
         // 上面那两个 upgrade 的坐标一起改，不然升级会静默落空。
-        for (int row : new int[]{5, 9, 13}) {
-            field.place(BuildingType.BALLISTA, 32, row);
+        for (int row : new int[]{coreRow - 6, coreRow - 4, coreRow - 2}) {
+            field.place(BuildingType.BALLISTA, ballistaCol, row);
         }
-        Building veteran = field.buildingAt(new Cell(14, 3));
+        Building veteran = field.buildingAt(new Cell(midCol, coreRow - 4));
         if (veteran != null) {
             field.upgrade(veteran);
         }
-        upgradeToLevel(field, new Cell(32, 9), 2);
-        upgradeToLevel(field, new Cell(32, 13), 3);
+        upgradeToLevel(field, new Cell(ballistaCol, coreRow - 4), 2);
+        upgradeToLevel(field, new Cell(ballistaCol, coreRow - 2), 3);
         return field;
     }
 

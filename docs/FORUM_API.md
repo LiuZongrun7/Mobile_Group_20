@@ -8,11 +8,11 @@ Android 已提供 News / Community 页面、最多 9 张图片的发帖草稿、
 
 ## 接入账号与 API 地址
 
-开发期可以直接点击调试 APK 中的“免账号测试”。测试会话使用独立 `/test-api/` 服务和独立帖子池，不需要账号管理模块；正式接口仍要求团队账号。测试身份有效期 24 小时，新闻与正式服务共享只读新闻快照，帖子/图片/点赞/评论隔离。`POST /test-api/forum/test-session` 返回 `{token,accountId,displayName,expiresAtEpochMillis}`；`DELETE` 同一路径携带该 Bearer token 退出。服务端仅存 token 的 SHA-256，正式 `/api/` 拒绝该 token；客户端 Release 构建隐藏入口。部署细节见 backend/README.md。
+开发期可以直接点击调试 APK 中的“免账号测试”。测试会话使用独立 `/test-api/` 服务和独立帖子池，不需要账号；正式接口要求**登录 APP 账号**（2026-02 起就是 `/api/account/*` 那个账号，见下）。测试身份有效期 24 小时，新闻与正式服务共享只读新闻快照，帖子/图片/点赞/评论隔离。`POST /test-api/forum/test-session` 返回 `{token,accountId,displayName,expiresAtEpochMillis}`；`DELETE` 同一路径携带该 Bearer token 退出。服务端仅存 token 的 SHA-256，正式 `/api/` 拒绝该 token；客户端 Release 构建隐藏入口。部署细节见 backend/README.md。
 
-当前 App 在 Application 启动时恢复 `TeamAccountSession`，提供论坛和“我的”中的已有账号登录入口，调用原后端 `POST /api/login`，再用 `GET /api/users/me` 确认身份。token 由 Android Keystore 的 AES-GCM 密钥加密保存，备份和设备迁移排除会话文件；不保存密码。退出清除本机会话并请求原后端注销；离线时仅保证本机退出，服务端 token 撤销需要请求成功。新闻和帖子均要求登录，不提供访客假账号或 App 注册入口。
+**2026-09-27 起账号归我们自己**：注册、登录、退出都打 `/api/account/*`（`POST register` / `POST login` / `GET me` / `POST logout`），会话 token 由我们自己签发、库里只存 sha256。**不再调用那台机器上其它项目的 `/api/login`、`/api/users/me`**——这个 APP 里没有「团队」这回事，用户就是 APP 的用户。`posts.author_uid` 存的**就是**账号的 `user_id`（还是原来那个值，所以论坛数据一个字没改）。密码用 `hashlib.scrypt`（标准库，每用户一份随机盐），**不存明文、不存裸 sha256**。退出撤销当前会话；离线时仅保证本机退出。新闻和帖子均要求登录。
 
-`gradle.properties` 已配置公开地址 `forumBaseUrl=https://43.140.212.47/api/`。未来团队账号模块可继续通过以下 SessionProvider 接入点替换登录 UI，共用相同账号体系。
+`gradle.properties` 已配置公开地址 `forumBaseUrl=https://43.140.212.47/api/`。账号模块**已经接好了**：`data/AccountSession` 实现 `SessionProvider`，通过下面的接入点把会话交给论坛。
 
 账号模块在建立/恢复会话后调用 `RepositoryProvider.configureForum("https://your-api.example/api/", sessionProvider)`。`SessionProvider.token()` 和 `accountId()` 必须每次返回当前会话；退出登录时返回 null。会话提供者需要能安全地被 HTTP 回调读取。更换 API 或 provider 时再调用 configureForum。客户端不在 Gradle 或仓库保存 token，不创建第二套账号体系。
 

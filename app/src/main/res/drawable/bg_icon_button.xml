@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 操作条上那三个小方框的底。**不是 @color/glass_button 那三个 glass**：
+     glass 是 15% 白，压在深岩石上像一层玻璃，可这三个框贴在**草地上**
+     （选中的建筑一定在可放置区里），15% 白压在绿草上几乎看不见，
+     白图标就浮在草上读不出来了。所以这一组用**岩石色本身**做底（半透明），
+     在草地和灰岩上都拉得开，而且和整页那层深色石头是同一个色源。
+
+     形状是圆角方框而不是圆：圆是 HUD 上资源圆点的语言（"这是哪一种资源"），
+     方框是按钮的语言。三个框排成一行时，方角能让它们读成"一排按钮"，
+     三个圆点则会读成"三个状态"。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/icon_button_pressed" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/icon_button" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+</selector>

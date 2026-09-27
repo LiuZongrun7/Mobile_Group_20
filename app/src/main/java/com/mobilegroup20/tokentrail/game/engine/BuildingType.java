@@ -12,7 +12,7 @@ package com.mobilegroup20.tokentrail.game.engine;
  * 三个方向都是同一个意思——<b>锚点不动，探出的那截是画面上的溢出，不占格子</b>。
  *
  * <p>现在是"塔往左右探、核心往上探"：塔的炮管朝左伸出去（敌人从左边来，
- * 塔一律朝左，见 {@link BuildingStats#AIM_HALF_ANGLE_DEG}），炮尾在右边露一点；
+ * 塔一律朝左，见 {@link BuildingStats.FireArc}），炮尾在右边露一点；
  * 核心是往上长的楼。
  *
  * <p><b>这里故意没有价格字段。</b>价格是随时要调的平衡参数，不是建筑自身的性质
@@ -28,7 +28,7 @@ public enum BuildingType {
      * 箭塔：占 2×2。<b>射得快、每发轻</b>，见 {@link BuildingStats}。
      *
      * <p><b>炮管往左探出 1 格、炮尾往右探出 0.3 格</b>（塔一律朝左打，见
-     * {@link BuildingStats#AIM_HALF_ANGLE_DEG}）。向上不探——塔顶没有塔尖。
+     * {@link BuildingStats#fireArc}）。向上不探——塔顶没有塔尖。
      *
      * <p>右边那 0.3 格不是"顺手多给一点"：炮塔的<b>底座比身子窄</b>，
      * 炮尾（后座那截粗圆柱）会从底座的右边探出去。贴图里就是这样的，
@@ -79,8 +79,8 @@ public enum BuildingType {
     /**
      * 贴图向<b>左</b>探出占地左边多少格——<b>美术参数，不是玩法参数</b>。
      *
-     * <p>只有两种塔用（箭塔是炮管、弩车是弩弓）：武器从占地左边伸出去，
-     * 指着一律朝左的射界（{@link BuildingStats#AIM_HALF_ANGLE_DEG}）。
+     * <p>只有两种塔用（大炮是炮管、弩车是弩弓）：武器从占地左边伸出去，
+     * 指着一律朝左的射界（{@link BuildingStats#fireArc}）。
      * 伸出去的那一截在画面上会盖到左边的格子上，但<b>不占格子</b>：
      * 能不能放、挡不挡路、敌人往哪儿走，全都只看
      * {@link #cols}×{@link #rows} 那块占地。

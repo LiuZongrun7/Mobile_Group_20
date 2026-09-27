@@ -26,7 +26,7 @@ public class BattlefieldTest {
 
     /**
      * 典型大屏手机的战场：{@link BoardGeometry#COLS} × {@link BoardGeometry#ROWS}，
-     * 也就是真机上那一块（40 × 18）。
+     * 也就是真机上那一块（80 × 36）。
      */
     private static Battlefield battlefield() {
         return new Battlefield(BoardGeometry.fit(387f * 2.625f, 643f * 2.625f));
@@ -37,16 +37,17 @@ public class BattlefieldTest {
     @Test
     public void towerOccupiesItsWholeFootprint() {
         Battlefield bf = battlefield();
-        Building tower = bf.place(BuildingType.TOWER, 4, 7);
+        int col = bf.firstBuildableCol();   // 就地摆在可建区最左边那一列
+        Building tower = bf.place(BuildingType.TOWER, col, 7);
         assertNotNull(tower);
 
         // 2×2 压住 4 个格子，多一格都不行
-        assertTrue(tower.covers(new Cell(4, 7)));
-        assertTrue(tower.covers(new Cell(5, 7)));
-        assertTrue(tower.covers(new Cell(4, 8)));
-        assertTrue(tower.covers(new Cell(5, 8)));
-        assertFalse(tower.covers(new Cell(6, 7)));
-        assertFalse(tower.covers(new Cell(4, 9)));
+        assertTrue(tower.covers(new Cell(col, 7)));
+        assertTrue(tower.covers(new Cell(col + 1, 7)));
+        assertTrue(tower.covers(new Cell(col, 8)));
+        assertTrue(tower.covers(new Cell(col + 1, 8)));
+        assertFalse(tower.covers(new Cell(col + 2, 7)));
+        assertFalse(tower.covers(new Cell(col, 9)));
 
         assertEquals(4, BuildingType.TOWER.cellCount());
         assertEquals(9, BuildingType.CORE.cellCount());
@@ -71,16 +72,19 @@ public class BattlefieldTest {
     @Test
     public void cannotPlaceOverlappingAnotherBuilding() {
         Battlefield bf = battlefield();
-        assertNotNull(bf.place(BuildingType.TOWER, 4, 7));   // 占 (4..5, 7..8)
+        // 比可建区左边缘再往右一格：左边那一格得留给下面那座核心——核心压塔的一角
+        // 要压在一块真的可建的地上，不能是被通道挡下来的
+        int col = bf.firstBuildableCol() + 1;
+        assertNotNull(bf.place(BuildingType.TOWER, col, 7));   // 占 (col..col+1, 7..8)
 
-        assertFalse("完全重合", bf.canPlace(BuildingType.TOWER, 4, 7));
-        assertFalse("压住一格", bf.canPlace(BuildingType.TOWER, 5, 8));
-        assertFalse("压住一格", bf.canPlace(BuildingType.WALL, 5, 8));
-        assertFalse("核心压住塔的一角", bf.canPlace(BuildingType.CORE, 3, 6));
+        assertFalse("完全重合", bf.canPlace(BuildingType.TOWER, col, 7));
+        assertFalse("压住一格", bf.canPlace(BuildingType.TOWER, col + 1, 8));
+        assertFalse("压住一格", bf.canPlace(BuildingType.WALL, col + 1, 8));
+        assertFalse("核心压住塔的一角", bf.canPlace(BuildingType.CORE, col - 1, 6));
 
         // 贴着放可以
-        assertTrue("贴右边", bf.canPlace(BuildingType.TOWER, 6, 7));
-        assertTrue("贴下边", bf.canPlace(BuildingType.WALL, 4, 9));
+        assertTrue("贴右边", bf.canPlace(BuildingType.TOWER, col + 2, 7));
+        assertTrue("贴下边", bf.canPlace(BuildingType.WALL, col, 9));
     }
 
     /** 放不下时返回 null，不抛异常——手指点到放不下的地方是正常操作。 */
@@ -88,12 +92,13 @@ public class BattlefieldTest {
     public void placingSomewhereIllegalReturnsNullAndChangesNothing() {
         Battlefield bf = battlefield();
 
-        assertNull("右下角放不下 3×3", bf.place(BuildingType.CORE, 10, 16));
+        assertNull("右下角放不下 3×3", bf.place(BuildingType.CORE,
+                bf.board().cols() - 2, bf.board().rows() - 2));
         assertNull("负坐标", bf.place(BuildingType.TOWER, -1, 4));
         assertNull("入侵通道", bf.place(BuildingType.WALL, 0, 4));
 
         assertTrue("失败的放置不该留下任何东西", bf.buildings().isEmpty());
-        assertFalse(bf.canPlace(BuildingType.CORE, 10, 16));
+        assertFalse(bf.canPlace(BuildingType.CORE, bf.board().cols() - 2, bf.board().rows() - 2));
         assertFalse(bf.canPlace(BuildingType.TOWER, -1, 4));
         assertFalse(bf.canPlace(BuildingType.WALL, 0, 4));
     }
@@ -250,7 +255,7 @@ public class BattlefieldTest {
     @Test
     public void movingWithoutACoreDoesNothing() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.WALL, 5, 5);
+        bf.place(BuildingType.WALL, bf.firstBuildableCol(), 5);
 
         assertFalse(bf.moveCore(20, 6));
         assertNull(bf.core());
@@ -432,7 +437,8 @@ public class BattlefieldTest {
         Battlefield bf = battlefield();
         assertNull("还没放核心时应该是 null", bf.core());
 
-        bf.place(BuildingType.WALL, 5, 5);
+        assertNotNull("先得真有一座墙站在场上，不然下面那一问什么也没验",
+                bf.place(BuildingType.WALL, bf.firstBuildableCol(), 5));
         assertNull("城墙不是核心", bf.core());
 
         bf.place(BuildingType.CORE, 30, 7);
@@ -448,13 +454,322 @@ public class BattlefieldTest {
     @Test
     public void removingABuildingFreesItsCells() {
         Battlefield bf = battlefield();
-        Building tower = bf.place(BuildingType.TOWER, 4, 7);
+        int col = bf.firstBuildableCol();
+        Building tower = bf.place(BuildingType.TOWER, col, 7);
 
-        assertFalse(bf.canPlace(BuildingType.TOWER, 4, 7));
+        assertFalse(bf.canPlace(BuildingType.TOWER, col, 7));
         assertTrue(bf.remove(tower));
-        assertTrue(bf.canPlace(BuildingType.TOWER, 4, 7));
-        assertNull(bf.buildingAt(new Cell(4, 7)));
+        assertTrue(bf.canPlace(BuildingType.TOWER, col, 7));
+        assertNull(bf.buildingAt(new Cell(col, 7)));
         assertFalse("拆两遍不该成功", bf.remove(tower));
+    }
+
+    // ---- 整排：选中与整体挪动 ----
+
+    private static List<Cell> cellsOf(List<Building> group) {
+        List<Cell> out = new ArrayList<>();
+        for (Building building : group) {
+            out.add(new Cell(building.col(), building.row()));
+        }
+        return out;
+    }
+
+    /**
+     * 一列墙点出整排：同类型、首尾相接的那一串，上下都走到头。
+     *
+     * <p>这是"点两下选中整排"的地基。选出来的顺序是按坐标排的（上到下），
+     * 界面拿它去画高亮、算总价。
+     */
+    @Test
+    public void aColumnOfWallsComesBackAsOneLine() {
+        Battlefield bf = battlefield();
+        List<Building> walls = new ArrayList<>();
+        for (int row = 10; row < 15; row++) {
+            walls.add(bf.place(BuildingType.WALL, 20, row));
+        }
+
+        List<Building> line = bf.lineOf(walls.get(2));   // 从中间那一座点下去
+
+        assertEquals("中间点下去也要把上下两头都收进来", 5, line.size());
+        assertEquals(cellsOf(walls), cellsOf(line));
+    }
+
+    /**
+     * <b>竖排优先。</b>一个 2×2 的方块（两列两行塔）两条都成立，取竖的那条。
+     *
+     * <p>战场上纵深比宽度金贵，玩家布防时脑子里那条线是"这一列"，
+     * 不是"这一行"。
+     */
+    @Test
+    public void aColumnBeatsARowWhenBothAreThere() {
+        Battlefield bf = battlefield();
+        Building topLeft = bf.place(BuildingType.TOWER, 20, 4);
+        Building topRight = bf.place(BuildingType.TOWER, 22, 4);
+        Building bottomLeft = bf.place(BuildingType.TOWER, 20, 6);
+        bf.place(BuildingType.TOWER, 22, 6);
+
+        List<Building> line = bf.lineOf(topLeft);
+
+        assertEquals(2, line.size());
+        assertEquals("竖着那一列：上下的两座", cellsOf(List.of(topLeft, bottomLeft)),
+                cellsOf(line));
+        assertFalse("横着那两座不算这条线上", line.contains(topRight));
+    }
+
+    /** 没有竖排时才轮到横排。 */
+    @Test
+    public void aRowIsUsedWhenThereIsNoColumn() {
+        Battlefield bf = battlefield();
+        Building left = bf.place(BuildingType.TOWER, 20, 4);
+        Building right = bf.place(BuildingType.TOWER, 22, 4);
+        Building farRight = bf.place(BuildingType.TOWER, 24, 4);
+
+        List<Building> line = bf.lineOf(left);
+
+        assertEquals(3, line.size());
+        assertEquals(cellsOf(List.of(left, right, farRight)), cellsOf(line));
+    }
+
+    /** 孤零零一座就返回它自己——界面靠这个决定"选中整排"那个按钮亮不亮。 */
+    @Test
+    public void aLonelyBuildingIsALineOfOne() {
+        Battlefield bf = battlefield();
+        Building wall = bf.place(BuildingType.WALL, 20, 5);
+
+        assertEquals(List.of(wall), bf.lineOf(wall));
+    }
+
+    /**
+     * <b>断了就不算一排。</b>中间空一格的两个塔群合成一排的话，一起挪的时候
+     * 中间那一格会被拉平，谁也没想那样。
+     */
+    @Test
+    public void aGapBreaksTheLineInTwo() {
+        Battlefield bf = battlefield();
+        Building above = bf.place(BuildingType.WALL, 20, 5);
+        Building below = bf.place(BuildingType.WALL, 20, 7);   // 第 6 行空着
+
+        assertEquals(List.of(above), bf.lineOf(above));
+        assertEquals(List.of(below), bf.lineOf(below));
+    }
+
+    /**
+     * <b>一排是"挨着的同类"，不是"挨着的任何东西"。</b>
+     *
+     * <p>墙连着塔的时候，从墙点下去只该选中墙。混着选的话，
+     * "一起升级"会按最贵的那座报总价，而玩家看着一排墙按了按钮。
+     */
+    @Test
+    public void neighboursOfAnotherKindAreNotPartOfTheLine() {
+        Battlefield bf = battlefield();
+        Building wall = bf.place(BuildingType.WALL, 20, 5);
+        bf.place(BuildingType.TOWER, 20, 6);
+
+        assertEquals(List.of(wall), bf.lineOf(wall));
+    }
+
+    /**
+     * <b>不比等级。</b>一列墙里有一座升过级了，它还是那一列。
+     *
+     * <p>玩家眼里的"一列墙"是摆在那儿的一串，不是"一串一样强的"。
+     * 一起升级时到顶的那座跳过就是了（玩法侧的事）。
+     */
+    @Test
+    public void aLineDoesNotCareAboutLevels() {
+        Battlefield bf = battlefield();
+        Building low = bf.place(BuildingType.WALL, 20, 5);
+        Building high = bf.place(BuildingType.WALL, 20, 6);
+        assertTrue(bf.upgrade(high));
+        assertTrue(bf.upgrade(high));
+        assertEquals(3, high.level);
+
+        assertEquals(2, bf.lineOf(low).size());
+        assertEquals(2, bf.lineOf(high).size());
+    }
+
+    /**
+     * 2×2 的塔"挨着"是按<b>占地</b>算的，不是左上角差一格。
+     *
+     * <p>第 4 行那座占 4-5 行、第 6 行那座占 6-7 行，看着就是贴在一起的，
+     * 所以它们是一排。反过来把"挨着"写成左上角差 2 才算的话，
+     * 一列塔永远选不中。
+     */
+    @Test
+    public void towersTouchByFootprintNotByCorner() {
+        Battlefield bf = battlefield();
+        Building above = bf.place(BuildingType.TOWER, 20, 4);   // 占 4..5 行
+        Building below = bf.place(BuildingType.TOWER, 20, 6);   // 占 6..7 行
+
+        assertEquals(cellsOf(List.of(above, below)), cellsOf(bf.lineOf(above)));
+    }
+
+    /** 不在场上的建筑（拆过了、别的局留下的）没有整排，返回空表。 */
+    @Test
+    public void aBuildingThatIsNotOnTheFieldHasNoLine() {
+        Battlefield bf = battlefield();
+        Building wall = bf.place(BuildingType.WALL, 20, 5);
+        bf.remove(wall);
+
+        assertTrue(bf.lineOf(wall).isEmpty());
+        assertTrue(bf.lineOf(null).isEmpty());
+    }
+
+    /**
+     * 一列墙整体往右挪一格：<b>新格子有一半正是自己这一排的旧格子。</b>
+     *
+     * <p>这条是 {@link Battlefield#moveAll} 存在的理由里最容易写错的一处。
+     * 判定时不把整排自己让开的话，整体平移会当场判失败——而整体平移
+     * 正是这个功能最常见的用法。
+     */
+    @Test
+    public void aWholeColumnSlidesSidewaysOverItsOwnCells() {
+        Battlefield bf = battlefield();
+        List<Building> walls = new ArrayList<>();
+        for (int row = 10; row < 15; row++) {
+            walls.add(bf.place(BuildingType.WALL, 20, row));
+        }
+
+        assertTrue("整体平移：新格子压着的全是自己人", bf.moveAll(walls, 1, 0));
+
+        for (int i = 0; i < walls.size(); i++) {
+            assertEquals(21, walls.get(i).col());
+            assertEquals(10 + i, walls.get(i).row());
+        }
+        for (int row = 10; row < 15; row++) {
+            assertSame("新格子记上了", walls.get(row - 10), bf.buildingAt(new Cell(21, row)));
+            assertNull("最左边那一列让出来了", bf.buildingAt(new Cell(20, row)));
+        }
+        assertEquals("挪动不等于再建一排", 5, bf.buildings().size());
+    }
+
+    /** 整体平移不花钱，也不新建记录——等级、引用都跟着走。 */
+    @Test
+    public void slidingAColumnCarriesEveryLevelAlong() {
+        Battlefield bf = battlefield();
+        Building low = bf.place(BuildingType.WALL, 20, 5);
+        Building high = bf.place(BuildingType.WALL, 20, 6);
+        assertTrue(bf.upgrade(high));
+        assertTrue(bf.upgrade(high));
+
+        List<Building> line = List.of(low, high);
+        assertTrue(bf.moveAll(line, 0, 3));
+
+        assertEquals(3, high.level);
+        assertSame(high, bf.buildingAt(new Cell(20, 9)));
+        assertSame(low, bf.buildingAt(new Cell(20, 8)));
+        assertEquals(2, bf.buildings().size());
+    }
+
+    /**
+     * <b>要么整排都挪，要么整排都不动。</b>
+     *
+     * <p>最后一格压着一座排外的塔：那一座挪不过去，于是另外四座也不动。
+     * 允许"挪过去三座、剩下两座卡住"的话，玩家自己都记不清哪几座动了。
+     */
+    @Test
+    public void oneBlockedMemberStopsTheWholeColumn() {
+        Battlefield bf = battlefield();
+        List<Building> walls = new ArrayList<>();
+        for (int row = 10; row < 15; row++) {
+            walls.add(bf.place(BuildingType.WALL, 20, row));
+        }
+        Building stray = bf.place(BuildingType.WALL, 21, 14);   // 挡在最后一格要去的路上
+
+        assertFalse(bf.moveAll(walls, 1, 0));
+
+        for (int i = 0; i < walls.size(); i++) {
+            assertEquals("一座都不该动", 20, walls.get(i).col());
+            assertEquals(10 + i, walls.get(i).row());
+            assertSame(walls.get(i), bf.buildingAt(new Cell(20, 10 + i)));
+        }
+        assertEquals(21, stray.col());
+        assertEquals(14, stray.row());
+    }
+
+    /** 出界、压通道、压山区：和单座一样挪不过去，而且同样一座都不动。 */
+    @Test
+    public void aColumnCannotSlideOffTheBuildableGround() {
+        Battlefield bf = battlefield();
+        int edge = bf.firstBuildableCol();   // 可建区最左那一列，左边就是通道
+        Building top = bf.place(BuildingType.WALL, edge, 10);
+        Building bottom = bf.place(BuildingType.WALL, edge, 11);
+        List<Building> line = List.of(top, bottom);
+
+        assertFalse("再往左一格是通道，不是空地", bf.moveAll(line, -1, 0));
+        assertEquals(edge, top.col());
+        assertEquals(edge, bottom.col());
+
+        assertFalse("往下挪出行高也是不行的", bf.moveAll(line, 0, bf.board().rows()));
+        assertEquals(10, top.row());
+    }
+
+    /**
+     * {@link Battlefield#canMoveAll} 是 {@link Battlefield#moveAll} 的试算，
+     * <b>两者必须严格同进同退</b>。
+     *
+     * <p>拖动时的虚影就是拿它决定画绿还是画红：它说行、{@code moveAll} 说不行的话，
+     * 玩家看到一块绿框、松手却弹回来，而且不知道是为什么。反过来更糟——
+     * 画着红框却能挪过去，等于把"这里放不下"这条提示变成假话。
+     */
+    @Test
+    public void canMoveAllAgreesWithMoveAllOnEveryCase() {
+        Battlefield bf = battlefield();
+
+        // 一列墙往右一格：新格子压着的全是自己人，两支都该说行
+        List<Building> column = new ArrayList<>();
+        for (int row = 10; row < 15; row++) {
+            column.add(bf.place(BuildingType.WALL, 20, row));
+        }
+        assertTrue(bf.canMoveAll(column, 1, 0));
+        assertTrue(bf.moveAll(column, 1, 0));
+
+        // 通道那一侧：出可建区，两支都该说不行
+        List<Building> atEdge = new ArrayList<>();
+        int edge = bf.firstBuildableCol();
+        for (int row = 10; row < 13; row++) {
+            atEdge.add(bf.place(BuildingType.WALL, edge, row));
+        }
+        assertFalse(bf.canMoveAll(atEdge, -1, 0));
+        assertFalse("试算说不行，真挪也必须不行", bf.moveAll(atEdge, -1, 0));
+        assertEquals("而且一座都没动", edge, atEdge.get(0).col());
+
+        // 压着排外的建筑
+        Building stray = bf.place(BuildingType.WALL, 22, 10);
+        assertFalse(bf.canMoveAll(column, 1, 0));
+        assertFalse(bf.moveAll(column, 1, 0));
+        assertEquals("连没被压到的那几座也不许动", 21, column.get(0).col());
+        assertEquals(22, stray.col());
+
+        // 空表 / null：两边都是 false
+        assertFalse(bf.canMoveAll(List.of(), 1, 0));
+        assertFalse(bf.canMoveAll(null, 1, 0));
+        assertFalse(bf.moveAll(List.of(), 1, 0));
+    }
+
+    /** 原地不动算成功（和单座 {@code move} 一个口径），空的一排算失败。 */
+    @Test
+    public void aZeroSlideSucceedsAndAnEmptyGroupFails() {
+        Battlefield bf = battlefield();
+        Building wall = bf.place(BuildingType.WALL, 20, 5);
+
+        assertTrue(bf.moveAll(List.of(wall), 0, 0));
+        assertEquals(20, wall.col());
+
+        assertFalse(bf.moveAll(List.of(), 1, 0));
+        assertFalse(bf.moveAll(null, 1, 0));
+    }
+
+    /** 场上已经没有的成员混在里面，整排也不动。 */
+    @Test
+    public void aGroupWithAGhostInItDoesNotMoveAtAll() {
+        Battlefield bf = battlefield();
+        Building kept = bf.place(BuildingType.WALL, 20, 5);
+        Building gone = bf.place(BuildingType.WALL, 20, 6);
+        bf.remove(gone);
+
+        assertFalse(bf.moveAll(List.of(kept, gone), 1, 0));
+        assertEquals("在场的那座也不许动", 20, kept.col());
+        assertEquals(5, kept.row());
     }
 
     // ---- 敌人 ----
@@ -500,30 +815,39 @@ public class BattlefieldTest {
     @Test
     public void aWallStopsAnEnemyJustBeforeIt() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.WALL, 6, 3);
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 2f);
+        int wallCol = bf.firstBuildableCol() + 2;   // 墙砌在可建区里、离通道口两格
+        bf.place(BuildingType.WALL, wallCol, 3);
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);   // 从通道里走过来
 
         advanceFor(bf, 6f);   // 足够走完 5 格多
 
-        assertEquals("应该贴在城墙左边", 5.5f, e.x, 1e-3f);
+        assertEquals("应该贴在城墙左边", wallCol - 0.5f, e.x, 1e-3f);
         assertTrue(e.blocked);
         assertEquals("没漏怪", 0, bf.leaks());
     }
 
-    /** 塔也挡路（这一版没有寻路，敌人不会绕）。 */
+    /**
+     * 塔也挡路（这一版没有寻路，敌人不会绕）。
+     *
+     * <p><b>用弩车摆，不用大炮。</b>这条要推满二十秒，而大炮十格以内不开火——
+     * 敌人贴到它身上啃八秒就把它拆了，然后继续往前走，二十秒后根本不在原位。
+     * 弩车贴脸直射，能自己把啃它的那只收拾掉，塔才站得住。
+     */
     @Test
     public void aTowerBlocksToo() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);   // 占 (5..6, 3..4)
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 1f);
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);   // 占 (towerCol..towerCol+1, 3..4)
+        float from = bf.firstBuildableCol() - 3f;    // 从通道里出发
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, from);
 
         bf.advance(0.5f);   // 一步 0.45 格，只够挪一小段
 
-        assertEquals(1.45f, e.x, 1e-3f);
+        assertEquals(from + 0.45f, e.x, 1e-3f);
         assertFalse(e.blocked);
 
         advanceFor(bf, 20f);
-        assertEquals("撞上塔之后贴住", 4.5f, e.x, 1e-3f);
+        assertEquals("撞上塔之后贴住", towerCol - 0.5f, e.x, 1e-3f);
         assertTrue(e.blocked);
     }
 
@@ -534,12 +858,13 @@ public class BattlefieldTest {
     @Test
     public void aLongFrameCannotTunnelThroughABlocker() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.WALL, 6, 3);
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 2f);
+        int wallCol = bf.firstBuildableCol() + 2;
+        bf.place(BuildingType.WALL, wallCol, 3);
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);
 
         bf.advance(10f);   // 一步 9 格，足够跨过城墙
 
-        assertEquals(5.5f, e.x, 1e-3f);
+        assertEquals(wallCol - 0.5f, e.x, 1e-3f);
         assertTrue(e.blocked);
     }
 
@@ -622,8 +947,8 @@ public class BattlefieldTest {
     @Test
     public void chewingDoesNotCountAsWalking() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.WALL, 6, 3);
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 2f);
+        bf.place(BuildingType.WALL, bf.firstBuildableCol() + 2, 3);
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);
 
         advanceFor(bf, 6f);   // 走过去贴上，然后开始啃
         assertTrue(e.blocked);
@@ -637,18 +962,24 @@ public class BattlefieldTest {
     // ---- 打起来 ----
 
     /**
-     * <b>射程里最靠前的那一只挨打，哪怕另一只离塔更近。</b>
+     * <b>射界里最靠前的那一只挨打，哪怕另一只离塔更近。</b>
      *
      * <p>规则是"打最靠前的"，不是"打离自己最近的"（理由见
      * {@code Battlefield.frontmostInRange}——"就近"试过一版，五波的演示场面
      * 第 2 波就会 Overrun）。这一条要把两种规则<b>分得开</b>：
-     * 两只都得在射程里，而且"更靠前的"必须同时是"更远的"，否则选谁都能过，
+     * 两只都得在射界里，而且"更靠前的"必须同时是"更远的"，否则选谁都能过，
      * 测试就等于没验。
      *
-     * <p><b>改成朝左的扇形之后，"更靠前"和"更近"差点变成同一件事</b>：塔全朝左，
+     * <p><b>2026-09-27 起这条用弩车摆，不用大炮。</b>大炮换成十到二十格的扇环之后，
+     * 它十格以内压根不打，而这条要的是"两只都够得着、只有挑谁的区别"——
+     * 拿大炮摆就得把两只都摆到十几格外，还得同时让"更靠前的"更远，
+     * 越摆越绕。弩车贴脸直射、射界又宽，正是这条规则合适的舞台
+     * （大炮那一套射界几何由 {@code CostTest} 里的 FireArc 那几条直接盯着）。
+     *
+     * <p><b>朝左的扇形让"更靠前"和"更近"差点变成同一件事</b>：塔全朝左，
      * 射界里的一切都在它左边，于是 x 越大离塔越近。这里靠<b>行</b>把两者掰开：
-     * 更靠前的那只走第 4 行（离核心那三行只差 0 格，进度 16），离塔心 2.19 格；
-     * 更靠后的那只走第 2 行（离核心多绕 2 格，进度 18），离塔心只有 1.77 格。
+     * 更靠前的那只走第 4 行（离核心那三行只差 0 格，进度 12），离塔心 2.19 格；
+     * 更靠后的那只走第 2 行（离核心多绕 2 格，进度 14），离塔心只有 1.77 格。
      * 按"最靠前"该打第 4 行那只，按"最近"该打第 2 行那只——两种规则给出相反的结果。
      *
      * <p>两只的 x 只差 0.1 格，看着像并排：这不是随手摆的。射界朝左的前提下，
@@ -664,35 +995,32 @@ public class BattlefieldTest {
     public void aTowerShootsTheEnemyFurthestAlongNotTheNearestOne() {
         Battlefield bf = battlefield();
         bf.place(BuildingType.CORE, 20, 4);                    // 核心占 (20..22, 4..6)
-        Building tower = bf.place(BuildingType.TOWER, 5, 2);   // 占 (5..6, 2..3)，圆心 (6, 3)
-        Enemy ahead = bf.spawn(EnemyType.GRUNT, 4, 4.4f);      // 更靠前，离塔心 2.19 格
-        Enemy behind = bf.spawn(EnemyType.GRUNT, 2, 4.3f);     // 更靠后，离塔心 1.77 格
+        int towerCol = bf.firstBuildableCol() + 1;
+        Building tower = bf.place(BuildingType.BALLISTA, towerCol, 2);   // 占 (9..10, 2..3)
+        float centreX = towerCol + 1f;                          // 2×2 的圆心 (10, 3)
+        Enemy ahead = bf.spawn(EnemyType.GRUNT, 4, centreX - 1.6f);    // 更靠前，离塔心 2.19 格
+        Enemy behind = bf.spawn(EnemyType.GRUNT, 2, centreX - 1.7f);   // 更靠后，离塔心 1.77 格
 
-        // 先钉住"两只都在射程里"：射程 2.5 + 敌人半个身位 0.5 = 够到 3.0 格。
-        // 少了这一句，哪天射程被调小、远的那只其实够不着，这条就又变成没验了。
-        double reach = BuildingStats.rangeCells(BuildingType.TOWER, 1)
-                + EnemyType.GRUNT.halfBodyCells();
-        assertTrue("更靠前的那只确实在射程里，不然这条测试什么也没验",
-                reach > Math.hypot(4.4 - 6.0, 4.5 - 3.0));
-        // 射界是配平参数（{@code AIM_HALF_ANGLE_DEG}）。调窄了的话，这两只会先在这里
-        // 失败，而不是给出一句看不懂的"没挨打"——所以这一问单列出来。
-        for (double[] at : new double[][]{{4.4, 4.5}, {4.3, 2.5}}) {
-            double dx = at[0] - 6.0;
-            double dy = at[1] - 3.0;
-            assertTrue("两只都得在朝左的扇形里，不然这条测试什么也没验",
-                    dx < 0.0 && Math.abs(dy) <= -dx * BuildingStats.AIM_HALF_ANGLE_TAN);
+        // 先钉住"两只都在射界里"。少了这一句，哪天射界被调小、远的那只其实够不着，
+        // 这条就又变成没验了。用的就是引擎那一句判定，不另抄一份公式。
+        BuildingStats.FireArc arc = BuildingStats.fireArc(BuildingType.BALLISTA, 1);
+        for (Enemy at : new Enemy[]{ahead, behind}) {
+            assertTrue("两只都得在射界里，不然这条测试什么也没验",
+                    arc.catches(at.x - centreX, at.y - 3.0f,
+                            EnemyType.GRUNT.halfBodyCells()));
         }
         // 再钉住"近的那只确实更近"：不成立的话两种规则会挑到同一只，也等于没验
         assertTrue("靠后的那只确实离塔更近",
-                Math.hypot(4.3 - 6.0, 2.5 - 3.0) < Math.hypot(4.4 - 6.0, 4.5 - 3.0));
+                Math.hypot(behind.x - centreX, behind.y - 3.0f)
+                        < Math.hypot(ahead.x - centreX, ahead.y - 3.0f));
 
-        // 半秒：一级塔一秒一发，所以这半秒里<b>正好一发</b>（一帧就打完整个装填周期
-        // 的话会打两发，见 theFireRateDoesNotDependOnTheFrameRate 那条）；
+        // 半秒：一级弩车 2.6 秒一发，所以这半秒里<b>正好一发</b>（一帧就打完整个
+        // 装填周期的话会打两发，见 theFireRateDoesNotDependOnTheFrameRate 那条）；
         // 而子弹 9 格/秒，半秒够飞 4.5 格，2.2 格那一段早落地了
         bf.advance(0.5f);
 
-        assertEquals("走得更靠前的那只挨了一发（14 点）",
-                EnemyType.GRUNT.maxHp - 14f, ahead.hp, 1e-3f);
+        assertEquals("走得更靠前的那只挨了一发（34 点）",
+                EnemyType.GRUNT.maxHp - 34f, ahead.hp, 1e-3f);
         assertEquals("更近、但还在后头的那只一点没掉",
                 EnemyType.GRUNT.maxHp, behind.hp, 1e-3f);
         assertSame(ahead, tower.target);
@@ -713,13 +1041,14 @@ public class BattlefieldTest {
     @Test
     public void withoutACoreTheProgressStillRunsFromTheLeft() {
         Battlefield bf = battlefield();   // 这个场不摆核心
-        Building tower = bf.place(BuildingType.TOWER, 5, 2);
-        Enemy behind = bf.spawn(EnemyType.GRUNT, 2, 3.2f);
-        Enemy ahead = bf.spawn(EnemyType.GRUNT, 4, 4.2f);
+        int towerCol = bf.firstBuildableCol() + 1;
+        Building tower = bf.place(BuildingType.BALLISTA, towerCol, 2);   // 圆心 (10, 3)
+        Enemy behind = bf.spawn(EnemyType.GRUNT, 2, towerCol - 1.8f);
+        Enemy ahead = bf.spawn(EnemyType.GRUNT, 4, towerCol - 0.8f);
 
         bf.advance(0.5f);
 
-        assertEquals("右边那只才是更靠前的", EnemyType.GRUNT.maxHp - 14f, ahead.hp, 1e-3f);
+        assertEquals("右边那只才是更靠前的", EnemyType.GRUNT.maxHp - 34f, ahead.hp, 1e-3f);
         assertEquals("左边那只一点没掉", EnemyType.GRUNT.maxHp, behind.hp, 1e-3f);
         assertSame(ahead, tower.target);
     }
@@ -735,8 +1064,9 @@ public class BattlefieldTest {
     @Test
     public void aTowerFiresOnItsReloadTimerNotEveryFrame() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);      // 圆心 (6, 4)
-        Enemy e = bf.spawn(EnemyType.GRUNT, 4, 4f);   // 射程里，2.06 格
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);   // 圆心 (towerCol + 1, 4)
+        Enemy e = bf.spawn(EnemyType.GRUNT, 4, towerCol - 1f);   // 射界里，2.06 格
 
         bf.advance(0.05f);   // 一帧：开火，子弹出膛
 
@@ -745,9 +1075,9 @@ public class BattlefieldTest {
 
         advanceFor(bf, 0.5f);   // 2.06 格 ÷ 9 格每秒 ≈ 0.25 秒，早落地了
 
-        assertEquals("落地才扣这一发", EnemyType.GRUNT.maxHp - 14f, e.hp, 1e-3f);
+        assertEquals("落地才扣这一发", EnemyType.GRUNT.maxHp - 34f, e.hp, 1e-3f);
         assertTrue("打完了，天上没东西了", bf.projectiles().isEmpty());
-        // 装填是一秒，而这 0.55 秒里只该有那一发（血只掉了一发，不是两发 28 点）
+        // 装填是 2.6 秒，而这 0.55 秒里只该有那一发（血只掉了一发，不是两发 68 点）
     }
 
     /**
@@ -760,26 +1090,31 @@ public class BattlefieldTest {
      */
     @Test
     public void theFireRateDoesNotDependOnTheFrameRate() {
-        Enemy at60Hz = shelledFor(4.5f, 0.05f);
-        Enemy at120Hz = shelledFor(4.5f, 0.02f);
+        Enemy at60Hz = shelledFor(4f, 0.05f);
+        Enemy at120Hz = shelledFor(4f, 0.02f);
 
         // 不然"两边相等"可能只是因为一炮都没打出去，那这条测试什么也没验
-        assertTrue("至少得打中三发，实际 " + (EnemyType.BRUTE.maxHp - at60Hz.hp),
-                at60Hz.hp <= EnemyType.BRUTE.maxHp - 3 * 14f);
+        assertTrue("至少得打中两发，实际 " + (EnemyType.BRUTE.maxHp - at60Hz.hp),
+                at60Hz.hp <= EnemyType.BRUTE.maxHp - 2 * 34f);
         assertEquals("两种帧率挨的伤害该一模一样", at60Hz.hp, at120Hz.hp, 1e-3f);
     }
 
     /**
-     * 一座 1 级塔打一只走进射程里停住的重甲，按给定帧长推 {@code seconds} 秒，返回那只敌人。
+     * 一座 1 级弩车打一只走进射界里停住的重甲，按给定帧长推 {@code seconds} 秒，返回那只敌人。
      *
-     * <p>选重甲是因为它够厚：4.5 秒里打中的那几发（70 点）远不到 160，
-     * 血量能一直当"挨了多少"的读数用。它啃穿那座塔要 3.8 秒，而碰到塔要 1.6 秒，
-     * 所以这 4.5 秒里塔还站着（塔一倒就没人开火了）。
+     * <p>选重甲是因为它够厚：4 秒里打中的那两发（68 点）远不到 160，
+     * 血量能一直当"挨了多少"的读数用。
+     *
+     * <p><b>为什么是 4 秒、不是从前那个 4.5。</b>弩车比从前的箭塔薄（80 血对 100），
+     * 重甲 26 dps 啃穿它只要 3.1 秒，而重甲贴到它身上要 1.6 秒——4.5 秒时弩车
+     * 只剩 5 点血活着，那种"差一点就崩"的余量不该出现在一条测试里。4 秒留出
+     * 二十点，同时仍然够打满两发（间隔 2.6 秒）。
      */
     private static Enemy shelledFor(float seconds, float step) {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);              // 圆心 (6, 4)，射程 2.5
-        Enemy brute = bf.spawn(EnemyType.BRUTE, 4, 3.5f);   // 一开局就在射程里
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);       // 圆心 (towerCol + 1, 4)，射界 3.0
+        Enemy brute = bf.spawn(EnemyType.BRUTE, 4, towerCol - 1.5f);   // 一开局就在射界里
         for (float t = 0f; t < seconds; t += step) {
             bf.advance(step);
         }
@@ -800,14 +1135,18 @@ public class BattlefieldTest {
      * 加上塔是 2×2 的占地，全盘扫下来能同时打一只敌人的塔<b>最多三座</b>
      * （再想加一座，角度就顶到 60° 的边上或者身子叠上了）。所以这里直接把血量
      * 按到"一发就死"——验的是那一问本身，不是血量从哪来。
+     *
+     * <p><b>用的是弩车</b>：一发 34 点，比那 14 点血富余得多；而且它贴脸直射，
+     * 两座摆得近也都在射界里（大炮十格以内压根不开火，摆不出这个局面）。
      */
     @Test
     public void towersDoNotPileOntoAnEnemyThatIsAlreadyCovered() {
         Battlefield bf = battlefield();
-        // 两座塔都在射界里（各偏离正左 45°），而且都不占第 9 行——敌人走的那一行
-        bf.place(BuildingType.TOWER, 7, 7);    // 圆心 (8, 8)，离敌人 2.12 格
-        bf.place(BuildingType.TOWER, 7, 10);   // 圆心 (8, 11)，离敌人 2.12 格
-        Enemy grunt = bf.spawn(EnemyType.GRUNT, 9, 6.5f);
+        // 两座都在射界里（各偏离正左 45°），而且都不占第 9 行——敌人走的那一行
+        int towerCol = bf.firstBuildableCol() + 3;
+        bf.place(BuildingType.BALLISTA, towerCol, 7);    // 圆心 (towerCol + 1, 8)，离敌人 2.12 格
+        bf.place(BuildingType.BALLISTA, towerCol, 10);   // 圆心 (towerCol + 1, 11)，离敌人 2.12 格
+        Enemy grunt = bf.spawn(EnemyType.GRUNT, 9, towerCol - 0.5f);
         grunt.hp = 14f;   // 一发就死
 
         bf.advance(0.05f);
@@ -828,13 +1167,18 @@ public class BattlefieldTest {
      * 一定是被最后落地的那一发打死的——天上不会有跟着白飞的子弹。
      * 这里直接把血按到 0 是为了守住那一问本身：少了它，{@code moveProjectiles}
      * 会去扣一只已经不在场上的敌人的血（不崩，但"打死了还继续打"这件事迟早
-     * 会以别的形式冒出来，比如以后加溅射时溅到尸体上）。
+     * 会以别的形式冒出来）。
+     *
+     * <p><b>这条只管没有溅射的那些（弩车）。</b>大炮那一发反过来——目标死了
+     * 它照样炸，旁边站着的照样挨，见 {@link #aShellStillExplodesWhereItsTargetDied}。
+     * 两支的分岔就在 {@code Projectile.splashCells} 那一个数上。
      */
     @Test
     public void aBulletThatArrivesAfterItsTargetIsGoneDealsNoDamage() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);
-        Enemy doomed = bf.spawn(EnemyType.GRUNT, 4, 4f);
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);
+        Enemy doomed = bf.spawn(EnemyType.GRUNT, 4, towerCol - 1f);
 
         bf.advance(0.05f);
         assertEquals("一发在天上", 1, bf.projectiles().size());
@@ -852,8 +1196,9 @@ public class BattlefieldTest {
     @Test
     public void clearingTheFieldTakesTheShotsOutOfTheAir() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);
-        bf.spawn(EnemyType.GRUNT, 4, 4f);
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);
+        bf.spawn(EnemyType.GRUNT, 4, towerCol - 1f);
         bf.advance(0.05f);
         assertFalse("先得真有一发在天上，不然这条测试什么也没验",
                 bf.projectiles().isEmpty());
@@ -863,25 +1208,31 @@ public class BattlefieldTest {
         assertTrue(bf.projectiles().isEmpty());
     }
 
-    /** 射程外的打不着。射程从建筑占地中心算，单位是格。 */
+    /**
+     * 射界外（太远）的打不着。距离从建筑占地的中心算，单位是格。
+     *
+     * <p>用弩车摆：大炮的射界还有个"太近也不行"的内径，那半边在
+     * {@link #theCannonCannotShootAnythingInsideItsBlindSpot} 里。
+     */
     @Test
     public void enemiesOutsideTheRangeTakeNoDamage() {
         Battlefield bf = battlefield();
-        bf.place(BuildingType.TOWER, 5, 3);
+        int towerCol = bf.firstBuildableCol() + 1;
+        bf.place(BuildingType.BALLISTA, towerCol, 3);
         Enemy far = bf.spawn(EnemyType.GRUNT, 10, 20f);   // 另一行，离得很远
 
         advanceFor(bf, 3f);
 
         assertEquals("满血：没被打过", EnemyType.GRUNT.maxHp, far.hp, 1e-3f);
-        assertNull("没有目标", bf.buildingAt(new Cell(5, 3)).target);
+        assertNull("没有目标", bf.buildingAt(new Cell(towerCol, 3)).target);
     }
 
     /**
      * <b>塔只往左打。</b>射界是朝左的扇形，所以站在塔<b>右边</b>的敌人，
      * 哪怕一样近、哪怕在射程里，也不挨打——它已经走过去了。
      *
-     * <p>这条是"塔不转向、一律朝左"（{@link BuildingStats#AIM_HALF_ANGLE_DEG}）
-     * 这个设定的直接后果，也是"摆位"之所以有意义的全部来路：
+     * <p>这条是"塔不转向、一律朝左"（{@code BuildingStats.FireArc}）这个设定的
+     * 直接后果，也是"摆位"之所以有意义的全部来路：
      * 塔摆在敌人来路的左边才有用，摆在右边等于白摆。
      *
      * <p>两只<b>一样近</b>（都离塔心 1.58 格），唯一的差别是在塔的哪一侧。
@@ -891,24 +1242,151 @@ public class BattlefieldTest {
     @Test
     public void towersOnlyShootToTheirLeft() {
         Battlefield bf = battlefield();
-        Building tower = bf.place(BuildingType.TOWER, 5, 3);   // 占 (5..6, 3..4)，圆心 (6, 4)
-        Enemy left = bf.spawn(EnemyType.GRUNT, 4, 4.5f);       // 离塔心 1.58 格
-        Enemy right = bf.spawn(EnemyType.GRUNT, 4, 7.5f);      // 同样 1.58 格，但在右边
+        int towerCol = bf.firstBuildableCol() + 1;
+        Building tower = bf.place(BuildingType.BALLISTA, towerCol, 3);   // 占 (towerCol..towerCol+1, 3..4)
+        float centreX = towerCol + 1f;                                // 圆心
+        Enemy left = bf.spawn(EnemyType.GRUNT, 4, centreX - 1.5f);     // 离塔心 1.58 格
+        Enemy right = bf.spawn(EnemyType.GRUNT, 4, centreX + 1.5f);    // 同样 1.58 格，但在右边
 
         bf.advance(0.05f);
         assertSame("先得真挑中了左边那只，不然这条测试什么也没验", left, tower.target);
 
         advanceFor(bf, 0.5f);
-        assertEquals("左边那只挨了一发", EnemyType.GRUNT.maxHp - 14f, left.hp, 1e-3f);
+        assertEquals("左边那只挨了一发", EnemyType.GRUNT.maxHp - 34f, left.hp, 1e-3f);
         assertEquals("右边那只一点没掉，哪怕它一样近", EnemyType.GRUNT.maxHp, right.hp, 1e-3f);
+    }
+
+    /**
+     * <b>大炮十格以内不开火。</b>它的射界是一个十到二十格的扇环，
+     * 内径那十格是<b>真的打不着</b>，不是"命中率低"。
+     *
+     * <p>这条盯的是 {@link BuildingStats#CANNON_INNER_CELLS} 那个数真的被用上了。
+     * 射界最容易写错的地方就是漏掉内径——只写"外径二十格"的话，
+     * 代码跑起来一切正常、测试也全绿，只有摆到阵地上才发现敌人贴到脸上它一声不吭。
+     * 所以这里放一只<b>正对着炮口、五格远</b>的敌人：方向对、距离够近、
+     * 什么都不缺，只差"太近了"。
+     */
+    @Test
+    public void theCannonCannotShootAnythingInsideItsBlindSpot() {
+        Battlefield bf = battlefield();
+        int towerCol = bf.firstBuildableCol() + 4;
+        float centreX = towerCol + 1f;
+        Building cannon = bf.place(BuildingType.TOWER, towerCol, 3);
+        Enemy close = bf.spawn(EnemyType.GRUNT, 4, centreX - 5f);   // 正左五格
+
+        advanceFor(bf, 3f);
+
+        assertNull("十格以内不开火", cannon.target);
+        assertEquals("一发都没挨", EnemyType.GRUNT.maxHp, close.hp, 1e-3f);
+    }
+
+    /**
+     * <b>大炮的射界是有限张角的：正左、上下各三十度，一共六十度。</b>
+     * 十六格远是够得着的，可偏到旁边去它就不打了。
+     *
+     * <p>对照组是这条测试的另一半：<b>同样十六格</b>、同样一只杂兵，
+     * 挪到正左方向上就立刻被瞄上。两半合起来才说明拦下第一只的是<b>角度</b>，
+     * 而不是距离或者别的什么——只验前一半的话，射界写成"什么都不打"也能过。
+     *
+     * <p><b>偏出去的那只必须真的在三十度以外，所以它被往外挪过两次。</b>
+     * 从前张角是十五度、这只兵在第 10 行（横向 15 格、纵向 6.5 格，偏 23°），
+     * 改宽到三十度之后 23° 就<b>落在射界里面了</b>——那一版会静悄悄地变成
+     * "打得到"、这条测试跟着变红，还算好的；真正危险的是反过来：
+     * 测试里写死的角度一旦比真实张角还宽，它就永远绿，什么也验不到。
+     * 现在放在第 14 行：横向 15 格、纵向 10.5 格，偏约 35°，
+     * 离三十度那条边有五度的余量，而离二十格外径还有一格半的余量
+     * （hypot(15, 10.5) ≈ 18.3）——**两边都卡得住**。
+     */
+    @Test
+    public void theCannonIgnoresWhatIsOffToTheSideOfItsWedge() {
+        Battlefield offAxis = battlefield();
+        Building cannon = offAxis.place(BuildingType.TOWER, 30, 3);     // 圆心 (31, 4)
+        offAxis.spawn(EnemyType.GRUNT, 14, 16f);                        // dx -15、dy +10.5
+
+        offAxis.advance(0.001f);
+
+        assertNull("十六格远够得着，卡住它的是角度", cannon.target);
+
+        Battlefield onAxis = battlefield();
+        Building alignedCannon = onAxis.place(BuildingType.TOWER, 30, 3);
+        Enemy aligned = onAxis.spawn(EnemyType.GRUNT, 4, 16f);          // dx -15、dy +0.5
+
+        onAxis.advance(0.001f);
+
+        assertSame("摆正了就在射界里，所以上面那条拦下来的是角度", aligned,
+                alignedCannon.target);
+    }
+
+    /**
+     * <b>一发炮弹炸一格，旁边的跟着一起挨。</b>
+     *
+     * <p>两只杂兵离着一格（第 4 行和第 5 行，纵向正好 1.0 格），炮只瞄得中一只，
+     * 但落点周围一格里的都吃这一发的伤害。
+     *
+     * <p>时间卡在"第一发落地、第二发还没落地"之间：十五格、两者相向十格每秒，
+     * 第一发约一点五秒落地；而装填是一点六秒、第二发还要再飞一点四秒——
+     * 所以两秒的窗口里<b>只该有那一发</b>，挨的伤害正好是一个二十四点。
+     * 不然"两只都掉了血"可能只是两发各打一只，这条就什么也没验到。
+     */
+    @Test
+    public void aShellSplashesOntoEveryoneWithinOneCell() {
+        Battlefield bf = battlefield();
+        bf.place(BuildingType.TOWER, 30, 3);                    // 圆心 (31, 4)
+        Enemy aimed = bf.spawn(EnemyType.GRUNT, 4, 16f);        // 正左十五格，被瞄的那只
+        Enemy beside = bf.spawn(EnemyType.GRUNT, 5, 16f);       // 就在它旁边一格
+
+        advanceFor(bf, 2f);
+
+        assertEquals("被瞄的那只挨了一发", EnemyType.GRUNT.maxHp - 24f, aimed.hp, 1e-3f);
+        assertEquals("旁边那只也挨了同一发——溅射一格", EnemyType.GRUNT.maxHp - 24f,
+                beside.hp, 1e-3f);
+    }
+
+    /**
+     * <b>目标在半路上死了，炮弹照样落地炸开。</b>
+     *
+     * <p>这是"炮弹"和"弩箭"最大的差别。弩箭的目标没了就是白飞一趟
+     * （{@link #aBulletThatArrivesAfterItsTargetIsGoneDealsNoDamage}）；
+     * 炮弹的结算看的是<b>落点周围有谁</b>，跟当初瞄的是谁已经没关系了。
+     *
+     * <p>所以这一发不能省：落点那一格旁边站着的敌人该挨打。
+     * 实现上只差一行——{@code Battlefield.moveProjectiles} 里先看
+     * {@code splashCells} 再问 {@code lands()}，两条路就分开了。
+     *
+     * <p>时间窗口和溅射那条一样，卡在第一发落地、第二发没落地之间。
+     *
+     * <p><b>挨炸的那只为什么是"跟在后面一格"，不是"站在旁边一格"。</b>
+     * 炮弹认的是<b>目标倒下时那个点</b>——它冻在那儿，不再跟着谁走。而别人还在走：
+     * 十五格飞一点五秒，这期间大家往前挪了一格三，站在旁边的那只早就出了爆炸圈。
+     * 跟在后面那只反倒正好补上来（它往前走的距离差不多把那一格追平了），
+     * 落在离爆心半格的地方。这不是巧合挑出来的好看数字，
+     * 而是"落点冻结"这个模型在场上真实的样子。
+     */
+    @Test
+    public void aShellStillExplodesWhereItsTargetDied() {
+        Battlefield bf = battlefield();
+        bf.place(BuildingType.TOWER, 30, 3);                    // 圆心 (31, 4)
+        Enemy doomed = bf.spawn(EnemyType.GRUNT, 4, 16f);       // 走在前面的那只，被瞄的就是它
+        Enemy behind = bf.spawn(EnemyType.GRUNT, 4, 15f);       // 跟在后面一格，同一条道
+
+        bf.advance(0.05f);   // 开火，炮弹出膛
+        assertEquals("先得真有一发在天上，不然这条测试什么也没验",
+                1, bf.projectiles().size());
+
+        doomed.hp = 0f;      // 别的塔（或者别的什么）抢先把它收了
+
+        advanceFor(bf, 2f);
+
+        assertEquals("目标没了，炮弹照样炸在原地，跟在后面那只正好走到那儿",
+                EnemyType.GRUNT.maxHp - 24f, behind.hp, 1e-3f);
     }
 
     /**
      * <b>紧贴在城墙后面的那座塔，打得到正在啃墙的那只敌人。</b>
      *
      * <p>这条盯的是一个真机上撞到的边界：墙宽 1 格、敌人半个身位、塔自己
-     * 半个占地，加起来圆心到圆心正好 2.5 格多一点——只按"敌人中心在不在圈里"
-     * 判的话，差 0.05 格打不着。
+     * 半个占地，加起来圆心到圆心 2.55 格——只按"敌人中心在不在圈里"判的话，
+     * 对着 2.5 格射程的老箭塔差 0.05 格打不着。
      *
      * <p>而城墙的全部价值就是替后面的塔争取时间
      * （见 {@link BuildingStats#maxHp}）：塔不打贴在墙上的那只，墙就白砌了。
@@ -926,17 +1404,21 @@ public class BattlefieldTest {
     @Test
     public void aTowerRightBehindAWallStillShootsWhatIsChewingIt() {
         Battlefield bf = battlefield();
-        buildWallColumn(bf, 6);                                 // 第 6 列全砌上
-        Building wall = bf.buildingAt(new Cell(6, 3));
-        Building tower = bf.place(BuildingType.TOWER, 7, 3);    // 紧贴在墙后面
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 2f);
+        int wallCol = bf.firstBuildableCol() + 2;
+        buildWallColumn(bf, wallCol);                           // 这一列全砌上
+        Building wall = bf.buildingAt(new Cell(wallCol, 3));
+        Building tower = bf.place(BuildingType.BALLISTA, wallCol + 1, 3);   // 紧贴在墙后面
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);
+        // 血量手动加上去，为的是让它活到墙前。这条测的是"墙后那座塔够不够得着"，
+        // 而弩车一发 34 点、杂兵只有 45——不加油的话它两秒半就在半路上被打死了，
+        // "啃墙"这件事压根不会发生。
+        e.hp = 300f;
 
         advanceFor(bf, 6f);   // 走到墙前（约 3.9 秒）再啃两秒
 
-        assertEquals("该贴在城墙左边", 5.5f, e.x, 1e-3f);
+        assertEquals("该贴在城墙左边", wallCol - 0.5f, e.x, 1e-3f);
         assertTrue("城墙在挨啃", wall.damaged());
-        assertTrue("墙后那座塔该打得到它——这正是砌墙的目的",
-                e.hp < EnemyType.GRUNT.maxHp);
+        assertTrue("墙后那座塔该打得到它——这正是砌墙的目的", e.hp < 300f);
         assertSame(e, tower.target);
         // 反过来也一样重要：敌人在啃墙，够不着墙后面那座塔（隔了一格，
         // 不在它的四邻里），所以塔一点血都不该掉。墙"替后面的塔挨打"这句话，
@@ -945,147 +1427,192 @@ public class BattlefieldTest {
     }
 
     /**
-     * <b>一座 1 级塔打得死杂兵，打不死重甲。</b>
+     * <b>一门 1 级大炮清得掉走过它那条走廊的敌人。</b>
      *
-     * <p>这条盯着的是 {@link BuildingStats} 里那组数（射程 2.5 格 / 14 dps）
-     * 和 {@link EnemyType} 里那组数（杂兵 45 血 12 dps、重甲 160 血 26 dps）
-     * 之间的关系——<b>改任何一边都可能把这条打破</b>：
+     * <p>这条盯着的是 {@link BuildingStats} 那组数（内径十格 / 外径二十格 /
+     * 24 点一发 / 1.6 秒装填）和 {@link EnemyType} 那组数（杂兵 45 血 0.9 格每秒）
+     * 之间的关系——<b>改任何一边都可能把这条打破</b>：杂兵从十六格外走进来，
+     * 到十格盲区的边上要走六格 ≈ 6.7 秒，这期间炮打出四发（96 点），
+     * 而打死它只要两发——**余量很宽，所以这条测试现在是个下限**，
+     * 真要看"守住几成"得跑 {@code DemoSceneProbeTest}。
      *
-     * <ul>
-     *   <li>杂兵：45 血 ÷ 14 dps ≈ 3.2 秒，而它啃穿 100 血的塔要 8.3 秒
-     *       → 塔赢；</li>
-     *   <li>重甲：160 血 ÷ 14 dps ≈ 11.4 秒，而它啃穿塔只要 3.8 秒
-     *       → 塔先倒。玩家必须再加一座塔、或者升到 2 级。</li>
-     * </ul>
+     * <p><b>这条和从前那条不是一回事了。</b>从前它叫
+     * {@code oneLevelOneTowerKillsAGruntButNotABrute}，盯的是"打不死重甲 ——
+     * 所以你该升级"。换成十到二十格的扇环之后那句话不成立了：重甲慢
+     * （0.55 格每秒），在十格深的走廊里要待十七八秒，一门一级炮打满两百多点，
+     * <b>照样打得死</b>。所以重甲那半边删掉了，不再假装它还是那个结论。
      *
-     * <p>这就是"什么时候该升级"这个问题的答案，所以它得是一条测试，
-     * 而不是一段注释。
+     * <p><b>而且没有重新配平过</b>：换成扇环那次只动了射界，
+     * 2026-09-27 改张角那次只动了"单发和装填的比"（DPS 没变，见
+     * {@link BuildingStats#TOWER_DAMAGE_PER_SHOT}）。这条现在是"当前数值长什么样"
+     * 的记录，不是一份调好的平衡表。
      */
     @Test
-    public void oneLevelOneTowerKillsAGruntButNotABrute() {
-        Battlefield gruntField = battlefield();
-        gruntField.place(BuildingType.TOWER, 5, 3);
-        Enemy grunt = gruntField.spawn(EnemyType.GRUNT, 4, 1f);
-        advanceFor(gruntField, 12f);
-        assertFalse("杂兵该被打死", grunt.alive());
-        assertTrue("塔还站着", gruntField.buildings().size() == 1);
+    public void oneLevelOneCannonClearsItsCorridor() {
+        Battlefield bf = battlefield();
+        Building cannon = bf.place(BuildingType.TOWER, 20, 3);   // 圆心 (21, 4)
+        Enemy grunt = bf.spawn(EnemyType.GRUNT, 4, bf.firstBuildableCol() - 3f);   // 正左十六格
 
-        Battlefield bruteField = battlefield();
-        Building tower = bruteField.place(BuildingType.TOWER, 5, 3);
-        Enemy brute = bruteField.spawn(EnemyType.BRUTE, 4, 1f);
-        advanceFor(bruteField, 12f);
-        assertTrue("一座 1 级塔打不死重甲", brute.alive());
-        assertFalse("塔反而被啃掉了", bruteField.buildings().contains(tower));
+        advanceFor(bf, 12f);
+
+        assertFalse("杂兵该被打死", grunt.alive());
+        assertTrue("炮还站着", bf.buildings().contains(cannon));
     }
 
     /**
-     * <b>弩车够得着箭塔够不着的那一格。</b>
+     * <b>两种塔的射界在场上正好互补：贴脸那一段只有弩车管，远处那一段只有大炮管。</b>
      *
      * <p>{@code CostTest} 里那条比的是两张表上的数；这一条比的是<b>场上</b>的那件事：
-     * 同一个位置、同一只敌人，箭塔没有目标、弩车有。远出来的半格射程只有在这种
+     * 同一个位置、同一只敌人，一座没有目标、另一座咬着不放。射界的差别只有在这种
      * 边界上才看得见——平时两只都打得到，看不出区别。
      *
-     * <p>距离取在两条"够得着"的线中间：塔是 2.5 + 0.4（快兵半个身位）= 2.9，
-     * 弩车是 3.0 + 0.4 = 3.4，敌人的中心到塔心 3.14 格。两边各留出 0.19 / 0.26 格，
-     * 所以推进一帧（快兵挪 0.08 格）之后仍然是一边够得着、一边够不着。
+     * <ul>
+     *   <li>三格多一点：大炮十格以内压根不开火，弩车（射界 3.0 格）咬着不放；</li>
+     *   <li>十六格：弩车差得远，大炮（外径二十格）够得着。</li>
+     * </ul>
+     *
+     * <p>两个方向都验，是因为它们各自可能独立地坏掉：内径写成 0 就丢掉前一半，
+     * 外径写成 3 就丢掉后一半，而<b>只验一边的时候另一半坏了是完全看不出来的</b>。
+     *
+     * <p>距离都留了余量：3.14 对 3.0 + 0.4（快兵半个身位）= 3.4，
+     * 16.008 对 20 + 0.625 ——推进一帧（快兵挪 0.08 格）之后结论都不变。
      */
     @Test
-    public void aBallistaReachesWhatATowerCannot() {
-        Battlefield towerField = battlefield();
-        Building tower = towerField.place(BuildingType.TOWER, 5, 3);      // 圆心 (6, 4)
-        Enemy towerPrey = towerField.spawn(EnemyType.RUNNER, 4, 2.9f);
+    public void aBallistaCoversWhatTheCannonCannot() {
+        int towerCol = 30;
+        float centreX = towerCol + 1f;   // 2×2 的圆心
+
+        Battlefield cannonField = battlefield();
+        Building cannon = cannonField.place(BuildingType.TOWER, towerCol, 3);
+        Enemy cannonPrey = cannonField.spawn(EnemyType.RUNNER, 4, centreX - 3.1f);
 
         Battlefield ballistaField = battlefield();
-        Building ballista = ballistaField.place(BuildingType.BALLISTA, 5, 3);   // 同一格
-        Enemy ballistaPrey = ballistaField.spawn(EnemyType.RUNNER, 4, 2.9f);
+        Building ballista = ballistaField.place(BuildingType.BALLISTA, towerCol, 3);   // 同一格
+        Enemy ballistaPrey = ballistaField.spawn(EnemyType.RUNNER, 4, centreX - 3.1f);
 
+        cannonField.advance(0.05f);
         ballistaField.advance(0.05f);
-        towerField.advance(0.05f);
 
-        assertNull("3.14 格，够不着 2.5 格射程的塔", tower.target);
+        assertNull("3.14 格，在大炮十格的盲区里", cannon.target);
         assertSame("同一只敌人，弩车该咬着不放", ballistaPrey, ballista.target);
 
         // 两只都满血：这一条比的是"瞄不瞄得上"，不是打死没打死
-        assertEquals(EnemyType.RUNNER.maxHp, towerPrey.hp, 1e-3f);
+        assertEquals(EnemyType.RUNNER.maxHp, cannonPrey.hp, 1e-3f);
+
+        Battlefield farCannonField = battlefield();
+        Building farCannon = farCannonField.place(BuildingType.TOWER, towerCol, 3);
+        Enemy farPrey = farCannonField.spawn(EnemyType.RUNNER, 4, centreX - 16f);
+
+        Battlefield farBallistaField = battlefield();
+        Building farBallista = farBallistaField.place(BuildingType.BALLISTA, towerCol, 3);
+        farBallistaField.spawn(EnemyType.RUNNER, 4, centreX - 16f);
+
+        farCannonField.advance(0.05f);
+        farBallistaField.advance(0.05f);
+
+        assertSame("十六格，大炮够得着", farPrey, farCannon.target);
+        assertNull("弩车那三格射界差得远", farBallista.target);
     }
 
     /**
-     * <b>一级弩车一发带走快兵，一级箭塔要两发。</b>
+     * <b>一级弩车一发带走快兵，一级大炮一发带不走。</b>
      *
-     * <p>这就是花两倍价钱买弩车买到的东西，也是 {@code BuildingStats} 里
-     * "DPS 比箭塔低但单发重一倍半"那句话的账：弩车的每秒伤害其实更少，
-     * 赢的是<b>每一发都终结掉一只</b>。快兵 28 血——弩车一级 34 点一发就够，
-     * 箭塔一级 14 点还得再来一次。
+     * <p>这就是花将近两倍价钱买弩车买到的东西，也是 {@code BuildingStats} 里
+     * "两种塔拿伤害换射程"那句话的账：大炮的每秒伤害其实更高、够得着的地方也远得多，
+     * 但弩车赢的是<b>每一发都终结掉一只</b>。快兵 28 血——弩车一级 34 点一发就够，
+     * 大炮一级 24 点还得再来一次。
      *
-     * <p>所以两边都只推进 0.5 秒：箭塔的第二次装填（间隔 1.0 秒）还没到，
-     * 弩车那边已经不需要第二次了。多推一点的话箭塔也会把快兵打死，
-     * 这条就退化成"两只都打死了"，什么也没验到。
+     * <p><b>两边差距被压缩过一次，这条是它还剩多少的记录。</b>大炮单发从 14 提到 24
+     * 之后，"弩车一发、大炮两发"这个对比还在（24 &lt; 28 &lt; 34），但不再是一倍半
+     * 那么悬殊——真正撑住两种塔分工的是 DPS 那半边（弩车更低）和盲区，
+     * 见 {@code CostTest.ballistaTradesDamageRateForReach}。
+     *
+     * <p><b>两边的距离不一样，是有意的。</b>快兵得放进大炮那条十到二十格的走廊里
+     * 才谈得上"挨了一发"（摆到三格远的话它压根不开火，这条会变成
+     * "两只都活着、都没挨打"，什么也没验到）。所以弩车那边贴脸 1.58 格、
+     * 大炮那边正左十六格。
+     *
+     * <p>时间也不一样：弩车 0.5 秒（一发，够快兵挨的），大炮 1.9 秒——
+     * 十五格 ÷ 两者相向的 10.6 格每秒 ≈ 1.4 秒第一发落地，
+     * 而第二发要等装填的 1.6 秒、再飞一点四秒，总在三秒左右才落地。
+     * 窗口卡在这中间，挨的伤害才正好是一个二十四点。
      */
     @Test
-    public void oneBallistaBoltDropsARunnerThatATowerNeedsTwoShotsFor() {
-        Battlefield towerField = battlefield();
-        towerField.place(BuildingType.TOWER, 5, 3);
-        Enemy towerPrey = towerField.spawn(EnemyType.RUNNER, 4, 4.5f);
+    public void oneBallistaBoltDropsARunnerThatTheCannonNeedsTwoShotsFor() {
+        int towerCol = 30;
+        float centreX = towerCol + 1f;
 
         Battlefield ballistaField = battlefield();
-        ballistaField.place(BuildingType.BALLISTA, 5, 3);
-        Enemy ballistaPrey = ballistaField.spawn(EnemyType.RUNNER, 4, 4.5f);
+        ballistaField.place(BuildingType.BALLISTA, towerCol, 3);
+        Enemy ballistaPrey = ballistaField.spawn(EnemyType.RUNNER, 4, centreX - 1.5f);
 
-        advanceFor(towerField, 0.5f);
+        Battlefield cannonField = battlefield();
+        cannonField.place(BuildingType.TOWER, towerCol, 3);
+        Enemy cannonPrey = cannonField.spawn(EnemyType.RUNNER, 4, centreX - 16f);
+
         advanceFor(ballistaField, 0.5f);
+        advanceFor(cannonField, 1.9f);
 
         assertFalse("弩车一发就该了结它", ballistaPrey.alive());
-        assertTrue("箭塔一发打不死（还要第二发）", towerPrey.alive());
-        assertEquals("正好剩一发箭塔的伤害", EnemyType.RUNNER.maxHp - 14f, towerPrey.hp, 1e-3f);
+        assertTrue("大炮一发打不死（24 点，快兵有 28 血）", cannonPrey.alive());
+        assertEquals("正好剩一发炮弹的伤害", EnemyType.RUNNER.maxHp - 24f,
+                cannonPrey.hp, 1e-3f);
     }
 
     /**
      * 体格不只是"画多大"：大块头<b>从更远处就开始挨打</b>。
      *
-     * <p>塔的判定是"射界里的身子碰到就算"，用的半径是"射程 + 半个身位"。重甲比杂兵宽，
-     * 所以同一座塔够得着更远的那一只。这不是 bug，是"大块头好打中"这件事
+     * <p>判定是"射界里的身子碰到就算"，用的半径是"外径 + 半个身位"。重甲比杂兵宽，
+     * 所以同一门炮够得着更远的那一只。这不是 bug，是"大块头好打中"这件事
      * 在判定上的样子，也和画面上那个更宽的身子对得上——画的和判的是同一个数。
      *
-     * <p>距离取两种身位判定的正中间（1 级塔射程 2.5：杂兵够到 3.0、
-     * 重甲够到 3.125），两边各留 0.0625 格。以后调体格或射程，
-     * 两边都会先撞上这条测试，不会悄悄变成"两种敌人一样好打"。
+     * <p>距离取两种身位判定的正中间（外径 20：杂兵够到 20.5、重甲够到 20.625），
+     * 两边各留 0.0625 格。以后调体格或射界，两边都会先撞上这条测试，
+     * 不会悄悄变成"两种敌人一样好打"。
+     *
+     * <p>摆在<b>外径</b>上而不是内径上，是因为外径这边没有别的干扰：
+     * 内径那条线上敌人正朝炮走过来，还会同时被"角度"和"太近"两件事影响。
      */
     @Test
     public void aBulkyEnemyTakesFireFromFurtherOut() {
-        // 塔占 (5,3)–(6,4)，中心 (6,4)；敌人走第 4 行，中心 y = 4.5
-        float x = 2.9786f;   // 到塔心 3.0625 格，摆在塔的左边（射界朝左）
+        int towerCol = 30;
+        float centreX = towerCol + 1f;   // 2×2 的圆心 x；敌人走第 4 行，中心 y = 4.5
+        // 到炮心 20.56 格：横向 20.554、纵向 4.5 - 4 = 0.5，hypot 起来正好 20.56。
+        // 摆在炮的左边（射界朝左，而且正左方向偏不到 2°——离三十度那条边还远得很）
+        float x = centreX - 20.554f;
 
         Battlefield gruntField = battlefield();
-        Building gruntTower = gruntField.place(BuildingType.TOWER, 5, 3);
+        Building gruntCannon = gruntField.place(BuildingType.TOWER, towerCol, 3);
         gruntField.spawn(EnemyType.GRUNT, 4, x);
         gruntField.advance(0.001f);   // 小到几乎不动：挨不挨打在这一帧就定了
-        assertNull("杂兵还在射界外", gruntTower.target);
+        assertNull("杂兵的身子还在二十格外面", gruntCannon.target);
 
         Battlefield bruteField = battlefield();
-        Building bruteTower = bruteField.place(BuildingType.TOWER, 5, 3);
+        Building bruteCannon = bruteField.place(BuildingType.TOWER, towerCol, 3);
         Enemy brute = bruteField.spawn(EnemyType.BRUTE, 4, x);
         bruteField.advance(0.001f);
-        assertSame("重甲的身子探进射界里了，该挨打", brute, bruteTower.target);
+        assertSame("重甲的身子探进射界里了，该挨打", brute, bruteCannon.target);
     }
 
     /**
      * 体格也决定它<b>贴到挡路建筑多近</b>：身体右边缘碰到就停，不是中心碰到。
      *
      * <p>所以重甲停在 {@code 6 - 0.625 = 5.375}，杂兵停在 {@code 6 - 0.5 = 5.5}
-     * （杂兵那条在 {@code aTowerRightBehindAWallStillShootsWhatIsChewingIt} 里）。
+     * （杂兵那条在 {@link #aTowerRightBehindAWallStillShootsWhatIsChewingIt} 里）。
      * 差 0.125 格肉眼看不出来，但"画的身体和判的身体是同一个"这件事得有人盯着——
      * 分开写迟早会变成"贴图宽了、判定没跟上"，那时敌人看着压在墙上却还在挨打不到。
      */
     @Test
     public void aBulkyEnemyFlattensItsBodyAgainstTheWall() {
         Battlefield bf = battlefield();
-        Building wall = bf.place(BuildingType.WALL, 6, 3);
-        Enemy brute = bf.spawn(EnemyType.BRUTE, 3, 2f);
+        int wallCol = bf.firstBuildableCol() + 2;
+        Building wall = bf.place(BuildingType.WALL, wallCol, 3);
+        Enemy brute = bf.spawn(EnemyType.BRUTE, 3, bf.firstBuildableCol() - 2f);
 
         // 0.55 格/秒走过去约 6.1 秒，再啃不到 2 秒（26 dps，墙有 150 血，还啃不穿）
         advanceFor(bf, 8f);
 
-        assertEquals(6f - EnemyType.BRUTE.halfBodyCells(), brute.x, 1e-3f);
+        assertEquals(wallCol - EnemyType.BRUTE.halfBodyCells(), brute.x, 1e-3f);
         assertTrue("停下来啃了", brute.blocked);
         assertTrue("墙还在", wall.hp > 0f);
     }
@@ -1094,8 +1621,8 @@ public class BattlefieldTest {
     @Test
     public void anEnemyChewsTheBuildingThatBlocksIt() {
         Battlefield bf = battlefield();
-        Building wall = bf.place(BuildingType.WALL, 6, 3);
-        bf.spawn(EnemyType.GRUNT, 3, 2f);
+        Building wall = bf.place(BuildingType.WALL, bf.firstBuildableCol() + 2, 3);
+        bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);
 
         advanceFor(bf, 5f);   // 走到墙前约 3.9 秒 + 啃约 1.1 秒
 
@@ -1119,13 +1646,15 @@ public class BattlefieldTest {
     @Test
     public void anEnemyBitesTheNearestBuildingButNeverAWallThatIsNotInItsWay() {
         Battlefield bf = battlefield();
-        Building tower = bf.place(BuildingType.TOWER, 6, 3);   // 占 (6..7, 3..4)，挡住第 4 行
-        Building wall = bf.place(BuildingType.WALL, 5, 3);     // 在重甲斜上方，没挡路
-        Enemy brute = bf.spawn(EnemyType.BRUTE, 4, 2f);
+        int towerCol = bf.firstBuildableCol() + 2;
+        Building tower = bf.place(BuildingType.TOWER, towerCol, 3);   // 占 (towerCol..towerCol+1, 3..4)，挡住第 4 行
+        Building wall = bf.place(BuildingType.WALL, towerCol - 1, 3); // 在重甲斜上方，没挡路
+        Enemy brute = bf.spawn(EnemyType.BRUTE, 4, bf.firstBuildableCol() - 2f);
 
         advanceFor(bf, 8f);   // 0.55 格/秒走过去约 6.1 秒，再啃不到 2 秒
 
-        assertEquals("贴在挡路那座塔的左边", 6f - EnemyType.BRUTE.halfBodyCells(), brute.x, 1e-3f);
+        assertEquals("贴在挡路那座塔的左边",
+                towerCol - EnemyType.BRUTE.halfBodyCells(), brute.x, 1e-3f);
         assertTrue("停下来啃了", brute.blocked);
         assertTrue("塔在挨啃", tower.damaged());
         assertEquals("没挡路的那面墙一点没掉——墙不是候选",
@@ -1139,15 +1668,16 @@ public class BattlefieldTest {
     @Test
     public void anEnemyWalksOnOnceTheWallIsChewedThrough() {
         Battlefield bf = battlefield();
-        Building wall = bf.place(BuildingType.WALL, 6, 3);
-        Enemy e = bf.spawn(EnemyType.GRUNT, 3, 2f);
+        int wallCol = bf.firstBuildableCol() + 2;
+        Building wall = bf.place(BuildingType.WALL, wallCol, 3);
+        Enemy e = bf.spawn(EnemyType.GRUNT, 3, bf.firstBuildableCol() - 2f);
 
         // 150 血 ÷ 12 dps = 12.5 秒啃穿，再加上走过去的时间
         advanceFor(bf, 20f);
 
         assertFalse("墙该被啃掉了", bf.buildings().contains(wall));
-        assertTrue("那块地还回来了", bf.canPlace(BuildingType.WALL, 6, 3));
-        assertTrue("敌人继续往右走", e.x > 6f);
+        assertTrue("那块地还回来了", bf.canPlace(BuildingType.WALL, wallCol, 3));
+        assertTrue("敌人继续往右走", e.x > wallCol);
     }
 
     // ---- 寻路：绕还是拆 ----
@@ -1404,7 +1934,7 @@ public class BattlefieldTest {
     @Test
     public void upgradingATowerRepairsIt() {
         Battlefield bf = battlefield();
-        Building tower = bf.place(BuildingType.TOWER, 5, 3);
+        Building tower = bf.place(BuildingType.TOWER, bf.firstBuildableCol() + 1, 3);
         tower.hp = 20f;
         assertTrue(tower.damaged());
 
@@ -1455,6 +1985,58 @@ public class BattlefieldTest {
     }
 
     /**
+     * 打起来了就不许动建筑——放新的、挪、升级<b>问的是同一句话</b>。
+     *
+     * <p>这条规矩的用法是"界面每次要改建筑之前先问一声"（{@code BattlefieldView}
+     * 那边每一处改建筑的地方都过 {@code reworkLocked()}），所以这里验的是
+     * <b>这句话什么时候为真</b>，而不是某一次操作被挡下来了
+     * （挡下来那一半在视图层，没有单元测试）。
+     *
+     * <p><b>关键是"一波清完就解锁"。</b>要是按"这一局打没打完"来判，五波打满之前
+     * 一次阵型都改不了，中间那些空当——本来是留给玩家摆位和升级的——全废了。
+     */
+    @Test
+    public void reworkingBuildingsIsLockedWhileEnemiesAreOnTheField() {
+        Battlefield bf = battlefield();
+
+        assertTrue("开局场上空的，随便摆", bf.canReworkBuildings());
+        Building tower = bf.place(BuildingType.TOWER, bf.firstBuildableCol(), 7);
+        assertNotNull(tower);
+
+        assertTrue(bf.spawnWave(new Random(7)));
+        assertFalse("一波的人还在场上", bf.canReworkBuildings());
+        assertFalse("这一局也还没打完", bf.decided());
+
+        for (Enemy enemy : bf.enemies()) {
+            enemy.hp = 0f;
+        }
+        bf.advance(0.05f);   // 清场发生在 advance 里，不是设 hp 的那一刻
+        assertTrue("都清干净了", bf.enemies().isEmpty());
+        assertTrue("清完就该解锁——离打完第五波还早得很", bf.canReworkBuildings());
+    }
+
+    /**
+     * 场上有人就锁，<b>不管这人是"发了一波"来的还是别人摆进来的</b>。
+     *
+     * <p>判的是 {@code enemies} 空不空，不是 {@code waves} 发过没有：发了一波再清光
+     * 应该解锁（上一条），而一波都没发、场上却有人时必须也是锁的——不然
+     * 这条规矩就变成了"发过波次之后才生效"，和它要挡的事情对不上。
+     */
+    @Test
+    public void aLoneEnemyLocksReworkingEvenWithoutAWave() {
+        Battlefield bf = battlefield();
+        assertTrue(bf.canReworkBuildings());
+
+        bf.spawn(EnemyType.GRUNT, 7, 20f);
+        assertEquals("一波都没发过", 0, bf.waves());
+        assertFalse("场上有人，就是锁的", bf.canReworkBuildings());
+
+        advanceFor(bf, 80f);   // 场上没东西拦它，一路走出右边
+        assertTrue(bf.enemies().isEmpty());
+        assertTrue("走出场就解锁", bf.canReworkBuildings());
+    }
+
+    /**
      * 打完五波算守住——<b>哪怕一只都没拦住</b>。
      *
      * <p>这里场上什么建筑都没有：敌人一路走到右边出界，全算漏，但核心没被打掉
@@ -1466,11 +2048,13 @@ public class BattlefieldTest {
     public void clearingAllFiveWavesIsADefendedRun() {
         Battlefield bf = battlefield();
 
+        // 够最慢的重甲从画面外走到右边出界：cols 格 ÷ 0.55 格每秒 ≈ 145 秒，
+        // 再留两成余量——一波里排在后面的那几只起点还要再往左退几格
+        float crossing = bf.board().cols() / EnemyType.BRUTE.speedCellsPerSec * 1.2f;
         for (int wave = 1; wave <= Waves.TOTAL_WAVES; wave++) {
             assertFalse("这一局还没结束", bf.decided());
             assertTrue("第 " + wave + " 波该发得出去", bf.spawnWave(new Random(wave)));
-            // 够最慢的重甲从左边走到右边出界（40 格 ÷ 0.55 格每秒 ≈ 73 秒）
-            advanceFor(bf, 80f);
+            advanceFor(bf, crossing);
             assertTrue("第 " + wave + " 波该清完了", bf.enemies().isEmpty());
         }
 

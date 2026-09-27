@@ -32,7 +32,11 @@ public class TokenTrailApp extends Application {
         super.onCreate();
         RepositoryProvider.init(this);
         if (!BuildConfig.FORUM_BASE_URL.isEmpty()) {
-            com.mobilegroup20.tokentrail.data.TeamAccountSession session = com.mobilegroup20.tokentrail.data.TeamAccountSession.get(this);
+            // 论坛和用量共用**同一个**账号会话（`AccountSession`）：它就是「当前是谁」
+            // 的唯一来源。测试身份也在它里面（带 `tt_test_` 前缀、仅 Debug），
+            // 所以这里不需要再判断一次用哪一支。
+            com.mobilegroup20.tokentrail.data.AccountSession session =
+                    com.mobilegroup20.tokentrail.data.AccountSession.get(this);
             RepositoryProvider.configureForum(session.forumBaseUrl(), session);
         }
     }

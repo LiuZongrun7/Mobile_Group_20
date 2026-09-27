@@ -13,9 +13,14 @@ import org.junit.Test;
  * <p>这里的数字不是随手编的：每一组都对应一台真实设备的可用尺寸，改参数时
  * 一眼能看出"哪种手机会变成什么样"。dp × density = px 的换算写在注释里。
  *
- * <p>战场面板按「宽 = 屏幕宽，高 = 屏幕高 × 0.54」估——上面有 HUD、下面有操作条
- * 和导航栏（真机实测占屏幕高度的 46%）。真机那一组见
+ * <p>战场面板按「宽 = 屏幕宽，高 = 屏幕高 − 260dp」估——上面有状态栏和 HUD、
+ * 下面有操作条和导航栏。<b>260dp 是真机量出来的</b>（2026-09-27 压过一轮界面之后：
+ * 状态栏 41 + HUD 116 + 操作行 46 + 导航 56），真机那一组见
  * {@link #realDeviceMeasuredOnHbnAl80()}。
+ *
+ * <p><b>2026-09-27 这组数整体变过一次。</b>那天先把界面从 339dp 压到 260dp、
+ * 又把 {@link BoardGeometry#SCREEN_ROWS} 从 18 提到 36（一屏看全整块战场），
+ * 所以每个机型上的格子都变小了——上下两件事是一起的，改一个要回头看另一个。
  *
  * <p><b>行列数在所有设备上都是定死的</b>（{@link BoardGeometry#COLS} ×
  * {@link BoardGeometry#ROWS}），算出来的只有格子大小。所以下面这些测试盯的是
@@ -31,21 +36,22 @@ public class BoardGeometryTest {
     }
 
     /**
-     * 华为 HBN-AL80，373×843dp @3.375。战场面板 373×465dp 是在截图上量出来的
-     * （上下边界 554→2123px，1570px ÷ 3.375 = 465dp），界面占掉 378dp。
+     * 华为 HBN-AL80，373×843dp @3.375。战场面板 373×583dp 是 2026-09-27 压完界面
+     * 之后在真机上量的（{@code play_area} 上下边界 530→2498px，1968px ÷ 3.375 =
+     * 583.1dp），界面占掉 260dp。
      */
     private static BoardGeometry realPhone() {
-        return panel(373f, 465f, 3.375f);
+        return panel(373f, 583f, 3.375f);
     }
 
     // ---- 真实设备上的结果 ----
 
     /**
-     * <b>真机实测过的一组</b>（华为 HBN-AL80）：40 × 18 的战场，一格 23.9dp，
-     * 一屏看得见 15.6 列，横向要拖 2.6 屏。
+     * <b>真机实测过的一组</b>（华为 HBN-AL80）：80 × 36 的战场，一格 15.8dp，
+     * 一屏看得见 23.7 列，横向要拖 3.4 屏，<b>纵向一屏看全</b>。
      *
      * <p>这一组是拿手机跑出来的，不是估的：{@code game_grid_info} 那行小字显示的
-     * 就是这几个数。改动 {@link BoardGeometry#fit} 之后先看它有没有变。
+     * 就是这几个数。改动 {@link BoardGeometry#fit} 或者界面高度之后先看它有没有变。
      */
     @Test
     public void realDeviceMeasuredOnHbnAl80() {
@@ -53,50 +59,61 @@ public class BoardGeometryTest {
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        // 面板高度是量出来的，±1px 的误差就会让 dp 数在 24.47/24.48 之间跳，
+        // 面板高度是量出来的，±1px 的误差就会让 dp 数在 15.76/15.77 之间跳，
         // 所以这里给 0.05 的容差，不咬着小数点后一位
-        assertEquals(24.47f, g.cellPx() / 3.375f, 0.05f);
-        assertEquals(15.24f, g.visibleCols(), 0.02f);
-        assertEquals(2.62f, g.cols() / g.visibleCols(), 0.01f);
+        assertEquals(15.76f, g.cellPx() / 3.375f, 0.05f);
+        assertEquals(23.67f, g.visibleCols(), 0.05f);
+        assertEquals(3.38f, g.cols() / g.visibleCols(), 0.01f);
+        // 纵向不用拖：36 行 + 1 格余量正好铺满面板高度（583dp × 3.375 = 1967.6px）
+        assertEquals(583f * 3.375f, g.contentHeightPx(), EPS);
     }
 
     /**
-     * 典型大屏手机 411×891 @2.625：面板 387×643dp，一格 33.84dp，一屏可见 11.4 列。
+     * 典型大屏手机 411×891 @2.625：面板 387×631dp，一格 17.05dp，一屏可见 22.7 列。
      *
      * <p>和真机那组对比着看：格子大小<b>只跟面板高度走</b>，和宽度无关。
      */
     @Test
-    public void typicalPhoneShowsAboutTwelveColumnsAndAllEighteenRows() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+    public void typicalPhoneGetsSeventeenDpCellsAndSeesTheWholeHeight() {
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        assertEquals(88.836f, g.cellPx(), 0.01f);
-        assertEquals(33.84f, g.cellPx() / 2.625f, 0.01f);
-        assertEquals(11.44f, g.visibleCols(), 0.01f);
+        assertEquals(44.767f, g.cellPx(), 0.01f);
+        assertEquals(17.05f, g.cellPx() / 2.625f, 0.01f);
+        assertEquals(22.69f, g.visibleCols(), 0.02f);
     }
 
     /**
-     * <b>18 行永远全部在屏幕上。</b>这是「行数固定 18」这条设计的全部意义，
-     * 也是允许横向变宽的前提：纵向一眼看全 18 条路，横向才敢做长。
+     * <b>一屏永远装得下 {@link BoardGeometry#SCREEN_ROWS} 行，而且现在
+     * {@code SCREEN_ROWS == ROWS}——整块战场纵向一屏看得全，不用拖。</b>
+     * 格子大小就是从这条反推出来的（见 {@code fit()}），和面板宽高比无关。
      *
-     * <p>面板宽高比再离谱也一样——装得下 18 行是硬约束，格子是从面板高度反推的。
+     * <p><b>这两个断言是一对，方向是"正好"不是"至少"。</b>只留前一个的话，
+     * 哪天有人把格子按更小的行数去摊面板高度（屏幕上所有东西放大、纵向又拖起来），
+     * 测试不会响；只留后一个的话，"没装下"和"装下了但留了一大截白"都算过。
+     * 2026-09-27 之前这条断言的是相反的方向（{@code >}，即"整块装不下"），
+     * 那天把 {@code SCREEN_ROWS} 提到 36 之后才反过来的。
      */
     @Test
-    public void everyDeviceShowsAllEighteenRowsWithoutPanning() {
+    public void everyDeviceFitsTheWholeBoardVerticallyWithoutScrolling() {
         float[][] devices = {
-                {373f, 465f, 3.375f},  // 真机 HBN-AL80
-                {336f, 600f, 3f},      // 小屏 360×800
-                {369f, 620f, 2.75f},   // 常见 393×852
-                {387f, 643f, 2.625f},  // 大屏 411×891
-                {388f, 660f, 3.5f},    // 1440p 412×915
-                {776f, 1032f, 2f},     // 平板 800×1280
+                {373f, 583f, 3.375f},  // 真机 HBN-AL80（量出来的）
+                {336f, 540f, 3f},      // 小屏 360×800
+                {369f, 592f, 2.75f},   // 常见 393×852
+                {387f, 631f, 2.625f},  // 大屏 411×891
+                {388f, 655f, 3.5f},    // 1440p 412×915
+                {776f, 1020f, 2f},     // 平板 800×1280
                 {180f, 200f, 1f},      // 极窄的怪面板
         };
         for (float[] d : devices) {
             BoardGeometry g = panel(d[0], d[1], d[2]);
-            assertTrue("18 行装不下面板: " + g,
-                    g.contentHeightPx() <= d[1] * d[2] + EPS);
+            float panelHeightPx = d[1] * d[2];
+            assertTrue(BoardGeometry.SCREEN_ROWS + " 行装不下面板: " + g,
+                    BoardGeometry.SCREEN_ROWS * g.cellPx() <= panelHeightPx + EPS);
+            assertEquals("内容盒（1 格余量 + " + BoardGeometry.ROWS
+                            + " 行）应该正好铺满面板高度，多一分是留白、少一分是要拖: " + g,
+                    panelHeightPx, g.contentHeightPx(), EPS);
             assertEquals(BoardGeometry.ROWS, g.rows());
             assertEquals(BoardGeometry.COLS, g.cols());
         }
@@ -105,14 +122,14 @@ public class BoardGeometryTest {
     /**
      * <b>横向一屏永远看不全</b>——这正是这一版要的效果，不是没做完。
      *
-     * <p>40 格比任何手机都宽，所以横向一定有得拖（{@code maxPanX > 0}）。
-     * 哪天有台设备能一屏装下 40 格，说明格子小到没法点了。
+     * <p>80 格比任何手机都宽，所以横向一定有得拖（{@code maxPanX > 0}）。
+     * 哪天有台设备能一屏装下 80 格，说明格子小到没法点了。
      */
     @Test
     public void theWorldIsAlwaysWiderThanTheScreenSoItHasToBePanned() {
         float[][] devices = {
-                {373f, 465f, 3.375f}, {336f, 600f, 3f}, {387f, 643f, 2.625f},
-                {388f, 660f, 3.5f}, {776f, 1032f, 2f},
+                {373f, 583f, 3.375f}, {336f, 540f, 3f}, {387f, 631f, 2.625f},
+                {388f, 655f, 3.5f}, {776f, 1020f, 2f},
         };
         for (float[] d : devices) {
             BoardGeometry g = panel(d[0], d[1], d[2]);
@@ -126,18 +143,19 @@ public class BoardGeometryTest {
     }
 
     /**
-     * 平板：格子跟着面板高度变大（52.9dp），一屏可见的列数反而更多。
-     * 行数和列数不变——关卡形状不随屏幕变。
+     * 平板：格子跟着面板高度变大（27.6dp，是手机上 15.8dp 的 1.75 倍），
+     * 一屏可见的列数反而更多（28.2 列）。行数和列数不变——关卡形状不随屏幕变。
      */
     @Test
     public void tabletGetsBiggerCellsNotMoreColumns() {
-        BoardGeometry g = panel(776f, 1032f, 2f);
+        BoardGeometry g = panel(776f, 1020f, 2f);
 
         assertEquals(BoardGeometry.COLS, g.cols());
         assertEquals(BoardGeometry.ROWS, g.rows());
-        assertEquals(54.32f, g.cellPx() / 2f, 0.1f);
-        assertEquals(14.29f, g.visibleCols(), 0.01f);
-        assertTrue(g.contentHeightPx() <= 1032f * 2f + EPS);
+        assertEquals(55.135f, g.cellPx(), 0.05f);          // px
+        assertEquals(27.57f, g.cellPx() / 2f, 0.05f);      // dp
+        assertEquals(28.15f, g.visibleCols(), 0.02f);
+        assertTrue(BoardGeometry.SCREEN_ROWS * g.cellPx() <= 1020f * 2f + EPS);
     }
 
     // ---- 格子大小只由高度决定 ----
@@ -175,8 +193,8 @@ public class BoardGeometryTest {
         }
 
         float[][] devices = {
-                {336f, 600f, 3f}, {369f, 620f, 2.75f}, {387f, 643f, 2.625f},
-                {388f, 660f, 3.5f}, {776f, 1032f, 2f}, {200f, 300f, 1f},
+                {336f, 540f, 3f}, {369f, 592f, 2.75f}, {387f, 631f, 2.625f},
+                {388f, 655f, 3.5f}, {776f, 1020f, 2f}, {200f, 300f, 1f},
         };
         for (float[] d : devices) {
             BoardGeometry g = panel(d[0], d[1], d[2]);
@@ -198,7 +216,7 @@ public class BoardGeometryTest {
      */
     @Test
     public void coreOnTheTopRowSitsExactlyOnTheTopEdge() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         float spriteHeight = (3 + 1f) * g.cellPx();
         assertEquals("核心贴图上沿应该正好落在面板上沿（0），不多不少",
@@ -208,61 +226,80 @@ public class BoardGeometryTest {
     /**
      * <b>贴图永远不会被放大。</b>任何机型、放到最大，素材都只是缩小显示——
      * 放大才会糊，这也是"一格 = 256px"这个基准的选法。
+     *
+     * <p><b>下界从 0.4 降到了 0.3（2026-09-27）。</b>那天格子从约 26dp 缩到
+     * 约 16dp，贴图缩放跟着腰斩：最省的机型（小屏 360×800）放到最大也只有
+     * 0.34 倍。**这一条现在是个"还可以更省"的信号，不是错误**——
+     * 素材按一格 256px 出图，而放到最大也只需要约 88px/格，
+     * 照着 128px/格 重出一遍能省一半内存和包体，画面几乎看不出差别。
+     * 那是美术那边的一次重出，没做，记在这里。
      */
     @Test
     public void spritesAreNeverUpscaledOnAnyDevice() {
         float[][] devices = {
-                {336f, 600f, 3f}, {369f, 620f, 2.75f}, {387f, 643f, 2.625f},
-                {388f, 660f, 3.5f}, {776f, 1032f, 2f},
+                {336f, 540f, 3f}, {369f, 592f, 2.75f}, {387f, 631f, 2.625f},
+                {388f, 655f, 3.5f}, {776f, 1020f, 2f},
         };
         for (float[] d : devices) {
             BoardGeometry g = panel(d[0], d[1], d[2]);
             float scale = g.spriteScale(Viewport.MAX_ZOOM);
             assertTrue("放到最大时贴图被放大了: " + scale, scale <= 1f);
-            assertTrue("素材浪费得太多: " + scale, scale > 0.4f);
+            assertTrue("素材浪费得太多: " + scale, scale > 0.3f);
         }
     }
 
     /**
-     * 可点区域：一格（约 33dp）低于 48dp 的建议值，但真正的目标不止一格——
-     * 2×2 的塔约 66dp，过线。1×1 的城墙是唯一的例外，靠放大补。
+     * <b>可点区域：翻倍到 36 行之后，塔自己也不够 48dp 了。</b>
+     *
+     * <p>这是"一屏看全整块战场"直接换来的代价，不是漏了。真机（一格 15.8dp）上：
+     * 1×1 的城墙 15.8dp、2×2 的塔 31.5dp、3×3 的核心 47.3dp，
+     * <b>三个都不到 48dp</b>。放大到 {@link Viewport#MAX_ZOOM} 倍之后是
+     * 31.5 / 63 / 94.7dp，塔和核心才过线，城墙仍然不够。
+     *
+     * <p>所以这条测试<b>断言的是"确实不够"，而不是"够"</b>——哪天有人把格子改大了
+     * （比如把 {@code SCREEN_ROWS} 调回去），这里会立刻响，提醒他那意味着
+     * 纵向又要拖了。两个数必须一起看。
      */
     @Test
-    public void towerFootprintsMeetTheTapTargetSizeEvenThoughOneCellDoesNot() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
-        float cellDp = g.cellPx() / 2.625f;
+    public void towerFootprintsAreBelowTheTapTargetAfterFittingTheWholeBoard() {
+        BoardGeometry g = realPhone();
+        float cellDp = g.cellPx() / 3.375f;
 
         assertTrue("一格本来就达不到 48dp，这是设计上接受的", cellDp < BoardGeometry.TAP_TARGET_DP);
-        assertTrue("2×2 的塔必须过线", 2f * cellDp >= BoardGeometry.TAP_TARGET_DP);
-        assertTrue("3×3 的核心必须过线", 3f * cellDp >= BoardGeometry.TAP_TARGET_DP);
+        assertTrue("2×2 的塔现在也达不到 48dp 了——如果这条挂了，说明格子被改大了，"
+                        + "回头确认纵向是不是又要拖：",
+                2f * cellDp < BoardGeometry.TAP_TARGET_DP);
+        // 放到最大之后，塔过线
+        assertTrue("放大到最大时 2×2 的塔必须过线",
+                2f * cellDp * Viewport.MAX_ZOOM >= BoardGeometry.TAP_TARGET_DP);
     }
 
     /** 第 0 列贴着内容盒左边缘，横向不留白；战场整体比面板宽。 */
     @Test
     public void boardStartsAtTheLeftEdgeAndIsWiderThanThePanel() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         // 第 0 列贴着内容盒左边缘，左边没有留白
         assertEquals(0f, g.leftX(0), EPS);
         assertEquals(g.boardWidthPx(), g.contentWidthPx(), EPS);
-        // 40 格 × 86.56px，比面板宽得多
-        assertEquals(40f * g.cellPx(), g.boardWidthPx(), 0.01f);
+        // 80 格 × 44.77px，比面板宽得多
+        assertEquals(BoardGeometry.COLS * g.cellPx(), g.boardWidthPx(), 0.01f);
     }
 
     // ---- footprint ----
 
     @Test
     public void fitsChecksTheWholeFootprintAgainstTheBoard() {
-        BoardGeometry g = panel(387f, 643f, 2.625f); // 40 × 18
+        BoardGeometry g = panel(387f, 631f, 2.625f); // 80 × 36
 
         assertTrue(g.fits(0, 0, 1, 1));
-        assertTrue(g.fits(38, 16, 2, 2));
-        assertTrue(g.fits(37, 15, 3, 3));
-        assertTrue(g.fits(39, 17, 1, 1));
+        assertTrue(g.fits(78, 34, 2, 2));
+        assertTrue(g.fits(77, 33, 3, 3));
+        assertTrue(g.fits(79, 35, 1, 1));
 
-        assertFalse("右边超出一列", g.fits(39, 0, 2, 2));
-        assertFalse("下边超出一行", g.fits(0, 17, 1, 2));
-        assertFalse("核心贴右下角放不下", g.fits(38, 16, 3, 3));
+        assertFalse("右边超出一列", g.fits(79, 0, 2, 2));
+        assertFalse("下边超出一行", g.fits(0, 35, 1, 2));
+        assertFalse("核心贴右下角放不下", g.fits(78, 34, 3, 3));
         assertFalse("负坐标", g.fits(-1, 0, 2, 2));
         assertFalse("尺寸为 0", g.fits(0, 0, 0, 2));
     }
@@ -270,7 +307,7 @@ public class BoardGeometryTest {
     /** 一个 footprint 盖住的格子：2×2 盖 4 格，3×3 盖 9 格，一个不多一个不少。 */
     @Test
     public void cellsOfReturnsExactlyTheFootprint() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         Cell[] four = g.cellsOf(3, 5, 2, 2);
         assertEquals(4, four.length);
@@ -294,7 +331,7 @@ public class BoardGeometryTest {
      */
     @Test
     public void footprintAnchorsAtItsBottomCentre() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         // 1×1：锚点就是格子中心的下边缘
         assertEquals(g.centerX(3), g.anchorX(3, 1), EPS);
@@ -319,7 +356,7 @@ public class BoardGeometryTest {
      */
     @Test
     public void everyBuildingTypeFitsInsideTheReservedHeadroom() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         for (BuildingType type : BuildingType.values()) {
             float spriteTop = g.anchorY(0, type.rows) - type.spriteHeightCells() * g.cellPx();
@@ -347,7 +384,7 @@ public class BoardGeometryTest {
      */
     @Test
     public void horizontalOverhangFitsInsideTheBoard() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         for (BuildingType type : BuildingType.values()) {
             assertTrue(type.label + " 向左探出超过了给美术的上限",
@@ -400,7 +437,7 @@ public class BoardGeometryTest {
     /** 占地尽量以点中的格子为中心：3×3 点中的是正中那格，2×2 点中的当左上角。 */
     @Test
     public void topLeftForCentresTheFootprintOnTheTappedCell() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         assertEquals(new Cell(4, 4), g.topLeftFor(5, 5, 3, 3));
         assertEquals(new Cell(5, 5), g.topLeftFor(5, 5, 2, 2));
@@ -413,16 +450,16 @@ public class BoardGeometryTest {
      */
     @Test
     public void topLeftForPushesTheFootprintBackInsideTheBoard() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);   // 40 × 18
+        BoardGeometry g = panel(387f, 631f, 2.625f);   // 80 × 36
 
-        assertEquals(new Cell(37, 15), g.topLeftFor(39, 17, 3, 3));
+        assertEquals(new Cell(77, 33), g.topLeftFor(79, 35, 3, 3));
         assertEquals(new Cell(0, 0), g.topLeftFor(0, 0, 3, 3));
-        assertEquals(new Cell(37, 15), g.topLeftFor(100, 100, 3, 3));
+        assertEquals(new Cell(77, 33), g.topLeftFor(100, 100, 3, 3));
         assertEquals(new Cell(0, 0), g.topLeftFor(-50, -50, 3, 3));
 
         // 不管点多偏，结果一定是一块放得下的占地
-        for (int col = -5; col < 45; col++) {
-            for (int row = -5; row < 25; row++) {
+        for (int col = -5; col < BoardGeometry.COLS + 5; col++) {
+            for (int row = -5; row < BoardGeometry.ROWS + 5; row++) {
                 for (BuildingType type : BuildingType.values()) {
                     Cell tl = g.topLeftFor(col, row, type.cols, type.rows);
                     assertTrue("点(" + col + "," + row + ") 放 " + type.label + " 得到 " + tl,
@@ -437,7 +474,7 @@ public class BoardGeometryTest {
     /** 敌人走在格子中间，位置是小数：{@code xAt(4.5)} 就是第 4 格的中心。 */
     @Test
     public void continuousCellCoordinatesAgreeWithTheIntegerOnes() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         for (int col = 0; col < g.cols(); col++) {
             assertEquals(g.leftX(col), g.xAt(col), EPS);
@@ -448,11 +485,65 @@ public class BoardGeometryTest {
         assertEquals(g.boardTopPx() + 7f * g.cellPx(), g.yAt(7f), 0.01f);
     }
 
+    // ---- 拖一排跨了几座 ----
+
+    /**
+     * 手指没离开按下那一格：就一座。
+     *
+     * <p>这一条保的是<b>"点一下建一座"没被拖拽那套逻辑吃掉</b>——
+     * 一次点击在触摸事件里也是一次"拖了零格"，算成 0 座的话点击就没反应了。
+     */
+    @Test
+    public void notMovingTheFingerMeansASingleBuilding() {
+        assertEquals(1, BoardGeometry.runLength(20, 20, 1));
+        assertEquals(1, BoardGeometry.runLength(20, 20, 2));
+    }
+
+    /** 墙是 1×1，拖过一格就是两座（按下那座 + 手指停的那座）。 */
+    @Test
+    public void aWallDragCountsEveryCellItCovers() {
+        assertEquals(2, BoardGeometry.runLength(20, 21, 1));
+        assertEquals(5, BoardGeometry.runLength(20, 24, 1));
+    }
+
+    /**
+     * 2×2 的塔要拖过<b>两格</b>才算多一座。
+     *
+     * <p>拖过一格就多一座的话，铺出来的塔会两两重叠一列——而"重叠"
+     * 在这种铺法里是看不出来的（后一座根本放不下），玩家只会觉得拖了没反应。
+     */
+    @Test
+    public void aTowerDragCountsWholeFootprints() {
+        assertEquals(1, BoardGeometry.runLength(20, 21, 2));
+        assertEquals(2, BoardGeometry.runLength(20, 22, 2));
+        assertEquals(2, BoardGeometry.runLength(20, 23, 2));   // 差一点满三座
+        assertEquals(3, BoardGeometry.runLength(20, 24, 2));
+    }
+
+    /**
+     * 往左拖和往右拖一样长。
+     *
+     * <p>只管长度不管方向：起头那一格由调用方取两端的较小者，
+     * 步长恒为一个占地。这样不管往哪边拖，铺出来的都是同一条。
+     */
+    @Test
+    public void draggingTheOtherWayCountsTheSameLength() {
+        assertEquals(BoardGeometry.runLength(20, 24, 1), BoardGeometry.runLength(24, 20, 1));
+        assertEquals(BoardGeometry.runLength(20, 24, 2), BoardGeometry.runLength(24, 20, 2));
+        assertEquals(5, BoardGeometry.runLength(24, 20, 1));
+    }
+
+    /** 占地跨度必须是正的：写 0 的话是除零，只会炸在一个和原因无关的地方。 */
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsAZeroSpan() {
+        BoardGeometry.runLength(20, 24, 0);
+    }
+
     // ---- 坐标换算 ----
 
     @Test
     public void everyCellCentreMapsBackToItsOwnCell() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         for (int col = 0; col < g.cols(); col++) {
             for (int row = 0; row < g.rows(); row++) {
@@ -465,7 +556,7 @@ public class BoardGeometryTest {
     /** 格子边界：左上角属于本格，右下角属于下一格（半开区间）。 */
     @Test
     public void cellEdgesBelongToTheCellOnTheRight() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         assertEquals(0, g.colAt(0f));
         assertEquals(1, g.colAt(g.cellPx()));
@@ -480,7 +571,7 @@ public class BoardGeometryTest {
      */
     @Test
     public void pointsOutsideTheBoardReportOutOfRange() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         assertTrue(g.colAt(-1f) < 0);
         assertTrue(g.rowAt(g.boardTopPx() - 1f) < 0);
@@ -491,7 +582,7 @@ public class BoardGeometryTest {
     /** 拖拽放置：手指拖出边界外，吸附到最边上的格子，而不是判定成非法。 */
     @Test
     public void nearestCellClampsToTheBoard() {
-        BoardGeometry g = panel(387f, 643f, 2.625f);
+        BoardGeometry g = panel(387f, 631f, 2.625f);
 
         assertEquals(new Cell(0, 0), g.nearestCell(-10_000f, -10_000f));
         assertEquals(new Cell(g.cols() - 1, g.rows() - 1), g.nearestCell(10_000f, 10_000f));

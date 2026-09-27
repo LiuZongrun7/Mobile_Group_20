@@ -14,7 +14,8 @@ package com.mobilegroup20.tokentrail.game.engine;
  * </pre>
  * <ul>
  *   <li><b>布局坐标</b>：{@link BoardGeometry} 算出来的那一套，也就是「不放大时
- *       每个东西该在哪」。它的原点在战场内容盒（上方余量 + 18 行）的左上角。</li>
+ *       每个东西该在哪」。它的原点在战场内容盒（上方余量 + {@code ROWS} 行，
+ *       现在 1 + 36 = 37 格高）的左上角。</li>
  *   <li><b>屏幕坐标</b>：画布上的真实像素。手指事件给的也是这个。</li>
  * </ul>
  * <p>{@code zoom == 1} 时两个坐标系重合，{@link #toScreenX} 是恒等映射——
@@ -40,15 +41,21 @@ package com.mobilegroup20.tokentrail.game.engine;
 public final class Viewport {
 
     /**
-     * 缩放下限：1 = <b>纵向</b>刚好装进面板（18 行全在），横向则是 {@code 面板宽 / 一格} 列。
+     * 缩放下限：1 = 一屏正好看得见 {@link BoardGeometry#SCREEN_ROWS} 行
+     * （= {@code 面板高 / 一格}），横向则是 {@code 面板宽 / 一格} 列。
      *
-     * <p>{@link BoardGeometry#fit} 保证了这个值下 18 行一定装得下。战场有
-     * {@link BoardGeometry#COLS} 列，比屏幕宽得多，所以 1 倍时<b>横向要拖</b>——
-     * 这不是 bug，见 {@code BoardGeometry.COLS} 的说明。
+     * <p>{@link BoardGeometry#fit} 保证了这个值下一屏装得下
+     * {@code SCREEN_ROWS} 行。战场有 {@link BoardGeometry#COLS} 列 ×
+     * {@link BoardGeometry#ROWS} 行：<b>横向比屏幕宽得多，纵向现在正好一屏</b>
+     * （{@code SCREEN_ROWS == ROWS}），所以 1 倍时<b>只有横向要拖，
+     * 纵向拖不动</b>——见 {@code BoardGeometry.COLS} 的说明。
      *
-     * <p>不许再往下缩：缩到 1 倍以下，格子会小于
-     * {@code fit()} 算出来的"18 行刚好装下"的尺寸，纵向就开始留白，
-     * 而画面并没有因此多看到什么有用的东西。
+     * <p><b>2026-09-27 这条改过两次意思，两次都只是跟着 {@code SCREEN_ROWS} 走。</b>
+     * 战场翻倍之前是"纵向正好一屏"；刚翻倍那半天变成"纵向也看得见一半、要拖"；
+     * 当天晚些时候 {@code SCREEN_ROWS} 提到 36，又变回"纵向一屏看全"。
+     * 这个值本身<b>从头到尾没有变，也不该变</b>：它守的是"格子不小于
+     * {@code fit()} 算出来的那个尺寸"。再往下缩就是"用更小的格子换更远的视野"，
+     * 而现在 {@link BoardGeometry#TAP_TARGET_DP} 的余量已经用完了。
      */
     public static final float MIN_ZOOM = 1f;
 
@@ -57,8 +64,13 @@ public final class Viewport {
      *
      * <p><b>这个值和 {@link BoardGeometry#DESIGN_CELL_PX} 是一对。</b>
      * 素材按 256px/格 设计，放到最大时任何机型上贴图都只是缩小显示
-     * （{@code spriteScale} 约 0.23–0.6），所以不会糊。改其中一个就要
-     * 重算另一个，否则放到最大时贴图会被放大。
+     * （{@code spriteScale} 约 0.34–0.48，不放大时 0.17–0.22），所以不会糊。
+     * 改其中一个就要重算另一个，否则放到最大时贴图会被放大。
+     *
+     * <p><b>2026-09-27 {@code SCREEN_ROWS} 提到 36 之后，这个上限的意味变了。</b>
+     * 以前"1 倍"就是一屏 18 行、格子 26.5dp，放大是为了看清细节；现在 1 倍是
+     * 36 行全在、格子 15.8dp，<b>放大 2 倍（31.5dp）反而变成了"点得准"的唯一办法</b>
+     * ——见 {@link BoardGeometry#TAP_TARGET_DP}。上限本身没动。
      */
     public static final float MAX_ZOOM = 2f;
 
@@ -128,7 +140,7 @@ public final class Viewport {
     /**
      * 镜头移到最右边：内容的右边缘和面板右边缘对齐（纵向不变）。
      *
-     * <p><b>这是开局取景。</b>战场有 {@link BoardGeometry#COLS} 列、约 2.6 屏宽，
+     * <p><b>这是开局取景。</b>战场有 {@link BoardGeometry#COLS} 列、约 3.4 屏宽，
      * 所以"一开局看到哪一段"是要选的。选最右边而不是"对准核心"：
      * <ul>
      *   <li>核心<b>可以挪</b>（{@code Battlefield.moveCore}），镜头跟着核心跑的话，

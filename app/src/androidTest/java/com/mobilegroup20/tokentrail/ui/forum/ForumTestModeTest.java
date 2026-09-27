@@ -7,7 +7,7 @@ import com.mobilegroup20.tokentrail.BuildConfig;
 import com.mobilegroup20.tokentrail.MainActivity;
 import com.mobilegroup20.tokentrail.R;
 import com.mobilegroup20.tokentrail.data.RepositoryProvider;
-import com.mobilegroup20.tokentrail.data.TeamAccountSession;
+import com.mobilegroup20.tokentrail.data.AccountSession;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static androidx.test.espresso.Espresso.onView;
@@ -19,7 +19,7 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class ForumTestModeTest {
     @Test public void testModeBadgeAndComposerSurviveRecreationAndExitReturnsToNormalForum() throws Exception {
-        TeamAccountSession session = TeamAccountSession.get(ApplicationProvider.getApplicationContext()); session.clear();
+        AccountSession session = AccountSession.get(ApplicationProvider.getApplicationContext()); session.clear();
         session.saveForumTest("tt_test_instrumentation-only", "test_instrumentation", "Tester Fixture");
         RepositoryProvider.configureForum("", session); // No live request needed for this UI test.
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
