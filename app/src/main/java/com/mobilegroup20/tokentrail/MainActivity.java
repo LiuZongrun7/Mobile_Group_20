@@ -22,7 +22,9 @@ import com.mobilegroup20.tokentrail.ui.forum.ForumFragment;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.mobilegroup20.tokentrail.contract.model.ResourceBalance;
 import com.mobilegroup20.tokentrail.contract.model.ResourceType;
+import com.mobilegroup20.tokentrail.contract.model.Provider;
 import com.mobilegroup20.tokentrail.contract.model.TokenBundle;
+import com.mobilegroup20.tokentrail.data.Money;
 import com.mobilegroup20.tokentrail.data.RepositoryProvider;
 import com.mobilegroup20.tokentrail.data.RelayCredentials;
 import com.mobilegroup20.tokentrail.data.SeasonWallet;
@@ -42,6 +44,7 @@ import com.mobilegroup20.tokentrail.game.engine.ShopCatalog;
 import com.mobilegroup20.tokentrail.game.engine.Waves;
 import com.mobilegroup20.tokentrail.game.view.BattleStatus;
 import com.mobilegroup20.tokentrail.game.view.BattlefieldView;
+import com.mobilegroup20.tokentrail.ui.dashboard.DashboardUsage;
 import com.mobilegroup20.tokentrail.util.TimeUtils;
 
 import java.util.ArrayList;
@@ -49,6 +52,7 @@ import java.util.Collections;
 import java.util.List;
 import com.mobilegroup20.tokentrail.util.TokenFormat;
 
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.Locale;
@@ -222,6 +226,8 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) binding.bottomNav.setSelectedItemId(savedInstanceState.getInt("selectedTab", R.id.nav_dashboard));
         showSeasonHeader();
         showHud();
+        showDashboard();
+        setUpDashboardActions();
     }
 
     // ==================== 战场 ====================
@@ -1274,6 +1280,111 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /** Dashboard reads the same per-day rows as the repository's usage analytics. */
+    private void showDashboard() {
+        String month = TimeUtils.currentMonth();
+        String from = TimeUtils.firstDayOfMonth(month);
+        String to = TimeUtils.clampToYesterday(TimeUtils.lastDayOfMonth(month));
+        LocalDate now = LocalDate.now(TimeUtils.ZONE);
+        binding.dashboardMonthLabel.setText(now.getMonth().getDisplayName(TextStyle.SHORT, Locale.US)
+                + " " + now.getYear());
+        if (to == null || to.compareTo(from) < 0) {
+            renderDashboard(DashboardUsage.calculate(Collections.emptyList(), from, to), from, to);
+            return;
+        }
+        RepositoryProvider.usage().dailyUsageIn(DEMO_UID, from, to).observe(this,
+                rows -> renderDashboard(DashboardUsage.calculate(rows, from, to), from, to));
+    }
+
+    private void renderDashboard(DashboardUsage.Summary summary, String from, String to) {
+        NumberFormat number = NumberFormat.getIntegerInstance(Locale.US);
+        binding.dashboardMonthTokens.setText(number.format(summary.month.tokens));
+        binding.dashboardTokenDelta.setText(RepositoryProvider.USE_STUBS
+                ? "Sample usage (preview)" : "From recorded usage");
+        if (summary.month.tokens == 0 || summary.month.rowsWithoutPrice > 0
+                && summary.month.knownCostMicros == 0) {
+            binding.dashboardCnySpend.setText(summary.month.tokens == 0 ? "¥0.00" : "—");
+        } else {
+            binding.dashboardCnySpend.setText(Money.formatCny(summary.month.knownCostMicros));
+        }
+        binding.dashboardSpendDelta.setText(summary.month.rowsWithoutPrice > 0
+                ? summary.month.rowsWithoutPrice + " records lack pricing"
+                : RepositoryProvider.USE_STUBS ? "Sample costs (preview)"
+                : "CNY estimate · exchange rate unverified");
+        binding.dashboardBudgetPercent.setText("—");
+        binding.dashboardBudgetText.setText("Budget not configured");
+        binding.dashboardRunway.setText("Available after wallet setup");
+        int percent = summary.completedDays == 0 ? 0
+                : Math.round(summary.daysWithRecords * 100f / summary.completedDays);
+        binding.dashboardMissingPercent.setText(percent + "%");
+        binding.dashboardCoverageNote.setText(summary.daysWithRecords + " of "
+                + summary.completedDays + " completed days have records");
+        binding.dashboardCoverageFill.post(() -> {
+            View parent = (View) binding.dashboardCoverageFill.getParent();
+            binding.dashboardCoverageFill.getLayoutParams().width =
+                    Math.round(parent.getWidth() * percent / 100f);
+            binding.dashboardCoverageFill.requestLayout();
+        });
+        renderDashboardProviders(summary);
+        renderDashboardTrend(summary, from, to);
+    }
+
+    private void renderDashboardProviders(DashboardUsage.Summary summary) {
+        TextView[] rows = {
+                binding.dashboardProviderOpenai,
+                binding.dashboardProviderMimo,
+                binding.dashboardProviderDeepseek
+        };
+        Provider[] providers = {Provider.OPENAI, Provider.MIMO, Provider.DEEPSEEK};
+        NumberFormat tokenFormat = NumberFormat.getIntegerInstance(Locale.US);
+        for (int i = 0; i < rows.length; i++) {
+            DashboardUsage.Totals totals = summary.providers.get(providers[i]);
+            long tokens = totals == null ? 0 : totals.tokens;
+            int percent = summary.month.tokens == 0 ? 0
+                    : (int) Math.round(tokens * 100.0 / summary.month.tokens);
+            String cost = totals == null || totals.tokens == 0 ? "" : totals.rowsWithoutPrice > 0
+                    ? " · price incomplete" : " · " + Money.formatCny(totals.knownCostMicros);
+            rows[i].setText(providers[i].displayName + "  " + percent + "%\n"
+                    + tokenFormat.format(tokens) + " tokens" + cost);
+        }
+    }
+
+    private void renderDashboardTrend(DashboardUsage.Summary summary, String from, String to) {
+        binding.dashboardTrendBars.removeAllViews();
+        if (to == null || to.compareTo(from) < 0) {
+            binding.dashboardTrendRange.setText("No completed days this month");
+            return;
+        }
+        String first = TimeUtils.plusDays(to, -13);
+        if (first.compareTo(from) < 0) first = from;
+        List<String> days = TimeUtils.daysBetween(first, to);
+        binding.dashboardTrendRange.setText(TimeUtils.formatForDisplay(first) + " – "
+                + TimeUtils.formatForDisplay(to));
+        long max = 0;
+        for (String day : days) max = Math.max(max, summary.tokensByDay.getOrDefault(day, 0L));
+        for (String day : days) {
+            long tokens = summary.tokensByDay.getOrDefault(day, 0L);
+            View bar = new View(this);
+            bar.setBackgroundColor(tokens == 0 ? 0xFFE5ECF8 : 0xFF1976D2);
+            bar.setContentDescription(TimeUtils.formatForDisplay(day) + ": " + tokens + " tokens");
+            int height = max == 0 ? 3 : Math.max(3, Math.round(126f * tokens / max));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(height), 1f);
+            params.setMargins(dp(3), 0, dp(3), 0);
+            binding.dashboardTrendBars.addView(bar, params);
+        }
+    }
+
+    private void setUpDashboardActions() {
+        binding.dashboardPriceCard.setOnClickListener(v -> Toast.makeText(this,
+                "Price Center: model prices and official top-up links", Toast.LENGTH_SHORT).show());
+        binding.dashboardPriceIcon.setOnClickListener(v -> binding.dashboardPriceCard.performClick());
+        binding.dashboardAiCard.setOnClickListener(v -> Toast.makeText(this,
+                "AI Assistant will explain usage changes from your records", Toast.LENGTH_SHORT).show());
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
     /**
      * 唯一的花钱入口：先本地乐观扣，再交给 {@link SpendSync} 去服务端对账。
      *
@@ -1412,24 +1523,28 @@ public class MainActivity extends AppCompatActivity {
      * 论坛 Fragment 留在 FragmentManager 中，保留两个标签各自的游标与滚动位置。
      */
     private void showTab(int itemId, CharSequence title) {
+        boolean dashboard = itemId == R.id.nav_dashboard;
         boolean game = itemId == R.id.nav_game;
         boolean forum = itemId == R.id.nav_forum;
         boolean account = itemId == R.id.nav_profile && !BuildConfig.FORUM_BASE_URL.isEmpty();
+        boolean lightPage = !game;
+
         binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
+        binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
         binding.gamePage.setVisibility(game ? View.VISIBLE : View.GONE);
-        binding.emptyPage.setVisibility(game || forum ? View.GONE : View.VISIBLE);
+        binding.emptyPage.setVisibility(game || forum || dashboard ? View.GONE : View.VISIBLE);
         binding.forumPage.setVisibility(forum ? View.VISIBLE : View.GONE);
         binding.battlefield.setVisibility(game ? View.VISIBLE : View.INVISIBLE);
-        binding.background.setVisibility(forum ? View.INVISIBLE : View.VISIBLE);
-        binding.getRoot().setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
-        ColorStateList navColors = ContextCompat.getColorStateList(this, forum ? R.color.forum_nav_item : R.color.nav_item);
+        binding.background.setVisibility(game ? View.VISIBLE : View.INVISIBLE);
+        binding.getRoot().setBackgroundColor(lightPage ? 0xFFFFFBFE : Color.TRANSPARENT);
+        ColorStateList navColors = ContextCompat.getColorStateList(this, lightPage ? R.color.forum_nav_item : R.color.nav_item);
         binding.bottomNav.setItemIconTintList(navColors);
         binding.bottomNav.setItemTextColor(navColors);
-        binding.bottomNav.setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
-        binding.bottomNav.setItemActiveIndicatorColor(ColorStateList.valueOf(forum ? 0xFFE8DEF8 : 0x40FFFFFF));
-        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(forum);
-        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(forum);
-        getWindow().setNavigationBarColor(forum && android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
+        binding.bottomNav.setBackgroundColor(lightPage ? 0xFFFFFFFF : Color.TRANSPARENT);
+        binding.bottomNav.setItemActiveIndicatorColor(ColorStateList.valueOf(lightPage ? 0xFFEAF3FF : 0x40FFFFFF));
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(lightPage);
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(lightPage);
+        getWindow().setNavigationBarColor(lightPage && android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
         Fragment forumFragment = getSupportFragmentManager().findFragmentByTag("forum");
         if (forumFragment == null && forum) {
             getSupportFragmentManager().beginTransaction().add(R.id.forum_page, new ForumFragment(), "forum").commitNow();
@@ -1438,7 +1553,7 @@ public class MainActivity extends AppCompatActivity {
             if (forum) tx.show(forumFragment); else tx.hide(forumFragment);
             tx.setMaxLifecycle(forumFragment, forum ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED).commitNow();
         }
-        if (!game && !forum) {
+        if (!game && !forum && !dashboard) {
             com.mobilegroup20.tokentrail.data.AccountSession session = com.mobilegroup20.tokentrail.data.AccountSession.get(this);
             boolean relay = com.mobilegroup20.tokentrail.data.RelayCredentials.get(this).configured();
             // 「我的」页：账号状态 + 中转状态。中转设置挂在同一个标签上（点标题进设置），
@@ -1453,7 +1568,6 @@ public class MainActivity extends AppCompatActivity {
             binding.emptyLabel.setOnClickListener(account ? v -> openRelaySetup() : null);
         }
     }
-
     /** 打开中转设置。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
     private void openRelaySetup() {
         androidx.fragment.app.FragmentManager manager = getSupportFragmentManager();
