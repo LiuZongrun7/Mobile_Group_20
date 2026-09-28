@@ -49,6 +49,7 @@ import java.util.Collections;
 import java.util.List;
 import com.mobilegroup20.tokentrail.util.TokenFormat;
 
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.Locale;
@@ -222,6 +223,8 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) binding.bottomNav.setSelectedItemId(savedInstanceState.getInt("selectedTab", R.id.nav_dashboard));
         showSeasonHeader();
         showHud();
+        showDashboard();
+        setUpDashboardActions();
     }
 
     // ==================== 战场 ====================
@@ -1274,6 +1277,77 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /** Dashboard 首页：把当前 demo usage 转成用户能直接理解的 token、人民币花费和预算风险。 */
+    private void showDashboard() {
+        RepositoryProvider.usage().monthTokens(DEMO_UID, TimeUtils.currentMonth()).observe(this, bundle -> {
+            if (bundle == null) {
+                return;
+            }
+            long input = TokenFormat.roundForDisplay(bundle.input);
+            long cache = TokenFormat.roundForDisplay(bundle.cacheRead + bundle.cacheWrite);
+            long output = TokenFormat.roundForDisplay(bundle.output);
+            long total = input + cache + output;
+            double spend = total / 1_000_000.0 * 8.72;
+            double budget = Math.max(140.0, spend / 0.62);
+            int budgetPct = (int) Math.min(99, Math.round(spend * 100.0 / budget));
+
+            binding.dashboardMonthTokens.setText(NumberFormat.getIntegerInstance(Locale.US).format(total));
+            binding.dashboardTokenDelta.setText("↑ 18% from last week");
+            binding.dashboardCnySpend.setText(String.format(Locale.US, "¥%.2f", spend));
+            binding.dashboardSpendDelta.setText("≈ ¥8.72 / 1M tokens");
+            binding.dashboardBudgetPercent.setText(budgetPct + "%");
+            binding.dashboardBudgetText.setText(String.format(Locale.US, "¥%.2f / ¥%.2f", spend, budget));
+            binding.dashboardRunway.setText("53 days runway");
+            binding.dashboardMissingPercent.setText("6%");
+
+            renderDashboardProviders(total, spend);
+            renderDashboardTrend();
+        });
+    }
+
+    private void renderDashboardProviders(long total, double spend) {
+        double[] ratios = {0.52, 0.24, 0.15, 0.09};
+        TextView[] rows = {
+                binding.dashboardProviderOpenai,
+                binding.dashboardProviderClaude,
+                binding.dashboardProviderGemini,
+                binding.dashboardProviderOther
+        };
+        String[] names = {"OpenAI", "Claude", "Gemini", "Others"};
+        NumberFormat tokenFormat = NumberFormat.getIntegerInstance(Locale.US);
+        for (int i = 0; i < rows.length; i++) {
+            long tokens = Math.round(total * ratios[i]);
+            double providerSpend = spend * ratios[i];
+            rows[i].setText(String.format(Locale.US, "%s  %.0f%%\n%s tokens · ¥%.2f",
+                    names[i], ratios[i] * 100, tokenFormat.format(tokens), providerSpend));
+        }
+    }
+
+    private void renderDashboardTrend() {
+        if (binding.dashboardTrendBars.getChildCount() > 0) {
+            return;
+        }
+        int[] values = {55, 70, 44, 86, 58, 108, 72, 96, 132, 88, 116, 74, 104, 154};
+        for (int value : values) {
+            View bar = new View(this);
+            bar.setBackgroundColor(0xFF1976D2);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(value), 1f);
+            params.setMargins(dp(3), 0, dp(3), 0);
+            binding.dashboardTrendBars.addView(bar, params);
+        }
+    }
+
+    private void setUpDashboardActions() {
+        binding.dashboardPriceCard.setOnClickListener(v -> Toast.makeText(this,
+                "Price Center: model prices and official top-up links", Toast.LENGTH_SHORT).show());
+        binding.dashboardPriceIcon.setOnClickListener(v -> binding.dashboardPriceCard.performClick());
+        binding.dashboardAiCard.setOnClickListener(v -> Toast.makeText(this,
+                "AI Assistant will explain usage changes from your records", Toast.LENGTH_SHORT).show());
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
     /**
      * 唯一的花钱入口：先本地乐观扣，再交给 {@link SpendSync} 去服务端对账。
      *
@@ -1412,24 +1486,28 @@ public class MainActivity extends AppCompatActivity {
      * 论坛 Fragment 留在 FragmentManager 中，保留两个标签各自的游标与滚动位置。
      */
     private void showTab(int itemId, CharSequence title) {
+        boolean dashboard = itemId == R.id.nav_dashboard;
         boolean game = itemId == R.id.nav_game;
         boolean forum = itemId == R.id.nav_forum;
         boolean account = itemId == R.id.nav_profile && !BuildConfig.FORUM_BASE_URL.isEmpty();
+        boolean lightPage = !game;
+
         binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
+        binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
         binding.gamePage.setVisibility(game ? View.VISIBLE : View.GONE);
-        binding.emptyPage.setVisibility(game || forum ? View.GONE : View.VISIBLE);
+        binding.emptyPage.setVisibility(game || forum || dashboard ? View.GONE : View.VISIBLE);
         binding.forumPage.setVisibility(forum ? View.VISIBLE : View.GONE);
         binding.battlefield.setVisibility(game ? View.VISIBLE : View.INVISIBLE);
-        binding.background.setVisibility(forum ? View.INVISIBLE : View.VISIBLE);
-        binding.getRoot().setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
-        ColorStateList navColors = ContextCompat.getColorStateList(this, forum ? R.color.forum_nav_item : R.color.nav_item);
+        binding.background.setVisibility(game ? View.VISIBLE : View.INVISIBLE);
+        binding.getRoot().setBackgroundColor(lightPage ? 0xFFFFFBFE : Color.TRANSPARENT);
+        ColorStateList navColors = ContextCompat.getColorStateList(this, lightPage ? R.color.forum_nav_item : R.color.nav_item);
         binding.bottomNav.setItemIconTintList(navColors);
         binding.bottomNav.setItemTextColor(navColors);
-        binding.bottomNav.setBackgroundColor(forum ? 0xFFFFFBFE : Color.TRANSPARENT);
-        binding.bottomNav.setItemActiveIndicatorColor(ColorStateList.valueOf(forum ? 0xFFE8DEF8 : 0x40FFFFFF));
-        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(forum);
-        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(forum);
-        getWindow().setNavigationBarColor(forum && android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
+        binding.bottomNav.setBackgroundColor(lightPage ? 0xFFFFFFFF : Color.TRANSPARENT);
+        binding.bottomNav.setItemActiveIndicatorColor(ColorStateList.valueOf(lightPage ? 0xFFEAF3FF : 0x40FFFFFF));
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(lightPage);
+        WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(lightPage);
+        getWindow().setNavigationBarColor(lightPage && android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
         Fragment forumFragment = getSupportFragmentManager().findFragmentByTag("forum");
         if (forumFragment == null && forum) {
             getSupportFragmentManager().beginTransaction().add(R.id.forum_page, new ForumFragment(), "forum").commitNow();
@@ -1438,7 +1516,7 @@ public class MainActivity extends AppCompatActivity {
             if (forum) tx.show(forumFragment); else tx.hide(forumFragment);
             tx.setMaxLifecycle(forumFragment, forum ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED).commitNow();
         }
-        if (!game && !forum) {
+        if (!game && !forum && !dashboard) {
             com.mobilegroup20.tokentrail.data.AccountSession session = com.mobilegroup20.tokentrail.data.AccountSession.get(this);
             boolean relay = com.mobilegroup20.tokentrail.data.RelayCredentials.get(this).configured();
             // 「我的」页：账号状态 + 中转状态。中转设置挂在同一个标签上（点标题进设置），
@@ -1453,7 +1531,6 @@ public class MainActivity extends AppCompatActivity {
             binding.emptyLabel.setOnClickListener(account ? v -> openRelaySetup() : null);
         }
     }
-
     /** 打开中转设置。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
     private void openRelaySetup() {
         androidx.fragment.app.FragmentManager manager = getSupportFragmentManager();
