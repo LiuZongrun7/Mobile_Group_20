@@ -26,3 +26,14 @@ tools/news/runtime/
 backend/runtime/
 backend/.venv/
 .pytest_cache/
+
+# ModelPilot: keep the editable deliverables, not local packaging / render output
+/docs/ModelPilot_Frontend_Design*.zip
+/docs/ModelPilot_Outline_LaTeX*.zip
+/docs/app界面示例图/v2/
+/docs/app界面示例图/v3/
+/docs/modelpilot-outline/OPEN_SOURCE_RECHECK.md
+# Interactive prototype stays local; only the static modelpilot-ui design is shared
+/docs/modelpilot-design/
+/output/
+/tmp/

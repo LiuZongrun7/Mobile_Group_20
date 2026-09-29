@@ -1,4 +1,19 @@
-# TokenTrail 文档索引
+# ModelPilot 文档索引
+
+## 当前方案
+
+| 内容 | 入口 |
+| --- | --- |
+| 最新 Outline | [PDF](modelpilot-outline/ModelPilot_Project_Outline.pdf) · [LaTeX 与编译说明](modelpilot-outline/README.md) |
+| 最新前端设计稿 | [设计稿目录](modelpilot-ui/README.md) · [完整图册](modelpilot-ui/GALLERY.md) · [总览图](modelpilot-ui/overview.png) |
+| 页面规范 | [DESIGN.md](modelpilot-ui/DESIGN.md) |
+| Insights 设计与统计口径 | [INSIGHTS.md](modelpilot-ui/INSIGHTS.md) |
+
+ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静态设计稿入口；页面使用示例数据，不包含前端原型代码，也不代表 Android / 后端已实现全部新功能。
+
+## 既有 TokenTrail 开发资料
+
+以下保留原工程的技术说明和阶段记录，供现有代码开发参考；其中旧界面、功能优先级和完成状态不等同于最新 ModelPilot 方案。
 
 这个文件夹放**所有文字信息**：接口契约、分工、架构说明、交接须知。
 写代码的时候要查的东西，先来这里。
@@ -14,7 +29,7 @@
 | [`DATA_SOURCES.md`](DATA_SOURCES.md) | 用量从哪来：三家 provider 各自要用户填什么、我们能拉到什么、官方还是私有接口 | **写 fetcher / 做填凭据界面之前先看** |
 | 本文 | 架构、依赖方向、桩数据开关、怎么构建 | 刚接手时 |
 
-交给老师的成品也在这里（英文，**不返工**）：
+旧版 TokenTrail 提交资料也保留在这里（英文，供历史对照）：
 
 | 文件 | 说明 |
 | --- | --- |
@@ -22,7 +37,7 @@
 | `TokenTrail_Project_Outline_Slides.pptx` / `.pdf` | 幻灯片成品，15 页 |
 | `outline-slides-src/` | 幻灯片的生成脚本与插图源码，见其中的 `README.md` |
 
-两者都从**本文件夹**里构建（路径写死了相对位置，别单独挪走其中一个）：
+以下编译说明仅针对旧版资料，不适用于上方的 ModelPilot Outline：
 
 ```bash
 # 大纲：跑两遍让 hyperref 的目录/链接对上
