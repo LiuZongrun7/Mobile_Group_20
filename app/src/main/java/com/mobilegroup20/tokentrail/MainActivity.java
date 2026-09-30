@@ -22,7 +22,9 @@ import com.mobilegroup20.tokentrail.ui.forum.ForumFragment;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.mobilegroup20.tokentrail.contract.model.ResourceBalance;
 import com.mobilegroup20.tokentrail.contract.model.ResourceType;
+import com.mobilegroup20.tokentrail.contract.model.Provider;
 import com.mobilegroup20.tokentrail.contract.model.TokenBundle;
+import com.mobilegroup20.tokentrail.data.Money;
 import com.mobilegroup20.tokentrail.data.RepositoryProvider;
 import com.mobilegroup20.tokentrail.data.RelayCredentials;
 import com.mobilegroup20.tokentrail.data.SeasonWallet;
@@ -42,6 +44,7 @@ import com.mobilegroup20.tokentrail.game.engine.ShopCatalog;
 import com.mobilegroup20.tokentrail.game.engine.Waves;
 import com.mobilegroup20.tokentrail.game.view.BattleStatus;
 import com.mobilegroup20.tokentrail.game.view.BattlefieldView;
+import com.mobilegroup20.tokentrail.ui.dashboard.DashboardUsage;
 import com.mobilegroup20.tokentrail.util.TimeUtils;
 
 import java.util.ArrayList;
@@ -1277,61 +1280,95 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** Dashboard 首页：把当前 demo usage 转成用户能直接理解的 token、人民币花费和预算风险。 */
+    /** Dashboard reads the same per-day rows as the repository's usage analytics. */
     private void showDashboard() {
-        RepositoryProvider.usage().monthTokens(DEMO_UID, TimeUtils.currentMonth()).observe(this, bundle -> {
-            if (bundle == null) {
-                return;
-            }
-            long input = TokenFormat.roundForDisplay(bundle.input);
-            long cache = TokenFormat.roundForDisplay(bundle.cacheRead + bundle.cacheWrite);
-            long output = TokenFormat.roundForDisplay(bundle.output);
-            long total = input + cache + output;
-            double spend = total / 1_000_000.0 * 8.72;
-            double budget = Math.max(140.0, spend / 0.62);
-            int budgetPct = (int) Math.min(99, Math.round(spend * 100.0 / budget));
-
-            binding.dashboardMonthTokens.setText(NumberFormat.getIntegerInstance(Locale.US).format(total));
-            binding.dashboardTokenDelta.setText("↑ 18% from last week");
-            binding.dashboardCnySpend.setText(String.format(Locale.US, "¥%.2f", spend));
-            binding.dashboardSpendDelta.setText("≈ ¥8.72 / 1M tokens");
-            binding.dashboardBudgetPercent.setText(budgetPct + "%");
-            binding.dashboardBudgetText.setText(String.format(Locale.US, "¥%.2f / ¥%.2f", spend, budget));
-            binding.dashboardRunway.setText("53 days runway");
-            binding.dashboardMissingPercent.setText("6%");
-
-            renderDashboardProviders(total, spend);
-            renderDashboardTrend();
-        });
-    }
-
-    private void renderDashboardProviders(long total, double spend) {
-        double[] ratios = {0.52, 0.24, 0.15, 0.09};
-        TextView[] rows = {
-                binding.dashboardProviderOpenai,
-                binding.dashboardProviderClaude,
-                binding.dashboardProviderGemini,
-                binding.dashboardProviderOther
-        };
-        String[] names = {"OpenAI", "Claude", "Gemini", "Others"};
-        NumberFormat tokenFormat = NumberFormat.getIntegerInstance(Locale.US);
-        for (int i = 0; i < rows.length; i++) {
-            long tokens = Math.round(total * ratios[i]);
-            double providerSpend = spend * ratios[i];
-            rows[i].setText(String.format(Locale.US, "%s  %.0f%%\n%s tokens · ¥%.2f",
-                    names[i], ratios[i] * 100, tokenFormat.format(tokens), providerSpend));
-        }
-    }
-
-    private void renderDashboardTrend() {
-        if (binding.dashboardTrendBars.getChildCount() > 0) {
+        String month = TimeUtils.currentMonth();
+        String from = TimeUtils.firstDayOfMonth(month);
+        String to = TimeUtils.clampToYesterday(TimeUtils.lastDayOfMonth(month));
+        LocalDate now = LocalDate.now(TimeUtils.ZONE);
+        binding.dashboardMonthLabel.setText(now.getMonth().getDisplayName(TextStyle.SHORT, Locale.US)
+                + " " + now.getYear());
+        if (to == null || to.compareTo(from) < 0) {
+            renderDashboard(DashboardUsage.calculate(Collections.emptyList(), from, to), from, to);
             return;
         }
-        int[] values = {55, 70, 44, 86, 58, 108, 72, 96, 132, 88, 116, 74, 104, 154};
-        for (int value : values) {
+        RepositoryProvider.usage().dailyUsageIn(DEMO_UID, from, to).observe(this,
+                rows -> renderDashboard(DashboardUsage.calculate(rows, from, to), from, to));
+    }
+
+    private void renderDashboard(DashboardUsage.Summary summary, String from, String to) {
+        NumberFormat number = NumberFormat.getIntegerInstance(Locale.US);
+        binding.dashboardMonthTokens.setText(number.format(summary.month.tokens));
+        binding.dashboardTokenDelta.setText(RepositoryProvider.USE_STUBS
+                ? "Sample usage (preview)" : "From recorded usage");
+        if (summary.month.tokens == 0 || summary.month.rowsWithoutPrice > 0
+                && summary.month.knownCostMicros == 0) {
+            binding.dashboardCnySpend.setText(summary.month.tokens == 0 ? "¥0.00" : "—");
+        } else {
+            binding.dashboardCnySpend.setText(Money.formatCny(summary.month.knownCostMicros));
+        }
+        binding.dashboardSpendDelta.setText(summary.month.rowsWithoutPrice > 0
+                ? summary.month.rowsWithoutPrice + " records lack pricing"
+                : RepositoryProvider.USE_STUBS ? "Sample costs (preview)"
+                : "CNY estimate · exchange rate unverified");
+        binding.dashboardBudgetPercent.setText("—");
+        binding.dashboardBudgetText.setText("Budget not configured");
+        binding.dashboardRunway.setText("Available after wallet setup");
+        int percent = summary.completedDays == 0 ? 0
+                : Math.round(summary.daysWithRecords * 100f / summary.completedDays);
+        binding.dashboardMissingPercent.setText(percent + "%");
+        binding.dashboardCoverageNote.setText(summary.daysWithRecords + " of "
+                + summary.completedDays + " completed days have records");
+        binding.dashboardCoverageFill.post(() -> {
+            View parent = (View) binding.dashboardCoverageFill.getParent();
+            binding.dashboardCoverageFill.getLayoutParams().width =
+                    Math.round(parent.getWidth() * percent / 100f);
+            binding.dashboardCoverageFill.requestLayout();
+        });
+        renderDashboardProviders(summary);
+        renderDashboardTrend(summary, from, to);
+    }
+
+    private void renderDashboardProviders(DashboardUsage.Summary summary) {
+        TextView[] rows = {
+                binding.dashboardProviderOpenai,
+                binding.dashboardProviderMimo,
+                binding.dashboardProviderDeepseek
+        };
+        Provider[] providers = {Provider.OPENAI, Provider.MIMO, Provider.DEEPSEEK};
+        NumberFormat tokenFormat = NumberFormat.getIntegerInstance(Locale.US);
+        for (int i = 0; i < rows.length; i++) {
+            DashboardUsage.Totals totals = summary.providers.get(providers[i]);
+            long tokens = totals == null ? 0 : totals.tokens;
+            int percent = summary.month.tokens == 0 ? 0
+                    : (int) Math.round(tokens * 100.0 / summary.month.tokens);
+            String cost = totals == null || totals.tokens == 0 ? "" : totals.rowsWithoutPrice > 0
+                    ? " · price incomplete" : " · " + Money.formatCny(totals.knownCostMicros);
+            rows[i].setText(providers[i].displayName + "  " + percent + "%\n"
+                    + tokenFormat.format(tokens) + " tokens" + cost);
+        }
+    }
+
+    private void renderDashboardTrend(DashboardUsage.Summary summary, String from, String to) {
+        binding.dashboardTrendBars.removeAllViews();
+        if (to == null || to.compareTo(from) < 0) {
+            binding.dashboardTrendRange.setText("No completed days this month");
+            return;
+        }
+        String first = TimeUtils.plusDays(to, -13);
+        if (first.compareTo(from) < 0) first = from;
+        List<String> days = TimeUtils.daysBetween(first, to);
+        binding.dashboardTrendRange.setText(TimeUtils.formatForDisplay(first) + " – "
+                + TimeUtils.formatForDisplay(to));
+        long max = 0;
+        for (String day : days) max = Math.max(max, summary.tokensByDay.getOrDefault(day, 0L));
+        for (String day : days) {
+            long tokens = summary.tokensByDay.getOrDefault(day, 0L);
             View bar = new View(this);
-            bar.setBackgroundColor(0xFF1976D2);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(value), 1f);
+            bar.setBackgroundColor(tokens == 0 ? 0xFFE5ECF8 : 0xFF1976D2);
+            bar.setContentDescription(TimeUtils.formatForDisplay(day) + ": " + tokens + " tokens");
+            int height = max == 0 ? 3 : Math.max(3, Math.round(126f * tokens / max));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(height), 1f);
             params.setMargins(dp(3), 0, dp(3), 0);
             binding.dashboardTrendBars.addView(bar, params);
         }
