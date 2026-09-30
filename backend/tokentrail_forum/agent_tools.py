@@ -114,6 +114,9 @@ class ToolContext:
     seasons: object
     budgets: object
     store: object
+    # 「今天」由路由层注入（`build_agent_router` 里那个 `today`）。给默认值是为了
+    # 单独调工具时也能跑：那时退回真实时区的今天，生产路径永远走注入的那个。
+    today: object = None
 
 
 def execute(name, arguments, **context):
@@ -176,8 +179,8 @@ def _budget_status(arguments, **context):
     if not isinstance(month, str) or len(month) != 7:
         raise HTTPException(400, "month is required (yyyy-MM)")
     from .seasons import today_in_financial_timezone
-    payload = context["budgets"].status(context["digest"], month,
-                                        today_in_financial_timezone())
+    today = context.get("today") or today_in_financial_timezone
+    payload = context["budgets"].status(context["digest"], month, today())
     gaps = []
     if payload.get("unpricedDays"):
         gaps.append(f"{len(payload['unpricedDays'])} 天算不出价，所以花销不完整")

@@ -110,11 +110,18 @@ def settings_fields(settings, store):
 
 
 def build_router(settings, store, forwarding_client, day_provider=None):
+    # **所有「今天」都走这一个函数**：赛季账本、预算覆盖度、智能体的提示词。
+    # 早先只有赛季用了注入进来的 provider，预算那边直接读系统时钟——于是那几个
+    # 测试把「今天是 2026-09-27」写死在断言里，过了那天就一起变红（踩过：
+    # 9/30 跑出来 `coverage["to"] == "2026-09-30"`，而测试期望 `2026-09-27`）。
+    # 生产两条路给出的是同一个日期，差别只在**可测**：注入之后测试不用碰系统时钟。
+    today = day_provider or today_in_financial_timezone
     relay = RelayStore(store)
     pricing = Pricing(store)
     # 智能体：用**我们自己的** key，账本独立（见 agent.py 开头）。
     # key 从环境变量读，不进数据库、不进日志、不进响应。
-    agent = Agent(store, settings.agent_key, settings.agent_model, settings.agent_endpoint)
+    agent = Agent(store, settings.agent_key, settings.agent_model, settings.agent_endpoint,
+                  day_provider=today)
     # 工具要用的那几个读写器。**这里自己建一份**，而不是从 `build_router` 传进来：
     # 两个 router 各自独立（可以只开其中一个），共用同一个库，代价只是几个对象。
     # 赛季/预算用到的「今天」也要能注入，理由见 `seasons.Seasons`。
@@ -393,7 +400,7 @@ def build_router(settings, store, forwarding_client, day_provider=None):
         """当前余额 + `lastSettledDay`。**只读，不触发结算。**"""
         digest, identity = identify_owner(authorization)
         state = seasons.state(digest)
-        state["monthTokens"] = seasons.month_tokens(digest, today_in_financial_timezone().strftime("%Y-%m"))
+        state["monthTokens"] = seasons.month_tokens(digest, today().strftime("%Y-%m"))
         state["tokensPerUnit"] = TOKENS_PER_UNIT
         return state
 
@@ -510,7 +517,7 @@ def build_router(settings, store, forwarding_client, day_provider=None):
         """
         digest, identity = identify_owner(authorization)
         validate_month(month)
-        return budgets.status(digest, month, today_in_financial_timezone())
+        return budgets.status(digest, month, today())
 
     @router.put("/budgets/{month}")
     def budget_save(month: str, payload: BudgetRequest,
@@ -673,7 +680,12 @@ def build_agent_router(settings, store, pricing, day_provider=None):
     「relay key 只应该在中转那里出现」）。改用账号 token 之后，`uid` 和 `userId`
     是同一个值，`getMyThreads` 直接拿它查 `posts.author_uid`，**不再需要绑定表**。
     """
-    agent = Agent(store, settings.agent_key, settings.agent_model, settings.agent_endpoint)
+    # 「今天」和 `build_router` 里同一个来源（见那边的注释）：提示词里那句日期、
+    # `agent_status` 报的月份、预算覆盖度，**一处都不能读系统时钟**，
+    # 否则测试只能靠「跑测试那天正好是某个日子」蒙对。
+    today = day_provider or today_in_financial_timezone
+    agent = Agent(store, settings.agent_key, settings.agent_model, settings.agent_endpoint,
+                  day_provider=today)
     # 工具要用的那几个读写器。**这里自己建一份**，而不是从 `build_router` 传进来：
     # 两个 router 各自独立（可以只开其中一个），共用同一个库，代价只是几个对象。
     # 赛季/预算用到的「今天」也要能注入，理由见 `seasons.Seasons`。
@@ -720,10 +732,10 @@ def build_agent_router(settings, store, pricing, day_provider=None):
         # `uid` 由服务端从账号 token 解出并传进去——模型的参数表里没有 uid。
         settings_for_tools = ToolContext(digest=user_id, uid=user_id, relay=relay,
                                         pricing=pricing, seasons=seasons,
-                                        budgets=budgets, store=store)
+                                        budgets=budgets, store=store, today=today)
         text, tokens, model, evidence, records, missing = agent.ask(
             user_id, payload.question, context=vars(settings_for_tools))
-        month = today_in_financial_timezone().strftime("%Y-%m")
+        month = today().strftime("%Y-%m")
         own = agent.month_cost_micros(user_id, pricing, month)
         return {"text": text, "model": model, "createdAtEpochMillis": now_ms(),
                 "ownCostMicros": own or 0, "evidence": evidence, "toolCalls": records,
@@ -736,7 +748,7 @@ def build_agent_router(settings, store, pricing, day_provider=None):
     def agent_status(authorization: str | None = Header(default=None)):
         """智能体配好了没有 + 它自己这个月花了多少。"""
         user_id = identify(authorization)
-        month = today_in_financial_timezone().strftime("%Y-%m")
+        month = today().strftime("%Y-%m")
         own = agent.month_cost_micros(user_id, pricing, month)
         return {"uid": user_id, "configured": agent.configured, "model": settings.agent_model,
                 "ownUsageThisMonth": agent.own_cost_ledger(

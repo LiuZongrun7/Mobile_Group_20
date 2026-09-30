@@ -106,12 +106,19 @@ class Agent:
     """一次问答 + 记账。挂在内核的 `Store` 上，用独立的 `agent_usage` 表。"""
 
     def __init__(self, store, api_key, model=DEFAULT_MODEL, endpoint=DEFAULT_ENDPOINT,
-                 client=None):
+                 client=None, day_provider=None):
         self.store = store
         self.api_key = api_key
         self.model = model
         self.endpoint = endpoint.rstrip("/")
         self.client = client
+        # 「今天」要能注入，和 `seasons.Seasons` 同一个理由：提示词里那句
+        # "Today is ..." 直接决定模型把「3 号」算到哪一年，而测试没法改系统时钟。
+        # 默认还是真实时区的今天，生产行为一个字不变。
+        if day_provider is None:
+            from .seasons import today_in_financial_timezone
+            day_provider = today_in_financial_timezone
+        self.today = day_provider
         with store.connect() as db:
             db.executescript(SCHEMA)
 
@@ -187,8 +194,7 @@ class Agent:
         headers = {"authorization": "Bearer " + self.api_key,
                    "content-type": "application/json"}
         # 日期必须由服务端给：模型自己猜年份会把整段查询查到别的年份上。
-        from .seasons import today_in_financial_timezone
-        messages = [{"role": "system", "content": system_prompt(today_in_financial_timezone().isoformat())},
+        messages = [{"role": "system", "content": system_prompt(self.today().isoformat())},
                     {"role": "user", "content": text}]
         tools = list(TOOL_SCHEMAS) if context else []
 

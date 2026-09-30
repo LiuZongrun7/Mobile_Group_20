@@ -104,14 +104,17 @@ def agent_app(tmp_path):
         original = Agent
 
         class Wired(original):
-            def __init__(self, store, api_key, model=DEFAULT_MODEL, endpoint=None, client=None):
+            def __init__(self, store, api_key, model=DEFAULT_MODEL, endpoint=None, client=None,
+                         day_provider=None):
                 super().__init__(store, api_key, model, endpoint or "https://api.deepseek.com",
-                                 client=fake)
+                                 client=fake, day_provider=day_provider)
 
         import tokentrail_forum.relay_routes as routes
         routes.Agent = Wired
         try:
-            app = create_app(settings, verifier(), client)
+            # 「今天」注入成固定值：提示词里那句日期是**服务端给**的，
+            # 不注入的话这条断言就变成「跑测试那天必须正好是 2026-09-27」。
+            app = create_app(settings, verifier(), client, day_provider=lambda: _TODAY)
         finally:
             routes.Agent = original
         holder["app"] = app
@@ -405,9 +408,10 @@ def loop_app(tmp_path):
         original = Agent
 
         class Wired(original):
-            def __init__(self, store, api_key, md=DEFAULT_MODEL, endpoint=None, client=None):
+            def __init__(self, store, api_key, md=DEFAULT_MODEL, endpoint=None, client=None,
+                         day_provider=None):
                 super().__init__(store, api_key, md, endpoint or "https://api.deepseek.com",
-                                 client=model)
+                                 client=model, day_provider=day_provider)
 
         import tokentrail_forum.relay_routes as routes
         holder = routes.Agent
@@ -418,7 +422,7 @@ def loop_app(tmp_path):
                                 relay_self_hosts=(), pricing_seed=True, agent_key=OUR_KEY)
             client = httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda request: httpx.Response(200, json=completion())))
-            app = create_app(settings, verifier(), client)
+            app = create_app(settings, verifier(), client, day_provider=lambda: _TODAY)
         finally:
             routes.Agent = holder
         return app, model
