@@ -17,7 +17,7 @@
 | --- | --- | --- | --- |
 | 用量导入、定价、预算、面板 | 张莉 | `UsageRepository` `BudgetRepository` | `data/local`、`data/remote`、`data/importer` |
 | 论坛帖子与排序 | 汪庭栋 | `ForumRepository` | `data/remote`、`ui/forum` |
-| ~~塔防游戏~~（已移出）、建议服务、agent 工具 | 刘宗润 | `SeasonRepository` `AdviceRepository` | ~~`game/engine`、`game/view`~~（在 `../TokenTrail_Game/`）、`agent`、`backend/` |
+| ~~塔防游戏~~（已移出）、建议服务、agent 工具 | 刘宗润 | `SeasonRepository` `AdviceRepository` | ~~`game/engine`、`game/view`~~（在 `../../TokenTrail_Game/`）、`agent`、`backend/` |
 
 界面（UI/UX）、无障碍和集成三人共担。
 

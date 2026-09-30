@@ -11,13 +11,18 @@
 
 ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静态设计稿入口；页面使用示例数据，不包含前端原型代码，也不代表 Android / 后端已实现全部新功能。
 
+> **交给老师的提交件以上面这套为准。** 仓库里还有一批 TokenTrail 时期的提交资料
+> （4 页 Word/PDF 大纲、18 页 PPT 与逐页方案、旧幻灯片脚本），已收进
+> [`archive-tokentrail/`](archive-tokentrail/README.md) 只作历史对照——
+> 它们用的是改名前那个产品名，别拿错。
+
 ## 既有 TokenTrail 开发资料
 
 以下保留原工程的技术说明和阶段记录，供现有代码开发参考；其中旧界面、功能优先级和完成状态不等同于最新 ModelPilot 方案。
 
 > **塔防游戏已整块移出本工程（2026-09-30）。** 战场、商店、建筑面板、波次、
 > `game/engine`、`game/view`、全部游戏贴图、`art/` 抠图脚本、`ui/game`，
-> 以及本文档组里的 `ART.md`，都放在**与本工程同级的** `../TokenTrail_Game/`，
+> 以及本文档组里的 `ART.md`，都放在**与本工程同级的** `../../TokenTrail_Game/`，
 > 那份归档里有一份 `patches/` 可以从这次移出反向恢复。
 > **下面凡与游戏有关的行、表、章节，都是移出之前的记录**，不再是现状；
 > 服务端的赛季 / 预算（`/season*`、`/budgets/{month}`）**留着没动**——
@@ -32,52 +37,16 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 | [`FORUM_API.md`](FORUM_API.md) | 论坛 UI、后端接口、账号接入与英文 RSS 采集 | 论坛联调与后端实现之前 |
 | [`RELAY_API.md`](RELAY_API.md) | **中转服务**：relay key 注册、转发、四桶记账、SSRF 防护 | 动中转、接 cc-switch、改上游之前 |
 | [`TASKS.md`](TASKS.md) | 三个人的待办、验收标准、依赖谁 | 认领任务、判断「做完了没」 |
-| ~~`ART.md`~~ | 游戏贴图的规格。**已随游戏移出**，现在在 `../TokenTrail_Game/docs/ART.md` | 要翻旧账时 |
+| ~~`ART.md`~~ | 游戏贴图的规格。**已随游戏移出**，现在在 `../../TokenTrail_Game/docs/ART.md` | 要翻旧账时 |
 | [`OPEN_SOURCE.md`](OPEN_SOURCE.md) | 第三方库的清单：许可证、出处、谁在用、怎么加新库 | **加依赖之前先看**，写报告的开源节时照抄 |
 | [`DATA_SOURCES.md`](DATA_SOURCES.md) | 用量从哪来：三家 provider 各自要用户填什么、我们能拉到什么、官方还是私有接口 | **写 fetcher / 做填凭据界面之前先看** |
 | 本文 | 架构、依赖方向、桩数据开关、怎么构建 | 刚接手时 |
 
-旧版 TokenTrail 提交资料也保留在这里（英文，供历史对照）：
+旧版 TokenTrail 提交资料（**9/27 那一版，当时还叫 TokenTrail**）已经挪进
+[`archive-tokentrail/`](archive-tokentrail/README.md)：4 页 Word/PDF 大纲、18 页 PPT
+与它的逐页方案、以及旧幻灯片的生成脚本。**提交给老师的以本页上方 ModelPilot 那套为准**，
+那一份只作历史对照；里面有它自己的编译说明和当年的字体坑记录。
 
-| 文件 | 说明 |
-| --- | --- |
-| `TokenTrail_Project_Outline.tex` / `.pdf` | 大纲源文件与成品，4 页 |
-| `TokenTrail_Project_Outline_Slides.pptx` / `.pdf` | 幻灯片成品，15 页 |
-| `outline-slides-src/` | 幻灯片的生成脚本与插图源码，见其中的 `README.md` |
-
-以下编译说明仅针对旧版资料，不适用于上方的 ModelPilot Outline：
-
-```bash
-# 大纲：跑两遍让 hyperref 的目录/链接对上
-cd docs && PATH="/Library/TeX/texbin:$PATH" xelatex -interaction=nonstopmode TokenTrail_Project_Outline.tex
-# 幻灯片：脚本自己找同目录的 fig_*.png，输出到上一级（就是本文件夹）
-cd docs/outline-slides-src && python3 build_deck.py
-```
-
-**字体是按机器自动选的**，`.tex` 顶部有一条 `\IfFileExists` / `\IfFontExistsTF`
-链，依次尝：微软雅黑（`msyh.ttc`，装了 Microsoft Word 才有）→ 微软雅黑（按名字，
-Windows）→ `Helvetica Neue`（macOS）→ `Arial` → 留空用 LaTeX 默认。
-
-**所以同一份 `.tex` 在两台机器上编出来字体不一样，页数都是 4 页。**
-仓库里那份 PDF 是在这台 Mac 上编的（`Helvetica Neue`）；谁在 Windows 上编会得到
-微软雅黑那版。两份都是对的，**别拿字体不一致当 bug 查**。
-
-**改大纲时容易踩的三个坑**（都踩过）：
-
-- 字体链**兜底那一支不能指回同一个字体**。上一版写成「找不到 `msyh.ttc` 就用
-  `\setmainfont{Microsoft YaHei}`」——那是同一个字体，Mac 上照样没有，fontspec
-  直接报错。**而且它照样输出 4 页、照样 BUILD SUCCESSFUL**，只是在 log 里留一句
-  `LaTeX Font Warning`，正文全变成默认字体。坏的 PDF 就这么发出去了。
-- 兜底**不要**写 `\setmainfont{Latin Modern Roman}`——fontspec 不把它当系统字体解析，
-  编译不报错，但整篇静默丢掉所有字形（两万多个缺字）。宁可留空。
-- `Helvetica Neue` **没有 `→` 这个字形**，会渲染成空框。箭头一律写
-  `$\rightarrow$`，让它从数学字体里取（现在是 0 个缺字，说明写法是对的）。
-
-验证：编译完看 log，**`Overfull` / `Missing character` / `cannot be found` 三个都应该是 0**
-（`grep -c` 一下最快），末尾有 `Output written on ... (4 pages)`。
-页数上限是 4 页，加内容必须同时删内容。字体宽度不同会让某一行从「正好放下」
-变成「溢出 17pt」，`\emergencystretch=3em` 就是为这个留的余量——它只在本来要溢出的
-行上生效，不改别的地方。
 
 ---
 
@@ -210,6 +179,6 @@ public static final boolean USE_STUBS = true;
 | 数据侧真实现 | **进行中，服务端已是权威**。`data/local` 落地了三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 建表语句导出在 `app/schemas/`。**App 侧连服务端的仓储已有两个**：`HttpSeasonRepository`（余额/结算，12 个 HTTP 契约测试）和 `HttpBudgetRepository`（预算上限，12 个）。**还没有**：`data/remote` 的用量 fetcher、`data/importer` 的解析器、`UsageRepository` 的 HTTP 实现（它的读和写混在一起，要等导入路径也搬到服务端，见 [`CONTRACTS.md`](CONTRACTS.md) §5）。**价目表是空的**——没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
 | API 中转与服务端（汪庭栋） | **已上线，默认关闭**。用户**先登录账号**，再在「我的」页填上游地址 + 上游 key，服务端发一个 relay key（可自定义，挂在账号下面），把 cc-switch 的供应商指向 `https://43.140.212.47/api/relay` 就能转发，**响应里的 usage 顺手落库**。契约见 [`RELAY_API.md`](RELAY_API.md)。服务端还持有**日汇总**（`GET /usage/daily`）、**逐次记录**（`GET /usage/calls`）、**资源余额与结算**（`/season*`）和**预算**（`/budgets/{month}`）——结算是服务端算的，客户端一行判断都没有（见 [`CONTRACTS.md`](CONTRACTS.md) §7）。App 侧 `HttpSeasonRepository`、`HttpBudgetRepository` 已实现。客户端那套消费方（游戏）已移出（2026-09-30），赛季与预算接口保留。**relay key 只用于转发**——用量、赛季、预算、智能体走账号 token（2026-02 改）。**启用前必须先关掉服务器上对公网开放的其它端口**，理由见 `DATA_SOURCES.md` §5 |
 | 论坛（汪庭栋） | News / Community、图文发布、点赞评论、账号注册/登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md。**账号现在是 App 自己的账号**（`/api/account/*`，不再是团队那台机器上的账号服务），和用量、结算共用同一个 `userId` |
-| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/tokentrail_forum/agent.py` + `/agent/ask`（见 [`RELAY_API.md`](RELAY_API.md)）|
+| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/tokentrail_forum/agent.py` + `/agent/ask`（见 [`RELAY_API.md`](RELAY_API.md)）|
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。

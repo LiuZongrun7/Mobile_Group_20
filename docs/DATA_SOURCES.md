@@ -267,6 +267,6 @@ Sessions 那类图表要过滤掉，否则会以为数据丢了。
 大纲 §1 写助手「does not run, **route** or control coding agents」、§3 把差异化
 写成「Imports records **without proxying** agent traffic」、§8 的 `Open-source reuse`
 和 §11 的功能定性都受影响，**四处都要改**（改动已落在
-`TokenTrail_Project_Outline.tex`）。`OPEN_SOURCE.md` §2 里 LiteLLM 那行
+`TokenTrail_Project_Outline.tex`，已随 9/27 那批资料收进 `archive-tokentrail/`）。`OPEN_SOURCE.md` §2 里 LiteLLM 那行
 「**我们不代理流量**」同样要改。改法：保留「**默认不代理**」这个定位，
 把中转写成**用户自愿开启的可选采集通道**，而不是把整个产品改成网关。

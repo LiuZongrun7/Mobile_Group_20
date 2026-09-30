@@ -74,7 +74,7 @@ GPL 要谨慎）。**没有 GPL / AGPL 混进来。**
 | 项目 | 大纲怎么说的 | 实际状态 |
 | --- | --- | --- |
 | [Room with a View](https://github.com/android/codelab-android-room-with-a-view)（Apache-2.0） | *guides storage* | **只参考做法**（Entity / Dao / Database 三段式的分法），一行代码没拷 |
-| 开源塔防样例 | *may supply the wave and placement loop* | **一行都没用**；那套引擎（`game/engine/`）2026-09-30 已随游戏整块移出，见 `../TokenTrail_Game/` |
+| 开源塔防样例 | *may supply the wave and placement loop* | **一行都没用**；那套引擎（`game/engine/`）2026-09-30 已随游戏整块移出，见 `../../TokenTrail_Game/` |
 | [dsh-pet](https://github.com/zhu1090093659/dsh-pet/blob/main/README.zh.md) | *inspires the agent's entry point* | **只是灵感**（agent 的入口形态），没引代码 |
 | [LiteLLM](https://docs.litellm.ai/docs/simple_proxy)（MIT，`enterprise/` 目录单独授权） | §3 竞品对比表 | **对照物，不引**：它是完整网关；我们的中转只透传不转换（见下） |
 | [dsh-context](https://github.com/bowenliang123/dsh-context/blob/main/README.md) | §3 竞品对比表 | **对照物，不引** |
