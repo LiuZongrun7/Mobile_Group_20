@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 悬浮按钮的底色：平时 15% 白，按下时亮到 30%。
-     用状态表而不是一个纯色，是因为按钮要能"按得下去"——没有按下反馈的按钮
-     在真机上会让人怀疑是不是没点到。 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/glass_pressed" android:state_pressed="true" />
-    <item android:color="@color/glass_strong" android:state_focused="true" />
-    <item android:color="@color/glass" />
-</selector>

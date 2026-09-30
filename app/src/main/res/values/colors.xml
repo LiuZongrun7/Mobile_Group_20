@@ -19,7 +19,6 @@
          从游戏页滑到数据页，底是同一个色，不跳。
          它同时是岩石贴图**压暗后的目标色**（见 RockTexture 的乘法系数），
          也是相机还没接上时兜底铺的那层纯色。 -->
-    <color name="game_mountain_deep">#3F484E</color>
 
     <!-- 战场里的三种地面：可放置区绿（能建）、左边敌人通道土黄（不能建，
          敌人从这儿来）、右边山区灰岩（不能建，就是石头）。
@@ -33,8 +32,6 @@
          **只有前两条比整页的底亮**，要能从背景里跳出来。
          第三条（山区）就是那个底本身，跟上下两条、跟屏幕边缘连成一片——
          它要是也亮一档，右边就会多出一条跟别处断开的亮带。 -->
-    <color name="game_ground_a">#5E8C4F</color>
-    <color name="game_entry_lane">#8C7A4E</color>
     <!-- **原来这儿还有一条 game_ground_b**（比 a 深一档），可放置区拿它画
          一格一换的棋盘格，给玩家数格子用。2026-09-27 换成实拍草地之后删掉了：
          草地自己的明暗起伏（一格平均下来还有百分之十几）比那一档深浅还大，
@@ -51,21 +48,15 @@
          game_ground_a 和 game_entry_lane）。压暗有两种做法：绿那条用
          MULTIPLY（逐通道相乘），土那条用 ColorMatrix 先取亮度再铺色
          （色相差得远，乘法会把草叶的高光染成粉的）——两种都只能压暗。 -->
-    <color name="game_mountain">#6E767C</color>
-    <color name="game_grass">#8CC776</color>
     <!-- 注意这儿**没有**"余量带"的颜色。战场上方那 1 格（核心楼顶要伸进去的地方）
          不归战场画：它也是"不能放东西的地方"，所以由整页的岩石底铺，
          和 HUD 背后的石头是同一片。这里再给一个颜色，屏幕上就会多出一条横带。 -->
 
     <!-- 格线。**它现在是"能不能数格子"唯一的依靠**（棋盘格已经删掉，见上），
          压在实拍草地上，所以比原来深：20% → 32%。 -->
-    <color name="game_grid_line">#52000000</color>
 
     <!-- 建筑（纯色块占位，贴图到位后整组删掉）。
          **注意这里没有敌人色**——见下面那一段。 -->
-    <color name="game_core">#D98324</color>
-    <color name="game_tower">#2E8B84</color>
-    <color name="game_wall">#8A9199</color>
 
     <!-- 三种敌人三种颜色。**颜色在说玩法，不是装饰**：杂兵是基准、快兵是"来不及打"、
          重甲是"一座塔打不死"，玩家得在它进射程之前就认出是哪一种。
@@ -83,18 +74,12 @@
          **没有"卡住了"的第四个颜色**：那个状态是把这三条各自压暗画出来的
          （见 BattlefieldView.drawEnemy），一换色就把"这是哪一种"丢了——
          而敌人贴着你的墙啃的时候，恰恰是最需要看清种类的时候。 -->
-    <color name="game_enemy_grunt">#C0392B</color>
-    <color name="game_enemy_runner">#E4B03A</color>
-    <color name="game_enemy_brute">#7D4A9E</color>
 
     <!-- 敌人脚下那圈**阴影**的底，上面再描一圈上面那三个颜色当边。
          **自带透明度**，理由和 game_hp_track 一样：它是一条"接地影"，
          实心的话会在草地上刷出一块黑斑。深色和 game_sprite_line 同源，
          整个界面的轮廓都是这个色，影子跟着它才不会显得是另一套东西。 -->
-    <color name="game_enemy_shadow">#6E14201C</color>
 
-    <color name="game_sprite_line">#CC14201C</color>
-    <color name="game_label">#FFFFFFFF</color>
 
     <!-- ============ 悬浮控件 ============
          压在岩石底上的东西（HUD 胶囊、选建筑按钮、底部导航的选中态）
@@ -104,11 +89,8 @@
          因为底色固定是深岩石，这三条在深浅色模式下**一样**，
          所以 values-night/ 下没有覆盖文件。 -->
     <!-- 15%：胶囊、按钮 -->
-    <color name="glass">#26FFFFFF</color>
     <!-- 25%：选中的那一个，比别的亮一档 -->
-    <color name="glass_strong">#40FFFFFF</color>
     <!-- 30%：按下时的反馈 -->
-    <color name="glass_pressed">#4DFFFFFF</color>
 
     <!-- **场上那三个图标框的底（@drawable/bg_icon_button）。**
          它们和上面那三个 glass 不是一套，因为贴在**草地**上而不是岩石上：
@@ -123,10 +105,7 @@
     <!-- 压在岩石上的文字。分两档就够：主要信息 / 次要信息。
          对比度（对 #3F484E）：on_mountain 约 8.3:1、on_mountain_dim 约 5.0:1，
          都过 WCAG AA 的 4.5:1。改这两个值之前先量一下。 -->
-    <color name="on_mountain">#F2F5F6</color>
-    <color name="on_mountain_dim">#B8C2C7</color>
     <!-- 进度条的槽 -->
-    <color name="on_mountain_track">#33FFFFFF</color>
 
     <!-- 主操作（Start wave）的填充色。白字压在上面约 7.6:1，过 AA。
          见 res/color/primary_button.xml 里为什么不用主题的 colorPrimary。 -->
@@ -134,14 +113,11 @@
     <color name="brand_pressed">#7A63B8</color>
 
     <!-- ============ 界面自己的提示色（和贴图无关，留着） ============ -->
-    <color name="game_ok">#3FBF52</color>
-    <color name="game_bad">#E53935</color>
 
     <!-- 攻击范围圈。**故意不用 game_ok 那个绿**：绿在这个界面里已经固定表示
          "这一下能放"，而范围圈是"这座塔打得到哪儿"，是常驻信息不是操作反馈，
          两个意思共用一个颜色，玩家会以为圈里圈外是能不能建的区别。
          挑的金黄在草地（#5E8C4F）和灰岩（#6E767C）上都拉得开。 -->
-    <color name="game_range">#F0C24B</color>
 
     <!-- ============ 战斗：血条和弹道 ============
          这一组画在建筑和敌人**上面**，所以颜色要能在它们身上也读得出来
@@ -150,17 +126,12 @@
     <!-- 血条的槽。**自带透明度**：它是一条"这里还有多少余量"的底，
          实心的话会在草地上刷出一道黑杠（见 BattlefieldView.drawBar 里
          为什么不能对它再调 setAlpha）。 -->
-    <color name="game_hp_track">#8C1A2118</color>
     <!-- 血条的三档：绿（>60%）→ 黄（>30%）→ 红。三档就够——
          连续渐变在这么细的一条上反而看不出差别，而"还剩几成"是要一眼看出来的。 -->
-    <color name="game_hp_good">#4CD964</color>
-    <color name="game_hp_warn">#F2C14E</color>
-    <color name="game_hp_low">#E5433A</color>
 
     <!-- 塔开火那条线。**用白色，不是某个色相**：这个界面上绿色已经表示
          "能放"、金黄表示"射程/选中"、红表示"不行"，再塞一个色相进去就要打架了。
          白线压在草地、灰岩、青塔上都读得出来，而且"白色 = 能量/光束"不用解释。 -->
-    <color name="game_beam">#FFF4F8E8</color>
 
     <!-- 资源的标记色（HUD 上四个圆点、商店余额和价格）。
          比"白底上好看"的那组**亮一档**：它们现在压在深岩石上（隔着一层

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 底部导航的图标和文字：选中的是亮的，其余压暗一档。
-     底部导航的底是透明的（岩石直接透上来），所以不能再用主题的 onSurface
-     ——浅色模式下那是近黑色，压在深岩石上看不见。 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/on_mountain" android:state_checked="true" />
-    <item android:color="@color/on_mountain_dim" />
-</selector>

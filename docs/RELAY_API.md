@@ -273,7 +273,8 @@ POST /api/relay/season/spend   {"input": 40, "cache": 25, "output": 10}
 
 ### `costMicros` 还是 null
 
-结算**不需要**价格：游戏资源是从 **token 数**换来的，和花多少钱无关。
+结算**不需要**价格：资源余额是从 **token 数**换来的，和花多少钱无关。
+（"游戏资源"是它原来的名字——塔防 2026-09-30 整块移出，换算规则一个字没改。）
 所以价目表（`pricing/rates`）没建并不挡结算——`costMicros` 继续是 `null`，
 界面显示「价格未知」，不影响余额。
 
@@ -300,7 +301,7 @@ POST /api/relay/season/spend   {"input": 40, "cache": 25, "output": 10}
    **id 在写入时生成，不在读取时拼**——同一毫秒里的两个请求会拼出同一个 id，
    而那个 id 是客户端去重用的键，撞了就丢数据。
 2. **`source` 恒为 `"IMPORTED"`。** `UsageCall.Source` 只有 `IMPORTED` 和 `SAMPLE`，
-   而 `CONTRACTS.md` §4 规定只有 `IMPORTED` 进日汇总、预算和游戏资源。
+   而 `CONTRACTS.md` §4 规定只有 `IMPORTED` 进日汇总、预算和资源余额。
    中转看到的是真实流量，属于前者。语义上有点勉强（这个名字也覆盖「拉取来的」），
    但 `DATA_SOURCES.md` §2 已拍板不改枚举名，报告里说明即可。
 3. **`costMicros` / `nativeCostMicros` 恒为 `null`**（没有价目表就算不出来）。
@@ -506,7 +507,7 @@ GET /api/relay/usage/summary?from=2026-09-01&to=2026-09-27&groupBy=MODEL
 
 **为什么这是硬要求。** 用户问「我这周怎么花了这么多」——如果把智能体自己调模型的
 消耗算进他的编码用量，**答案里的数字就被问题本身污染了**：问得越多、账越大。
-而且游戏资源是从编码用量换来的，混进去等于让「多问几句」能换塔。
+而且资源余额是从编码用量换来的，混进去等于让「多问几句」也能换余额。
 `CONTRACTS.md` §6 明确要求 agent 自己的 token 单独记账。
 
 ### 接口

@@ -5,11 +5,8 @@
     <!-- ============ 顶部 HUD ============ -->
     <!-- 赛季名和剩余天数都按当前日历算，不写死：写死的话下个月截图就是错的。
          %1$s 是月份，例如 September 2026。 -->
-    <string name="hud_season">Season · %1$s</string>
     <!-- %1$d 是这个月还剩几天 -->
-    <string name="hud_days_left">%1$d days left</string>
     <!-- 大数字和它的说明分两条：合起来"1.24M tokens this month"在手机宽度上排不下大字号。 -->
-    <string name="hud_tokens_label">tokens this month</string>
     <!-- 余额来源。三条文案必须一眼能分开——服务端结算出来的值和本地演示换算
          出来的值长得很像，不标出来演示时就没人分得清该不该信它。
 
@@ -34,72 +31,48 @@
          数据里仍然是四个字段、分开计价（读 $0.30/1M 对写 $3.75/1M，差十几倍）；
          **合并只发生在显示这一层**，而且合并的必须是这两个缓存桶——不是把缓存
          并进 input。见 TokenBundle 的类注释。 -->
-    <string name="hud_tok_input">Input (uncached)</string>
-    <string name="hud_tok_cache">Cache (read + write)</string>
-    <string name="hud_tok_output">Output</string>
 
     <!-- ============ 战场 ============ -->
-    <string name="game_start_wave">Start wave</string>
-    <string name="game_shop">Shop</string>
     <!-- 1 总列数 2 行数 3 一格多少 dp 4 一屏看得见几列。后两个数的比值就是要拖几屏。
          5/6/7 是敌人通道 / 可放置区 / 山区各占几列——这三段就是背景图的划分，
          画地面贴图之前先拿它对一眼。 -->
-    <string name="game_grid_info">%1$d × %2$d cells · %3$.1f dp · %4$.0f on screen\nlane %5$d · build %6$d · rock %7$d</string>
 
     <!-- ============ 战斗 ============ -->
     <!-- 战况胶囊：核心还剩多少耐久、到现在漏了几只。
          1 核心当前耐久 2 核心满耐久 3 漏掉的只数。
          **"leaked" 不能省**：漏怪是这一局唯一的扣分项，也是"我明明守住了怎么还输"
          的唯一解释。只写个数字在那儿，玩家不知道那是什么。 -->
-    <string name="game_status">Core %1$d/%2$d · %3$d leaked</string>
 
     <!-- 发波按钮的四种文案。**波次进度写在按钮上**，不是另起一行：
          "正在打第几波"就是"这个按钮现在管什么"，写在该按钮上最省高度
          （战场每多让出 1dp，格子就大一档，见 activity_main.xml 顶部那段）。 -->
     <!-- 1 这一波的序号 2 总共几波 3 场上还剩几只。一波在场上时按钮按下去没用，
          所以文案从"开始"变成"读数"——按不动的时候也该是有信息量的。 -->
-    <string name="game_wave_running">Wave %1$d/%2$d · %3$d left</string>
     <!-- 第 5 波（最后一波）下手之前换个说法，让玩家知道这一波打完就结束了。 -->
-    <string name="game_start_last_wave">Start final wave</string>
-    <string name="game_play_again">Play again</string>
 
     <!-- 按了发波但发不出去：上一波还在场上。悄悄不响应的话，
          玩家会以为按钮坏了或者游戏卡了。 -->
-    <string name="game_wave_pending">Clear this wave first</string>
 
     <!-- 结果卡片。标题只有两种：守住了 / 核心被打掉。
          **不用 "You win" / "Game over"**：这一局的位置是"这个赛季的一个月"，
          守住和失守说的都是"这个月"的事，用赛季的话说更贴。
          1 打完的波数 2 总共几波 3 漏了几只。两种结果共用这一句——
          输了也是"打完了 N 波"，那个 N 就是玩家的成绩。 -->
-    <string name="game_result_defended">Defended</string>
-    <string name="game_result_overrun">Overrun</string>
-    <string name="game_result_note">%1$d/%2$d waves · %3$d leaked</string>
 
     <!-- ============ 商店 ============ -->
     <!-- 选建筑这件事现在整个搬进了商店弹窗（屏幕上只留"商店 / 开始波次"两个按钮），
          所以下面这些字符串都归它。 -->
-    <string name="shop_title">Shop</string>
     <!-- 换算率的唯一出处。原来是 HUD 底下那行小字（hud_rate），挪进来了：
          它是"资源从哪来"的说明，和价格放在一起才读得懂。 -->
-    <string name="shop_rate">100 resources per 1M tokens · three kinds, not interchangeable</string>
-    <string name="shop_have">You have</string>
     <!-- 1 资源名 2 余额 -->
-    <string name="shop_balance_part">%1$s %2$d</string>
     <!-- 1 名称（Tower / Wall / Core） -->
     <!-- 1 名称。**"拖"这半句不能省**：建一排是这一版新增的手势，
          而它是唯一一处会告诉玩家这件事的界面文案——只在代码注释里写的话，
          没人会去拖一下试试。 -->
-    <string name="shop_picked">%1$s selected · tap to place one, drag for a row</string>
-    <string name="shop_picked_core">Core selected · tap a new spot to move it</string>
     <!-- 选中的那件放回货架，手上不留东西 -->
-    <string name="shop_look_only">Look only</string>
     <!-- 1 原来的副标题（占地）。这件正拿在手上——放下一座之后引擎会自动收手
          （BattlefieldView.handleTap），所以这个标记也会跟着消失。 -->
-    <string name="shop_in_hand">%1$s · in hand</string>
     <!-- 1 名称 -->
-    <string name="shop_need_more">Not enough resources for %1$s</string>
-    <string name="shop_no_room">%1$s does not fit there</string>
 
     <!-- 商品条：名称用 BuildingType.label（Core / Tower / Wall，代码里的唯一出处），
          下面两条是"多大"和"多少钱"。 -->
@@ -110,43 +83,30 @@
             "one" 这个复数类别，所以 quantity="one" 永远选不中，
             城墙那行一直显示 "1 cells"（真机上撞到过）。要写单复数就得先把
             应用 locale 钉死成英文，那是另一个决定，先不做。 -->
-    <string name="shop_size">%1$d×%2$d</string>
     <!-- 核心特有的后缀：商店里这一项是"挪"，不是买第二座。 -->
-    <string name="shop_size_core">%1$d×%2$d · move the one you have</string>
-    <string name="shop_cost_free">Free</string>
     <!-- 1 资源名 2 数量 -->
-    <string name="shop_cost_part">%1$s %2$d</string>
     <!-- 1 第一段 2 第二段。一件商品可以同时吃两种资源，用 + 连起来。 -->
-    <string name="shop_cost_join">%1$s + %2$s</string>
 
     <!-- ============ 建筑详情 ============ -->
     <!-- 点场上的建筑弹出来的那一屏。和商店是两个面板：商店回答"能买什么"，
          这个回答"这一座现在是什么样、还能不能变强"。 -->
     <!-- 1 名称（Tower / Wall / Core）2 等级 -->
-    <string name="bld_title">%1$s · Level %2$d</string>
     <!-- 1 列 2 行。同样不写"共几格"，理由见上面 shop_size 那段。 -->
-    <string name="bld_size">%1$d×%2$d</string>
     <!-- 耐久。**三种建筑都有这一行**（塔、墙、核心都有血），所以它不像攻击范围
          那样会整行藏起来。1 还剩 2 满血 -->
-    <string name="bld_hp_label">Durability</string>
-    <string name="bld_hp_value">%1$.0f / %2$.0f</string>
-    <string name="bld_range_label">Attack range</string>
     <!-- 1 格数。**这里写死复数是有意的**：范围最小的一档是弩车一级的 3.0 格
          （BuildingStats.fireArc），永远到不了 1。哪天出现一格的范围，
          这句就得重写——这台机器上 plurals 用不了，见 shop_size 那段。
          **没有盲区的建筑走这一句**（弩车、以及以后任何一种扇形射界）。 -->
-    <string name="bld_range_value">%1$.1f cells</string>
     <!-- 1 内径 2 外径。**有盲区的建筑走这一句**（现在只有大炮：10 格以内打不着）。
          写成一段区间而不是只报外径，是因为只报"20.0 cells"会把那十格盲区藏起来，
          而那正是这门炮最容易摆错的地方。 -->
-    <string name="bld_range_band">%1$.1f – %2$.1f cells</string>
     <!-- 升级价。**它是 2026-09-27 从条子上搬到这儿的**：那三个方框只剩图标，
          价钱在屏幕上没有地方写了，而"升一级要多少钱"是玩家按下去之前
          唯一想知道的数。删掉条子上那串价的同时必须在这儿补一行，
          不然点下去只会收到"资源不够"，无处可查差多少。
          值那半边复用商店那两条（shop_cost_part / shop_cost_join），
          价钱的说法全应用只有一处。 -->
-    <string name="bld_cost_label">Upgrade cost</string>
     <!-- 1 下一级的级数 -->
     <!-- ============ 场上那三个小方框（@id/building_bar） ============
          点一下建筑，三个方框贴在它**下面**冒出来：**详情 / 升级 / 整排**，
@@ -161,63 +121,46 @@
          contentDescription，也就是只给读屏软件念。**这不是"顺手加的无障碍"**：
          图标按钮没有文字，不给这个的话 TalkBack 念出来是"按钮"三个字，
          三个框听起来一模一样。 -->
-    <string name="bld_bar_info">Details</string>
     <!-- 1 总价（可能是两种资源拼起来的，见 MainActivity#costText）。
          **价钱挪进 contentDescription 之后是这里唯一还留着它的地方**：
          屏幕上不写了（撑宽条子），但读屏的人反而该听到它——
          看不见代价的按钮，对谁都不该按。 -->
-    <string name="bld_bar_upgrade">Upgrade · %1$s</string>
     <!-- 1 真会升上去的座数（到顶的那几座不算）2 总价 -->
-    <string name="bld_bar_upgrade_all">Upgrade ×%1$d · %2$s</string>
 
     <!-- 整排。**入口是条子上这个方框，不是再点一次场上的那座建筑**：
          条子出现的同时手指已经抬起来了，"再点一下同一座"这一下没有谁接得住。
          1 这一排有几座。**有整排可选时才出现**，孤零零一座时整格 GONE——
          按下去只会选中它自己，那个框就是一句空话。 -->
-    <string name="bld_bar_line">Select the whole row of %1$d</string>
     <!-- 已经是整排时的说法：按一下缩回一座。**图标会跟着换**
          （ic_bar_row → ic_bar_single）——不换的话玩家分不清现在是整排还是一座，
          而升级那一下的价钱会从"一座的价"跳到"四座的价"。 -->
-    <string name="bld_bar_line_clear">Select only this one</string>
     <!-- 选中整排时的标题。1 名称 2 座数 3 等级 -->
-    <string name="bld_title_line">%1$s ×%2$d · Level %3$d</string>
     <!-- 一排里等级不一样时的那句。1 名称 2 座数 3 最低 4 最高。
          报成一段区间而不是只报其中一座：一排墙里有一座升过级了，
          只报"Level 1"会让玩家以为升级白升了。 -->
-    <string name="bld_title_line_mixed">%1$s ×%2$d · Level %3$d–%4$d</string>
     <!-- 整排升级成功的提示。**每座各涨一级**，到顶的跳过（到顶的那些本来
          就没得升），所以文案说的是"这一排里的 N 座"，不是"升到第几级"——
          一排里等级不一样时根本没有一个共同的"第几级"。 -->
-    <string name="bld_upgraded_all">%1$d buildings upgraded</string>
     <!-- 整排升级时资源只够升其中几座：**全部或全不**，一座都不升。
          理由和中途卡住的那半排墙一样——升了三座、剩两座没升，
          玩家自己都记不清哪几座动了。 -->
-    <string name="bld_upgrade_all_need_more">Not enough resources for all %1$d</string>
     <!-- 到顶了按钮换成这一个，并且点不动。 -->
-    <string name="bld_max_btn">Max level</string>
-    <string name="bld_close">Close</string>
     <!-- 1 名称 2 新等级 -->
-    <string name="bld_upgraded">%1$s is now level %2$d</string>
-    <string name="bld_need_more">Not enough resources to upgrade</string>
     <!-- 面板还开着、建筑却没了（比如这一局重开了）。 -->
-    <string name="bld_gone">That building is gone</string>
 
     <!-- 挪动。**不花钱**，也不再有按钮了：选中的那一座（或一整排）直接拖着走，
          起点和终点都在战场上（BattlefieldView 的 Drag.RELOCATE）。
          参考部落冲突：摆错了随时能改。
          这里只剩"挪不过去"那一句——拖到通道、山区、别人身上或者出界了。 -->
     <!-- 1 名称。 -->
-    <string name="bld_move_blocked">The %1$s cannot go there</string>
 
     <!-- 打起来了（场上有敌人）就不给动建筑：放新的、挪、升级都锁上。
          一句通用的就够——三种动作不成立的原因是**同一个**（这一波还没打完），
          分三句写反而会让人以为是三件不同的事。**不说"换个位置试试"**：
          换个位置也一样不行，那句话会把人引到错的方向上。
          解锁条件是场上清空，文案里点出来，玩家才知道要等什么。 -->
-    <string name="bld_in_combat">Cannot change buildings during a wave</string>
 
     <!-- ============ 底部导航 ============ -->
-    <string name="nav_game">Game</string>
     <string name="nav_dashboard">Dashboard</string>
     <string name="nav_forum">Forum</string>
     <string name="nav_profile">Profile</string>
