@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   底部导航三项：统计 / 论坛 / 我的。（原来第一项之后还有"游戏"，2026-09-30 整块
-  移到与本工程同级的 `../TokenTrail_Game/`，那一格导航随之删掉。）
+  移到与本工程同级的 `../ModelPilot_Game/`，那一格导航随之删掉。）
 
   **"统计"排第一，因为它是打开 App 的落地页**（BottomNavigationView 默认选中
-  第一项，见 MainActivity.showTab）。这是个产品判断：TokenTrail 是个用量统计工具，
+  第一项，见 MainActivity.showTab）。这是个产品判断：ModelPilot 是个用量统计工具，
   不该一打开就糊人一脸别的板块。
   换顺序就是换主页——这也是为什么这里只有顺序、没有"哪一项是主页"的另一个开关。
 -->

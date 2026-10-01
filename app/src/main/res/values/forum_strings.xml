@@ -52,7 +52,7 @@
     <string name="account_sign_out">Sign out</string>
     <string name="account_username">Username</string>
     <string name="account_password">Password</string>
-    <string name="account_existing">用你的 TokenTrail 账号登录（论坛、用量、游戏结算共用这一个账号）。</string>
+    <string name="account_existing">用你的 ModelPilot 账号登录（论坛、用量、游戏结算共用这一个账号）。</string>
     <string name="account_register">注册</string>
     <string name="account_new">还没有账号？用户名至少 2 个字符，密码至少 8 位。</string>
     <string name="account_username_long">用户名最多 64 个字符。</string>

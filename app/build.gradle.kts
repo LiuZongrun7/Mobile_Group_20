@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.mobilegroup20.tokentrail"
+    namespace = "com.mobilegroup20.modelpilot"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,7 +11,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mobilegroup20.tokentrail"
+        applicationId = "com.mobilegroup20.modelpilot"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

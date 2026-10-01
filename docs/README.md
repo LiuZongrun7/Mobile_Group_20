@@ -9,6 +9,13 @@
 | 页面规范 | [DESIGN.md](modelpilot-ui/DESIGN.md) |
 | Insights 设计与统计口径 | [INSIGHTS.md](modelpilot-ui/INSIGHTS.md) |
 
+> **代码侧已经改名（2026-09-30）**：App 名、`applicationId`、Java 包
+> （`com.mobilegroup20.modelpilot`）、Room 库文件名、`ModelPilotApp` 全部换成 ModelPilot。
+> **没改的三处**：① 文档里历史叙述仍写 TokenTrail（那是当时的名字，改了就读不通）；
+> ② 归档目录 `archive-tokentrail/` 与游戏归档 `TokenTrail_Game/` 的名字（它们记录的就是那一段）；
+> ③ 服务端的 Python 包 `backend/tokentrail_forum/`、systemd 服务名与 `/opt/tokentrail` 部署路径
+> ——那套东西改了要重新部署，**还没动**。
+
 ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静态设计稿入口；页面使用示例数据，不包含前端原型代码，也不代表 Android / 后端已实现全部新功能。
 
 > **交给老师的提交件以上面这套为准。** 仓库里还有一批 TokenTrail 时期的提交资料
@@ -53,7 +60,7 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 ## 1. 代码在哪
 
 ```
-app/src/main/java/com/mobilegroup20/tokentrail/
+app/src/main/java/com/mobilegroup20/modelpilot/
 ├── contract/          接口契约。纯 Java，不 import 任何 android.* —— 三人共担，改动要打招呼
 │   ├── model/         数据类：UsageCall、DailyUsage、PricingRate、SeasonState、ForumPost …
 │   └── tool/          agent 的五个只读工具：入参和返回值
@@ -106,13 +113,13 @@ app/src/main/java/com/mobilegroup20/tokentrail/
 
 ```bash
 # 应该只列出 data/stub 和 data/RepositoryProvider
-grep -rn "import com.mobilegroup20.tokentrail.data.local" app/src/main/java/com/mobilegroup20/tokentrail/ui/
+grep -rn "import com.mobilegroup20.modelpilot.data.local" app/src/main/java/com/mobilegroup20/modelpilot/ui/
 
 # 应该什么都不输出（实现类不许反向依赖界面）
-grep -rn "import com.mobilegroup20.tokentrail.ui" app/src/main/java/com/mobilegroup20/tokentrail/data/
+grep -rn "import com.mobilegroup20.modelpilot.ui" app/src/main/java/com/mobilegroup20/modelpilot/data/
 
 # 应该什么都不输出（engine 必须能脱离 Android 跑测试）
-grep -rn "import android\." app/src/main/java/com/mobilegroup20/tokentrail/game/engine/
+grep -rn "import android\." ../TokenTrail_Game/app/src/main/java/com/mobilegroup20/tokentrail/game/engine/
 ```
 
 ## 3. 桩数据与 `USE_STUBS` 开关

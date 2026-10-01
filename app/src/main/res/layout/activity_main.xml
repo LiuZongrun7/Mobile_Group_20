@@ -9,7 +9,7 @@
 
   塔防游戏那一版（岩石底 + 战场 + HUD + 操作行 + 商店弹窗）已经整块移出本工程
   （2026-09-30，产品方向改成 ModelPilot）。连同它那套三层结构的说明，一起放在
-  与本工程同级的 `../TokenTrail_Game/` 里，要翻旧账或搬回来去那边找。
+  与本工程同级的 `../ModelPilot_Game/` 里，要翻旧账或搬回来去那边找。
 
   界面这一层里，统计页自己可滚动（ScrollView），没有别的固定段了；内容层
   上下留出系统栏的位置（fitsSystemWindows），别让第一行字压在状态栏底下。
@@ -34,7 +34,7 @@
 
 
         <!-- ===== 1.4 Dashboard 首页 =====
-             这是真正的 TokenTrail 落地页：统计、人民币估算、预算进度、数据覆盖、
+             这是真正的 ModelPilot 落地页：统计、人民币估算、预算进度、数据覆盖、
              provider breakdown、Price Center、AI Assistant 和论坛摘要。
              先用现有 UsageRepository 的 monthTokens 驱动核心数字，后续接真实 dashboard 包时
              可以整体迁移成 Fragment。 -->
@@ -79,7 +79,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TokenTrail"
+                            android:text="ModelPilot"
                             android:textColor="#071957"
                             android:textSize="30sp"
                             android:textStyle="bold" />

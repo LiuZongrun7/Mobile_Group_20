@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TokenTrail</string>
+    <string name="app_name">ModelPilot</string>
 
     <!-- ============ 顶部 HUD ============ -->
     <!-- 赛季名和剩余天数都按当前日历算，不写死：写死的话下个月截图就是错的。
