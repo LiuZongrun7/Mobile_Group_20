@@ -22,6 +22,13 @@
  * 也不能因为有了它就删掉上面那句。两类 key 的存法与风险见
  * {@code docs/DATA_SOURCES.md} §3。
  *
+ * <p><b>第三类（2026-09-30 起）：</b>{@link com.mobilegroup20.modelpilot.data.ProviderKeys}
+ * 里存的"用户自己填的各家 API key"——对话主线用它在手机上直连各家官方 API
+ * （{@code ProviderClient}），服务端从头到尾不参与对话、也没有接收它的接口
+ * （{@code docs/CHAT_ENGINE.md} §1）。它仍然不违反上面那句：那句说的是
+ * <b>我们</b>（服务端）调模型用的那个 key，而这一类是<b>用户自己的</b>，
+ * 两者不要写成一句"客户端不持有任何 key"——那样读起来像矛盾，实际是两类东西。
+ *
  * @see com.mobilegroup20.modelpilot.contract.tool.AgentTool
  */
 package com.mobilegroup20.modelpilot.data.remote;

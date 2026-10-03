@@ -17,6 +17,11 @@ import java.util.List;
  * 3. **价格是数据**。价格会变，而且我们**只写实测过的**：没查到官方定价的模型
  *    价格留 null，界面上显示"价格未知"，Auto 也不会把它当"最便宜"。
  *
+ * <p><b>`baseUrl` 的语义是"到资源路径之前"</b>：客户端会拼上 `/chat/completions`
+ * （OpenAI 兼容家）或 `/v1/messages`（Anthropic）。所以 OpenAI 与 Kimi 必须带 `/v1`
+ * ——少了它真跑就是 404，而 404 看起来像"这家挂了"，很难查。用户在设置里改 base URL 时
+ * 也按这个口径填（自建反代一般是 `https://my-proxy.example/v1`）。
+ *
  * <p><b>上限与价格的出处</b>：能填的都填官方文档值，并在 {@code priceSource} 留链接；
  * 查不到的那几个留 null + 注释写"待补"，**不许估**。真实价格最终以服务端的价目表为准
  * （手机这张表只用来给 Auto 排序与界面展示）。
@@ -49,15 +54,15 @@ public final class ProviderRegistry {
                         "https://api-docs.deepseek.com/quick_start/pricing/"),
                 model(DEEPSEEK, "deepseek-reasoner", "DeepSeek Reasoner", 128_000, true, false, false, true,
                         140_845L, 2_816L, 0L, 563_380L,
-                        "https://api-docs.deepseek.com/quick_start/pricing/"))));
+                        "https://api-docs.deepseek.com/quick_start/pricing/")), true));
 
         // OpenAI：官方定价页。
-        list.add(new ProviderSpec(OPENAI, "OpenAI", "https://api.openai.com",
+        list.add(new ProviderSpec(OPENAI, "OpenAI", "https://api.openai.com/v1",
                 ProviderSpec.Adapter.OPENAI_COMPATIBLE, Arrays.asList(
                 model(OPENAI, "gpt-5.5", "GPT-5.5", 400_000, true, true, true, true,
                         null, null, null, null, null),
                 model(OPENAI, "gpt-5-mini", "GPT-5 mini", 400_000, true, true, true, true,
-                        null, null, null, null, null))));
+                        null, null, null, null, null)), true));
 
         // GLM（智谱）：OpenAI 兼容端点。
         list.add(new ProviderSpec(GLM, "GLM", "https://open.bigmodel.cn/api/paas/v4",
@@ -66,7 +71,7 @@ public final class ProviderRegistry {
                         null, null, null, null, null))));
 
         // Kimi（月之暗面）。
-        list.add(new ProviderSpec(KIMI, "Kimi", "https://api.moonshot.cn",
+        list.add(new ProviderSpec(KIMI, "Kimi", "https://api.moonshot.cn/v1",
                 ProviderSpec.Adapter.OPENAI_COMPATIBLE, Arrays.asList(
                 model(KIMI, "kimi-k2-0905-preview", "Kimi K2", 256_000, true, false, false, true,
                         null, null, null, null, null))));
