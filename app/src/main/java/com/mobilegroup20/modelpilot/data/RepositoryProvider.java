@@ -89,7 +89,8 @@ public final class RepositoryProvider {
                     // IllegalStateException（"A migration from 1 to 2 was required but
                     // not found"），装过旧版的设备直接打不开——比静默改坏数据好，
                     // 但不如在装机前就发现。
-                    .addMigrations(AppDatabase.MIGRATION_1_2)
+                    .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3,
+                            AppDatabase.MIGRATION_3_4)
                     // 不加 fallbackToDestructiveMigration：那会在版本号对不上时
                     // 静默删掉全部原始记录，而那张表是「删了就没了」的唯一事实来源。
                     // 改了表结构就老老实实写迁移，见 docs/CONTRACTS.md §5。

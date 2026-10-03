@@ -136,4 +136,41 @@ public class AppDatabaseMigrationTest {
             assertEquals("同一个 id 插两次只该留一条", 1L, c.getLong(0));
         }
     }
+
+    /**
+     * v3 → v4：对话那四张表建出来，账本多三列，**老用量一条不动**。
+     *
+     * <p>2026-09-30 起"除论坛外全在手机上"：对话/记忆/用量都落在本机。
+     * 这一版是**纯新增**（四张新表 + 三列可空），所以老行必须原样还在——
+     * 迁移里唯一会踩的坑就是给可空列编了默认值（编 `MANUAL` 会把"不知道"
+     * 说成"用户手动选的"，那是把不确定当事实）。
+     */
+    @Test
+    public void v3ToV4AddsChatTablesAndKeepsOldUsageRows() throws IOException {
+        SupportSQLiteDatabase db = helper.createDatabase(TEST_DB, 3);
+        db.execSQL("INSERT INTO usage_call(id, uid, provider, model, started_at_epoch_millis, day,"
+                + " input, cache_read, cache_write, output, calls, source)"
+                + " VALUES('call:old', 'u_1', 'OPENAI', 'gpt-5', 1, '2026-09-27', 10, 0, 0, 5, 1,"
+                + " 'IMPORTED')");
+        db.close();
+
+        db = helper.runMigrationsAndValidate(TEST_DB, 4, true, AppDatabase.MIGRATION_3_4);
+
+        // 新的三列在，而且老行里是 NULL（"不知道"，不是被编出来的值）
+        try (android.database.Cursor cursor = db.query(
+                "SELECT route, chat_id, tool_calls, input FROM usage_call WHERE id='call:old'")) {
+            assertTrue(cursor.moveToFirst());
+            assertTrue("route 必须是 NULL，不能编成 MANUAL", cursor.isNull(0));
+            assertTrue("chat_id 必须是 NULL", cursor.isNull(1));
+            assertTrue("tool_calls 必须是 NULL", cursor.isNull(2));
+            assertEquals(10, cursor.getInt(3));
+        }
+        // 四张新表都在
+        for (String table : new String[]{"project", "chat", "message", "memory"}) {
+            try (android.database.Cursor cursor = db.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?", new String[]{table})) {
+                assertTrue(table + " 没建出来", cursor.moveToFirst());
+            }
+        }
+    }
 }

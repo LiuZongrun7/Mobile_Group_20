@@ -4,6 +4,11 @@ import androidx.annotation.NonNull;
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
 import androidx.room.TypeConverters;
+
+import com.mobilegroup20.modelpilot.chat.local.ChatEntity;
+import com.mobilegroup20.modelpilot.chat.local.MemoryEntity;
+import com.mobilegroup20.modelpilot.chat.local.MessageEntity;
+import com.mobilegroup20.modelpilot.chat.local.ProjectEntity;
 import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 
@@ -26,9 +31,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 @Database(
         entities = {
                 UsageCallEntity.class,
-                DailyUsageEntity.class
+                DailyUsageEntity.class,
+                ProjectEntity.class,
+                ChatEntity.class,
+                MessageEntity.class,
+                MemoryEntity.class
         },
-        version = 3,
+        version = 4,
         exportSchema = true)
 @TypeConverters(LocalConverters.class)
 public abstract class AppDatabase extends RoomDatabase {
@@ -77,7 +86,58 @@ public abstract class AppDatabase extends RoomDatabase {
         }
     };
 
+    /**
+     * v3 → v4：**对话那四张表**（项目 / 对话 / 消息 / 记忆）。
+     *
+     * <p>2026-09-30 起"除论坛外全在手机上"：对话、上下文、记忆、用量都落在本机，
+     * 服务端一张表都不加。四张表都是新建的，老库里的用量数据一条不动。
+     */
+    public static final Migration MIGRATION_3_4 = new Migration(3, 4) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase db) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS `project` ("
+                    + "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `instructions` TEXT NOT NULL,"
+                    + "`color_index` INTEGER NOT NULL, `created_at_epoch_millis` INTEGER NOT NULL,"
+                    + "`updated_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_project_created_at_epoch_millis`"
+                    + " ON `project` (`created_at_epoch_millis`)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS `chat` ("
+                    + "`id` TEXT NOT NULL, `project_id` TEXT NOT NULL, `title` TEXT NOT NULL,"
+                    + "`last_provider_id` TEXT, `last_model_id` TEXT,"
+                    + "`created_at_epoch_millis` INTEGER NOT NULL,"
+                    + "`updated_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_project_id` ON `chat` (`project_id`)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_updated_at_epoch_millis`"
+                    + " ON `chat` (`updated_at_epoch_millis`)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS `message` ("
+                    + "`id` TEXT NOT NULL, `chat_id` TEXT NOT NULL, `role` TEXT NOT NULL,"
+                    + "`text` TEXT NOT NULL, `attachments_json` TEXT, `tool_calls_json` TEXT,"
+                    + "`tool_call_id` TEXT, `tokens_in` INTEGER NOT NULL,"
+                    + "`tokens_out` INTEGER NOT NULL, `provider_id` TEXT, `model_id` TEXT,"
+                    + "`route` TEXT, `created_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_message_chat_id_created_at_epoch_millis`"
+                    + " ON `message` (`chat_id`, `created_at_epoch_millis`)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS `memory` ("
+                    + "`id` TEXT NOT NULL, `chat_id` TEXT NOT NULL,"
+                    + "`from_message_id` TEXT NOT NULL, `to_message_id` TEXT NOT NULL,"
+                    + "`summary` TEXT NOT NULL, `made_by_provider` TEXT NOT NULL,"
+                    + "`made_by_model` TEXT NOT NULL, `tokens_in` INTEGER NOT NULL,"
+                    + "`tokens_out` INTEGER NOT NULL, `edited_by_user` INTEGER NOT NULL,"
+                    + "`created_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_chat_id_created_at_epoch_millis`"
+                    + " ON `memory` (`chat_id`, `created_at_epoch_millis`)");
+            // 账本多三列：Auto 还是手动、属于哪条对话、跑了哪些工具。
+            // **都可空**：导入的记录没有这些概念，NULL 的语义正好是"不知道"；
+            // 加成 NOT NULL 就得给老行编一个值（编 MANUAL 会把"不知道"说成"手动选的"）。
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN route TEXT");
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN chat_id TEXT");
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN tool_calls TEXT");
+        }
+    };
+
     public abstract UsageCallDao usageCallDao();
 
     public abstract DailyUsageDao dailyUsageDao();
+
+    public abstract com.mobilegroup20.modelpilot.chat.local.ChatDao chatDao();
 }
