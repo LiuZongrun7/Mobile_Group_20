@@ -148,6 +148,34 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 5. 其余五家 provider 逐个接（改配置为主）+ Auto 打分升级。
 6. 导出/导入（对话与用量），把"换手机会丢"这件事补上——大纲 §4 有这一条。
 
+### 6.1 落地进度（2026-10-04 记）
+
+**已经能跑通的**（每一步都有对应的类与测试）：
+
+| 步骤 | 状态 | 在哪 |
+| --- | --- | --- |
+| 1. 上下文引擎 | 完成 | `chat/ContextEngine` `ContextRenderer` `OpenAiCompatibleRenderer` `AnthropicRenderer`（`ContextEngineTest` 等单测钉住） |
+| 2. 注册表 + key + 流式对话 | 完成（只有 DeepSeek 实测过） | `chat/ProviderRegistry`、`data/ProviderKeys`（Keystore）、`data/remote/ProviderClient` |
+| 3. 本机账本 | 完成 | `chat/UsageRecorder` + `chat/CallLedger`（每次调用一行，`uid` 固定为 `local`，见 `CallLedger` 的类注释） |
+| 4. 四屏 UI | **3/4** | 首页 `ui/chat/ChatHomeFragment`、对话页 `ChatConversationFragment`、模型弹层 `ModelSheetFragment`；**Insights 还没做**（现在点 Insights 看到的是旧的统计页，它读 `daily_usage` 那张表，而那张表目前只滚导入的记录——所以它不会显示 App 自己发出去的调用） |
+| 5. 其余五家 | 未开始 | 注册表里已有六家的 base URL 与模型清单，但只有 DeepSeek 真跑过；其余四家的 `streamUsage` 开关保持 false 等实测 |
+| 6. 导出/导入 | 未开始 | |
+
+**另外做了两件不在上面的清单里、但不做就没法用的事**：
+
+- `Me → API keys`（`ui/settings/ApiKeysDialog`）：用户自己填 key 与请求地址，
+  并在同一页选**压缩模型**（没选过就是 Auto 挑最便宜的）。
+- 压缩本身走 `chat/Summarizer` + `ProviderClient.complete(...)`（非流式那一趟），
+  指令见 `Summarizer.INSTRUCTION`——**改那句话等于改产品行为**。
+
+**已知的、有意留着的坑**（不是忘了）：
+
+- 附件（图片/PDF）在数据模型与两个渲染器里都通了，但界面上的 `+` 还没接；
+  图片编辑按 §7 不做。
+- 对话页的 `⋮`（重命名/删除/看记忆）与搜索还没做，点了会说"还没做"。
+- Insights 需要的聚合查询还没写：`daily_usage` 的滚动只收 `IMPORTED`，
+  App 自己那些调用要另走一条（`usage_call` 里 `source = APP` 且 `uid = local`）。
+
 ## 7. 明确不做（这一版）
 
 - 图片编辑（大纲：等能力/接入验证之后再说）——设计稿里的入口先置灰并写明原因。
