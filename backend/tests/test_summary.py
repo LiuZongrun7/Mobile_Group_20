@@ -11,15 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tokentrail_forum.pricing import cny_per_1m_to_usd_micros
-from tokentrail_forum.relay_store import key_hash
-from test_relay import (RELAY_KEY, account_login, account_token, completion, enroll,
-                        insert_usage, cst_millis)
+from helpers import (account_login, account_token, bearer, completion,
+                      cst_millis, daily, insert_usage)
 from test_seasons import make_season_app
 
-OTHER_USER = "tt_second_user_key_0123456789"
 
-
-def summary(api, relay_key=RELAY_KEY, **query):
+def summary(api, relay_key=None, **query):
+    relay_key = relay_key or account_token(api)
     from urllib.parse import urlencode
     return api.get("/api/relay/usage/summary?" + urlencode(query),
                    headers={"Authorization": "Bearer " + relay_key})
@@ -29,11 +27,10 @@ def priced_app(path, seed=True):
     from tokentrail_forum.app import Settings, create_app
     from conftest import verifier
     from test_seasons import TODAY
-    settings = Settings(str(path), "https://forum.example", relay_enabled=True,
-                        relay_allow_private=True, relay_self_hosts=(), pricing_seed=seed)
+    settings = Settings(str(path), "https://forum.example", relay_enabled=True, pricing_seed=seed)
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    return create_app(settings, verifier(), client, day_provider=lambda: TODAY)
+    return create_app(settings, verifier(), day_provider=lambda: TODAY)
 
 
 # ---- Coverage：这条是重点 ----------------------------------------------
@@ -41,7 +38,7 @@ def priced_app(path, seed=True):
 def test_missing_days_are_days_without_records(tmp_path):
     """只有「一条都没记」的天算缺。有记录的天（哪怕量很小）不算缺。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 12), "DEEPSEEK")
         insert_usage(tmp_path, digest, cst_millis("2026-09-22", 12), "DEEPSEEK")
@@ -56,7 +53,7 @@ def test_missing_days_are_days_without_records(tmp_path):
 
 def test_a_range_with_no_records_at_all_is_entirely_missing(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = summary(api, **{"from": "2026-09-01", "to": "2026-09-03"}).json()
         # 「没有记录」不等于「没花钱」——三条全进 daysMissing。
         assert body["coverage"]["daysMissing"] == ["2026-09-01", "2026-09-02", "2026-09-03"]
@@ -66,7 +63,7 @@ def test_a_range_with_no_records_at_all_is_entirely_missing(tmp_path):
 
 def test_one_day_range_works(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = summary(api, **{"from": "2026-09-20", "to": "2026-09-20"}).json()
         assert body["coverage"]["daysMissing"] == ["2026-09-20"]
 
@@ -75,7 +72,7 @@ def test_one_day_range_works(tmp_path):
 
 def test_grouping_by_day(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 12), "DEEPSEEK", input_tokens=100, output=0)
         insert_usage(tmp_path, digest, cst_millis("2026-09-21", 12), "DEEPSEEK", input_tokens=200, output=0)
@@ -87,7 +84,7 @@ def test_grouping_by_day(tmp_path):
 
 def test_grouping_by_model_splits_models(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 12), "DEEPSEEK",
                      model="deepseek-chat", input_tokens=100, output=0)
@@ -101,7 +98,7 @@ def test_grouping_by_model_splits_models(tmp_path):
 
 def test_grouping_by_provider_merges_its_models(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 12), "DEEPSEEK",
                      model="a", input_tokens=100, output=0)
@@ -117,7 +114,7 @@ def test_an_unknown_provider_groups_under_a_key_but_keeps_provider_null(tmp_path
     """`provider` 是枚举，值域只有三个。**分组键**可以是 "unknown"，
     但 `provider` 字段必须是 null——塞枚举外的值客户端反序列化会炸。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-20", 12), None, output=0)
         body = summary(api, **{"from": "2026-09-20", "to": "2026-09-20", "groupBy": "PROVIDER"}).json()
         assert body["rows"][0]["key"] == "unknown"
@@ -126,7 +123,7 @@ def test_an_unknown_provider_groups_under_a_key_but_keeps_provider_null(tmp_path
 
 def test_an_unknown_group_by_is_rejected(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert summary(api, **{"from": "2026-09-20", "to": "2026-09-20",
                                "groupBy": "NONSENSE"}).status_code == 400
 
@@ -135,7 +132,7 @@ def test_an_unknown_group_by_is_rejected(tmp_path):
 
 def test_cost_is_summed_from_the_priced_rows(tmp_path):
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
@@ -152,7 +149,7 @@ def test_an_unpriced_row_is_not_counted_as_zero(tmp_path):
     当确切答案讲出来。
     """
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
@@ -168,7 +165,7 @@ def test_an_unpriced_row_is_not_counted_as_zero(tmp_path):
 
 def test_without_any_pricing_the_cost_is_zero_but_marked_incomplete(tmp_path):
     with TestClient(priced_app(tmp_path, seed=False)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-25", 12),
                      "DEEPSEEK", input_tokens=1_000_000, output=0)
         body = summary(api, **{"from": "2026-09-25", "to": "2026-09-25"}).json()
@@ -184,7 +181,7 @@ def test_without_any_pricing_the_cost_is_zero_but_marked_incomplete(tmp_path):
                                  ("2026-13-01", "2026-09-02"), ("2026-02-30", "2026-09-02")])
 def test_bad_from_dates_are_400_not_500(tmp_path, bad):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert summary(api, **{"from": bad[0], "to": bad[1]}).status_code == 400
 
 
@@ -195,27 +192,26 @@ def test_a_reversed_range_is_rejected_not_silently_empty(tmp_path):
     那正是 `Coverage` 那段注释在防的那类错。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert summary(api, **{"from": "2026-09-20", "to": "2026-09-10"}).status_code == 400
 
 
 def test_an_overlong_range_is_rejected(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert summary(api, **{"from": "2020-01-01", "to": "2026-09-20"}).status_code == 400
 
 
 def test_the_summary_never_crosses_accounts(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
-        enroll(api, relay_key=OTHER_USER, upstream_key="sk-2",
-               account=account_token(api, "second"))
+        TOKEN = account_token(api)
+        OTHER = account_token(api, "second")
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-20", 12),
                      "DEEPSEEK", input_tokens=100, output=0)
         insert_usage(tmp_path, account_login(api, "second")["userId"], cst_millis("2026-09-20", 12),
                      "DEEPSEEK", input_tokens=999_999, output=0)
         mine = summary(api, **{"from": "2026-09-20", "to": "2026-09-20"}).json()
-        theirs = summary(api, relay_key=OTHER_USER,
+        theirs = summary(api, relay_key=OTHER,
                          **{"from": "2026-09-20", "to": "2026-09-20"}).json()
         assert mine["totals"]["input"] == 100
         assert theirs["totals"]["input"] == 999_999
@@ -224,7 +220,7 @@ def test_the_summary_never_crosses_accounts(tmp_path):
 
 def test_the_summary_requires_a_relay_key(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert api.get("/api/relay/usage/summary?from=2026-09-01&to=2026-09-02").status_code == 401
         assert summary(api, "team-token", **{"from": "2026-09-01", "to": "2026-09-02"}).status_code == 401
 
@@ -232,7 +228,7 @@ def test_the_summary_requires_a_relay_key(tmp_path):
 def test_the_uid_cannot_be_passed_as_a_parameter(tmp_path):
     """`uid` 不是参数——传了也不影响算谁的账（`CONTRACTS.md` §6）。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-20", 12),
                      "DEEPSEEK", input_tokens=42, output=0)
         # 试图冒充别人：多传一个 uid 参数
@@ -260,7 +256,7 @@ def test_usage_just_after_midnight_belongs_to_that_day(tmp_path):
     所以这条专门用凌晨的时刻。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 0, 30), "DEEPSEEK", input_tokens=7, output=0)
         insert_usage(tmp_path, digest, cst_millis("2026-09-20", 4, 0), "DEEPSEEK", input_tokens=11, output=0)
@@ -275,7 +271,7 @@ def test_usage_just_after_midnight_belongs_to_that_day(tmp_path):
 def test_usage_at_the_next_midnight_is_not_in_the_previous_day(tmp_path):
     """北京 09-21 00:00 属于 09-21，不属于 09-20。区间右端是开的。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-21", 0, 0), "DEEPSEEK", input_tokens=99, output=0)
         before = summary(api, **{"from": "2026-09-20", "to": "2026-09-20"}).json()
@@ -286,7 +282,8 @@ def test_usage_at_the_next_midnight_is_not_in_the_previous_day(tmp_path):
 
 # ---- 比价（agent 的 compareAgentCosts）----------------------------------
 
-def compare(api, relay_key=RELAY_KEY, **query):
+def compare(api, relay_key=None, **query):
+    relay_key = relay_key or account_token(api)
     from urllib.parse import urlencode
     return api.get("/api/relay/usage/compare?" + urlencode(query),
                    headers={"Authorization": "Bearer " + relay_key})
@@ -294,7 +291,7 @@ def compare(api, relay_key=RELAY_KEY, **query):
 
 def test_compare_rows_carry_all_three_numbers(tmp_path):
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      model="deepseek-chat", input_tokens=1_000_000, output=0)
@@ -315,7 +312,7 @@ def test_compare_rows_carry_all_three_numbers(tmp_path):
 
 def test_compare_sorts_by_the_requested_metric(tmp_path):
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         # 用**种子里真实存在的模型名**：编一个 `a`/`b` 的话两行都没价、
         # 成本都是 0，排序就测不出来了（这个坑踩过）。
@@ -340,7 +337,7 @@ def test_compare_keeps_unpriced_rows_out_of_the_ranking(tmp_path):
     但 `pricingComplete` 和 `unpricedModels` 会说明这件事。
     """
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      model="deepseek-chat", input_tokens=1_000_000, output=0)
@@ -359,7 +356,7 @@ def test_compare_keeps_unpriced_rows_out_of_the_ranking(tmp_path):
 
 def test_compare_carries_coverage_like_the_summary(tmp_path):
     with TestClient(priced_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-25", 12),
                      "DEEPSEEK", input_tokens=1_000_000, output=0)
         body = compare(api, **{"from": "2026-09-24", "to": "2026-09-26"}).json()
@@ -370,7 +367,7 @@ def test_compare_carries_coverage_like_the_summary(tmp_path):
 
 def test_compare_rejects_unknown_metrics_and_reversed_ranges(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert compare(api, **{"from": "2026-09-20", "to": "2026-09-20",
                                "metric": "SMARTNESS"}).status_code == 400
         assert compare(api, **{"from": "2026-09-20", "to": "2026-09-01"}).status_code == 400

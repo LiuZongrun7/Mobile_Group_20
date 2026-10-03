@@ -19,9 +19,10 @@ from fastapi.testclient import TestClient
 from tokentrail_forum.app import Settings, create_app
 from tokentrail_forum.news_job import import_articles
 from tokentrail_forum.store import OFFICIAL_AUTHOR_NAME, OFFICIAL_AUTHOR_UID, Store
+from tokentrail_forum.usage_store import UsageStore
 from conftest import verifier
 from test_forum import png
-from test_relay import RELAY_KEY, enroll
+from helpers import account_login, account_token, bearer, completion, insert_usage
 from test_seasons import make_season_app
 
 TODAY_MS = 1_790_500_000_000
@@ -191,17 +192,16 @@ def test_the_agent_tool_reports_both_counts(tmp_path):
     from tokentrail_forum.agent_tools import ToolContext, execute
     from tokentrail_forum.budgets import Budgets
     from tokentrail_forum.pricing import Pricing
-    from tokentrail_forum.relay_store import RelayStore, key_hash
     from tokentrail_forum.seasons import Seasons
 
     # 自己建一份：这个测试要同时拿到 app 和**它用的那个路径**
     # （读写器必须和 app 指向同一个库，塞进子目录就会读空）。
     make_app_with_news(tmp_path, TWO_ARTICLES)
     store = Store(str(tmp_path), "/api")
-    relay = RelayStore(store)
+    usage_store = UsageStore(store)
     pricing = Pricing(store)
-    context = ToolContext(digest=key_hash(RELAY_KEY), uid=None, relay=relay, pricing=pricing,
-                          seasons=Seasons(store, relay), budgets=Budgets(store, relay, pricing),
+    context = ToolContext(digest="u_test_account", uid=None, usage=usage_store, pricing=pricing,
+                          seasons=Seasons(store, usage_store), budgets=Budgets(store, usage_store, pricing),
                           store=store)
     payload, evidence = execute("getForumHighlights", {"limit": 5}, **vars(context))
     # 官方帖在（新闻是公共内容，不需要论坛身份）

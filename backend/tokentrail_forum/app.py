@@ -15,7 +15,6 @@ import ipaddress
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
-import httpx
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,8 +22,8 @@ from .account_routes import build_account_router
 from .accounts import Accounts
 from .auth import Identity, TableAuth
 from .pricing import Pricing
-from .relay_routes import build_agent_router
-from .relay_routes import build_router as build_relay_router
+from .api_routes import build_agent_router
+from .api_routes import build_router as build_api_router
 from .seed_pricing import install as install_seed
 from .test_sessions import ForumAuth
 from .store import (Store, decode_cursor, news_json, now_ms, official_post, official_posts,
@@ -42,21 +41,15 @@ class Settings:
     test_sessions_enabled: bool = False
     public_api_prefix: str = "/api"
     news_database: str = ""
-    # 中转（见 relay.py / relay_store.py）。默认关闭，打开后 /<前缀>/relay/* 才会注册，
-    # 没打开时这些路径落到 404，和以前一样。
+    # 用量/预算/价目/赛季这几组接口的开关。默认关闭，打开后 `/<前缀>/relay/*` 才注册。
+    #
+    # **名字是历史遗留**：2026-09-30 之前它管的是"中转转发"（用户把自己的 key 交上来、
+    # 我们替他把请求转给上游）。转发整块删掉之后，这个开关守的是记账那几组接口。
+    # 改名字要动服务器上的 `FORUM_ENABLE_RELAY` 和部署脚本，等下次一起改；
+    # `/health` 里那个 `relayEnabled` 同理。
     relay_enabled: bool = False
-    # 应用内 AI 智能体。**和 relay_enabled 分开**：一开始挂在同一个开关下面，
-    # 结果「只想开智能体」必须连中转一起开——而中转一开用户的 API key
-    # 就落在这台机器上了。两件事的风险完全不同，不该捆在一起。
+    # 应用内 AI 智能体。**和上面的记账开关分开**：两件事的风险与用途都不一样。
     agent_enabled: bool = False
-    # 允许的上游域名白名单（逗号分隔）。为空时退化成「拒绝私网地址」这一层校验；
-    # 生产环境应该填成实际允许的几家，把「用户能让我们请求任意公网地址」也收掉。
-    relay_allowed_hosts: tuple = ()
-    # 只在本地/测试里开：允许上游指向回环地址（假上游）。生产必须保持 False。
-    relay_allow_private: bool = False
-    # 指回自己会形成转发环。部署时填自己的公网域名和 127.0.0.1。
-    relay_self_hosts: tuple = ("127.0.0.1", "localhost", "::1")
-    relay_requests_per_minute: int = 240
     # 启动时把内置的价目种子录进去（幂等）。默认关闭：价目是**数据**不是代码，
     # 自动写入生产库会让「这批价是哪来的」变成一个没人说得清的问题。
     pricing_seed: bool = False
@@ -66,16 +59,16 @@ class Settings:
     agent_key: str = ""
     agent_model: str = "deepseek-chat"
     agent_endpoint: str = "https://api.deepseek.com"
-    # 智能体每次问答都要花我们的钱，所以限流比转发更严。
+        # 智能体每次问答都要花我们的钱，所以限流比转发更严。
     agent_requests_per_minute: int = 10
 
     @classmethod
     def from_environment(cls):
-        # 注意 self_hosts 这一项**不能写 `split_hosts(...) or 默认值`**：
-        # 「显式设成空串」的意思是「我确认不用防转发环」（本地验收就是这种），
-        # 而 `or` 会把空串当成没设置、悄悄退回默认值，于是那个开关关不掉。
-        # 只有变量**完全没定义**时才用默认值。
-        self_hosts = os.getenv("FORUM_RELAY_SELF_HOSTS")
+        # `FORUM_RELAY_ALLOWED_HOSTS` / `_ALLOW_PRIVATE` / `_SELF_HOSTS` /
+        # `_REQUESTS_PER_MINUTE` 四个变量**已经不起作用**了（2026-09-30）：
+        # 它们是给"转发到用户自己的上游"做 SSRF 防护与限流的，那条路整块删掉之后
+        # 没有东西可防。env 文件里留着这四个不会报错，但也不会生效——
+        # `FORUM_RELAY_REQUESTS_PER_MINUTE` 这个名字现在只出现在旧文档里。
         return cls(os.getenv("FORUM_DATA_DIR", "./runtime"),
                    os.getenv("FORUM_PUBLIC_ORIGIN", ""),
                    os.getenv("FORUM_ENABLE_TEST_SESSIONS", "0") == "1",
@@ -83,10 +76,6 @@ class Settings:
                    os.getenv("FORUM_NEWS_DATABASE", ""),
                    os.getenv("FORUM_ENABLE_RELAY", "0") == "1",
                    os.getenv("FORUM_ENABLE_AGENT", "0") == "1",
-                   split_hosts(os.getenv("FORUM_RELAY_ALLOWED_HOSTS", "")),
-                   os.getenv("FORUM_RELAY_ALLOW_PRIVATE", "0") == "1",
-                   ("127.0.0.1", "localhost", "::1") if self_hosts is None else split_hosts(self_hosts),
-                   int(os.getenv("FORUM_RELAY_REQUESTS_PER_MINUTE", "240")),
                    os.getenv("FORUM_PRICING_SEED", "0") == "1",
                    os.getenv("FORUM_AGENT_KEY", ""),
                    os.getenv("FORUM_AGENT_MODEL", "deepseek-chat"),
@@ -95,12 +84,12 @@ class Settings:
 
     @property
     def relay_prefix(self):
-        """中转转发路由挂在公共前缀下面：`/api/relay` 或 `/test-api/relay`。"""
+        """记账与智能体的路由挂在公共前缀下面：`/api/relay` 或 `/test-api/relay`。
+
+        路径里那个 `relay` 是历史字面量（App 的 `ServerApi`、文档、部署脚本都写死了它），
+        和"中转"这件事已经没有关系。"""
         return self.public_api_prefix.rstrip("/") + "/relay"
 
-
-def split_hosts(value):
-    return tuple(item.strip() for item in (value or "").split(",") if item.strip())
 
 
 class PostDraft(BaseModel):
@@ -176,20 +165,8 @@ def since_timestamp(value):
         raise HTTPException(400, "since must be yyyy-MM-dd") from None
 
 
-def _relay_client(app):
-    """转发用的 HTTP 客户端。
 
-    传入的实例由调用方负责关闭（测试里是 `httpx.MockTransport` 包出来的）；
-    没传就懒建一个真实的，并且注册进 `app.state` 让 lifespan 关掉它。
-    """
-    if app.state.relay_client is None:
-        app.state.relay_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0),
-            follow_redirects=False, trust_env=False)
-    return app.state.relay_client
-
-
-def create_app(settings=None, verifier=None, relay_client=None, day_provider=None):
+def create_app(settings=None, verifier=None, day_provider=None):
     settings = settings or Settings.from_environment()
     origin = settings.public_origin.rstrip("/")
     parsed = urlsplit(origin)
@@ -209,13 +186,10 @@ def create_app(settings=None, verifier=None, relay_client=None, day_provider=Non
     async def lifespan(app):
         yield
         auth.close()
-        if app.state.relay_client is not None:
-            await app.state.relay_client.aclose()
 
-    app = FastAPI(title="TokenTrail Forum", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(title="ModelPilot Forum", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.add_middleware(BoundedBody)
     app.state.store = store
-    app.state.relay_client = relay_client
 
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
@@ -241,23 +215,17 @@ def create_app(settings=None, verifier=None, relay_client=None, day_provider=Non
     app.include_router(build_account_router(settings, store), prefix=settings.public_api_prefix)
 
     if settings.agent_enabled:
-        # ⚠️ **已知耦合**：身份自助注册（`/keys`）目前和中转那套路由在一起，
-        # 所以只开 `agent_enabled`、不开 `relay_enabled` 的服务器**注册不出身份**。
-        # 要解耦得把「身份管理/用量/赛季/预算/价目」那批路由和转发兜底拆开，
-        # 但那个改动会动到 `APIRouter` 的注册顺序（兜底路由最短路优先，
-        # 拆错了具体路径会被它吃掉），**在没人用这个组合的时候不值得冒险**。
-        # 现在的部署两个开关都开着，所以碰不到。
         app.include_router(build_agent_router(settings, store, Pricing(store),
                                              day_provider=day_provider),
                            prefix=settings.relay_prefix)
     if settings.relay_enabled:
         if settings.pricing_seed:
             install_seed(store, Pricing(store))
-        relay_router, relay_forward = build_relay_router(settings, store, _relay_client(app),
-                                                         day_provider=day_provider)
-        app.include_router(relay_router, prefix=settings.relay_prefix)
-        app.add_api_route(settings.relay_prefix + "/{path:path}", relay_forward,
-                          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+        # **没有兜底转发了**（2026-09-30）：原来这里还注册一条 `/{path:path}`，
+        # 把客户端的请求原样转给"用户自己的上游"。那条路连同 `/keys` 一起删了，
+        # 所以现在也不需要再操心"兜底路由必须最后注册"这个顺序问题。
+        app.include_router(build_api_router(settings, store, day_provider=day_provider),
+                           prefix=settings.relay_prefix)
 
     @app.get("/health")
     def health():
@@ -265,12 +233,11 @@ def create_app(settings=None, verifier=None, relay_client=None, day_provider=Non
             db.execute("SELECT 1")
             metadata = dict(db.execute("SELECT key,value FROM metadata"))
             count = db.execute("SELECT COUNT(*) FROM news").fetchone()[0]
-        return {"status": "ok", "service": "tokentrail-forum", "newsCount": count,
+        return {"status": "ok", "service": "modelpilot-forum", "newsCount": count,
                 "newsLastCollectedAt": metadata.get("newsLastCollectedAt"),
                 "newsSourceErrors": json.loads(metadata.get("newsSourceErrors", "{}")),
                 "testSessionsEnabled": settings.test_sessions_enabled,
                 "relayEnabled": settings.relay_enabled,
-                "relayAllowedHosts": list(settings.relay_allowed_hosts),
                 # 只报「配没配」，**永远不报 key 本身**。
                 "agentConfigured": bool(settings.agent_key),
                 "agentModel": settings.agent_model}

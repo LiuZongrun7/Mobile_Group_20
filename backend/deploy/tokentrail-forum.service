@@ -1,5 +1,5 @@
 [Unit]
-Description=TokenTrail forum and relay API
+Description=ModelPilot forum API (accounts, usage, budgets, agent)
 After=network.target
 
 [Service]
@@ -7,9 +7,10 @@ User=tokentrail
 Group=tokentrail
 WorkingDirectory=/opt/tokentrail/backend
 EnvironmentFile=/etc/tokentrail-forum.env
-# 中转开关单独一个文件，前缀 `-` 表示**文件不存在也不报错**。
-# 这样只更新代码、还不打算启用中转的服务器不会因为这个文件缺失而起不来；
+# 记账接口与智能体的开关单独一个文件，前缀 `-` 表示**文件不存在也不报错**。
+# 这样只更新代码、还没打算开这些接口的服务器不会因为这个文件缺失而起不来；
 # 要启用时就把 forum-relay.env.example 装到 /etc/tokentrail-forum-relay.env。
+# （文件名里的 relay 是历史遗留：它原来管的是"中转转发"，那条路 2026-09-30 删了。）
 EnvironmentFile=-/etc/tokentrail-forum-relay.env
 ExecStart=/opt/tokentrail/venv/bin/uvicorn tokentrail_forum.app:application --factory --host 127.0.0.1 --port 8010 --workers 1 --no-access-log
 Restart=on-failure
@@ -20,12 +21,12 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/tokentrail-forum
-# 512M 对论坛够用，但中转要同时缓冲多个长上下文请求（每个可能几 MB），
-# 而且 MemoryMax 一旦触发是直接 OOM kill，表现为「用着用着服务重启」。
-# 1G 是给中转留的余量。
+# 512M 对论坛+记账够用；1G 是留着给"后端替用户调模型"那条路（还没写）的余量——
+# 它要缓冲长上下文请求（每个可能几 MB）。MemoryMax 一旦触发是直接 OOM kill，
+# 表现为「用着用着服务重启」，所以宁可给宽一点。
 MemoryMax=1G
 TimeoutStopSec=30
-# 中转的长连接可能正在流式输出，给它时间把用量落库再退出。
+# 请求可能正在流式输出，给它时间把用量落库再退出。
 KillSignal=SIGTERM
 
 [Install]

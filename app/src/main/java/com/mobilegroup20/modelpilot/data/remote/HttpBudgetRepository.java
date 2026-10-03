@@ -31,12 +31,12 @@ import retrofit2.converter.gson.GsonConverterFactory;
  *       意思是「算不出来」而不是「花了 0 元」。见下面 {@link #status} 的说明。</li>
  * </ol>
  *
- * <p>身份用**账号 token**（和论坛、用量那几套一样），不是 relay key：
- * 预算挂在账号上，换个 relay key 不该让预算消失。
+ * <p>身份用**账号 token**（和论坛、用量那几套一样，见 {@code AccountSession}）：
+ * 预算挂在账号的 `userId` 上，换台设备重新登录还是同一份。
  */
 public final class HttpBudgetRepository implements BudgetRepository {
 
-    private final RelayApi api;
+    private final ServerApi api;
     private final SessionProvider session;
 
     public HttpBudgetRepository(String baseUrl, SessionProvider session) {
@@ -46,7 +46,7 @@ public final class HttpBudgetRepository implements BudgetRepository {
         api = normalized == null ? null : new Retrofit.Builder().baseUrl(normalized)
                 .client(new OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS)
                         .retryOnConnectionFailure(false).build())
-                .addConverterFactory(GsonConverterFactory.create()).build().create(RelayApi.class);
+                .addConverterFactory(GsonConverterFactory.create()).build().create(ServerApi.class);
     }
 
     /** 认证头 + 「uid 和当前身份不一致就直接拒绝」。理由见 `HttpBudgetRepository` 的类注释。 */
@@ -56,7 +56,7 @@ public final class HttpBudgetRepository implements BudgetRepository {
         return Objects.equals(uid, session.accountId()) ? "Bearer " + token : null;
     }
 
-    private static Budget toBudget(RelayApi.BudgetBody body) {
+    private static Budget toBudget(ServerApi.BudgetBody body) {
         Budget budget = new Budget(body.uid, body.month, body.capMicros, body.warnAtRatio);
         return budget;
     }
@@ -69,15 +69,15 @@ public final class HttpBudgetRepository implements BudgetRepository {
         String authorization = authorizationFor(uid);
         if (authorization == null) { result.setValue(null); return result; }
         api.budgetStatus(authorization, month).enqueue(new Callback<>() {
-            @Override public void onResponse(Call<RelayApi.BudgetStatusBody> call,
-                                             Response<RelayApi.BudgetStatusBody> response) {
-                RelayApi.BudgetStatusBody body = response.body();
+            @Override public void onResponse(Call<ServerApi.BudgetStatusBody> call,
+                                             Response<ServerApi.BudgetStatusBody> response) {
+                ServerApi.BudgetStatusBody body = response.body();
                 if (!response.isSuccessful() || body == null) { result.postValue(null); return; }
                 if (!body.configured || body.capMicros == null) { result.postValue(null); return; }
                 result.postValue(new Budget(body.uid, body.month, body.capMicros,
                         body.warnAtRatio == null ? 0.0 : body.warnAtRatio));
             }
-            @Override public void onFailure(Call<RelayApi.BudgetStatusBody> call, Throwable error) {
+            @Override public void onFailure(Call<ServerApi.BudgetStatusBody> call, Throwable error) {
                 result.postValue(null);
             }
         });
@@ -90,15 +90,15 @@ public final class HttpBudgetRepository implements BudgetRepository {
         String authorization = authorizationFor(budget.uid);
         if (authorization == null) { result.setValue(null); return result; }
         api.saveBudget(authorization, budget.month,
-                        new RelayApi.BudgetRequest(budget.capMicros, budget.warnAtRatio))
+                        new ServerApi.BudgetRequest(budget.capMicros, budget.warnAtRatio))
                 .enqueue(new Callback<>() {
-                    @Override public void onResponse(Call<RelayApi.BudgetBody> call,
-                                                     Response<RelayApi.BudgetBody> response) {
-                        RelayApi.BudgetBody body = response.body();
+                    @Override public void onResponse(Call<ServerApi.BudgetBody> call,
+                                                     Response<ServerApi.BudgetBody> response) {
+                        ServerApi.BudgetBody body = response.body();
                         // 失败返回 null 而不是原样回传入参：回传的话界面会以为存上了。
                         result.postValue(response.isSuccessful() && body != null ? toBudget(body) : null);
                     }
-                    @Override public void onFailure(Call<RelayApi.BudgetBody> call, Throwable error) {
+                    @Override public void onFailure(Call<ServerApi.BudgetBody> call, Throwable error) {
                         result.postValue(null);
                     }
                 });
@@ -110,9 +110,9 @@ public final class HttpBudgetRepository implements BudgetRepository {
         String authorization = authorizationFor(uid);
         if (authorization == null) { result.setValue(emptyStatus(month)); return result; }
         api.budgetStatus(authorization, month).enqueue(new Callback<>() {
-            @Override public void onResponse(Call<RelayApi.BudgetStatusBody> call,
-                                             Response<RelayApi.BudgetStatusBody> response) {
-                RelayApi.BudgetStatusBody body = response.body();
+            @Override public void onResponse(Call<ServerApi.BudgetStatusBody> call,
+                                             Response<ServerApi.BudgetStatusBody> response) {
+                ServerApi.BudgetStatusBody body = response.body();
                 if (!response.isSuccessful() || body == null) { result.postValue(emptyStatus(month)); return; }
                 BudgetStatus status = new BudgetStatus();
                 status.month = body.month;
@@ -126,7 +126,7 @@ public final class HttpBudgetRepository implements BudgetRepository {
                 status.coverage = toCoverage(body.coverage);
                 result.postValue(status);
             }
-            @Override public void onFailure(Call<RelayApi.BudgetStatusBody> call, Throwable error) {
+            @Override public void onFailure(Call<ServerApi.BudgetStatusBody> call, Throwable error) {
                 result.postValue(emptyStatus(month));
             }
         });
@@ -142,7 +142,7 @@ public final class HttpBudgetRepository implements BudgetRepository {
         return status;
     }
 
-    private static Coverage toCoverage(RelayApi.CoverageBody body) {
+    private static Coverage toCoverage(ServerApi.CoverageBody body) {
         Coverage coverage = new Coverage();
         if (body == null) return coverage;
         coverage.from = body.from;

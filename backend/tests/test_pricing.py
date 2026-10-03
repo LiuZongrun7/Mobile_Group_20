@@ -13,12 +13,11 @@ from fastapi.testclient import TestClient
 from tokentrail_forum.app import Settings, create_app
 from tokentrail_forum.pricing import (CNY_PER_USD_MICROS, Pricing, cny_per_1m_to_usd_micros,
                                       cost_micros)
-from tokentrail_forum.relay_store import key_hash
 from tokentrail_forum.seed_pricing import SEED, install as install_seed
 from tokentrail_forum.store import Store
 from conftest import verifier
-from test_relay import (RELAY_KEY, account_login, completion, enroll,
-                        insert_usage, cst_millis)
+from helpers import (account_login, account_token, bearer, completion,
+                      cst_millis, daily, insert_usage)
 from test_seasons import TODAY, day, make_season_app
 
 MONTH = "2026-09"
@@ -26,21 +25,22 @@ MONTH = "2026-09"
 
 def make_pricing_app(path, seed=False):
     settings = Settings(str(path), "https://forum.example", relay_enabled=True,
-                        relay_allow_private=True, relay_self_hosts=(),
                         pricing_seed=seed)
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    return create_app(settings, verifier(), client, day_provider=lambda: TODAY)
+    return create_app(settings, verifier(), day_provider=lambda: TODAY)
 
 
-def pricing_list(api, relay_key=RELAY_KEY, **query):
+def pricing_list(api, relay_key=None, **query):
+    relay_key = relay_key or account_token(api)
     from urllib.parse import urlencode
     suffix = ("?" + urlencode(query)) if query else ""
     return api.get("/api/relay/pricing" + suffix,
                    headers={"Authorization": "Bearer " + relay_key})
 
 
-def daily(api, relay_key=RELAY_KEY, **query):
+def daily(api, relay_key=None, **query):
+    relay_key = relay_key or account_token(api)
     from urllib.parse import urlencode
     suffix = ("?" + urlencode(query)) if query else ""
     return api.get("/api/relay/usage/daily" + suffix,
@@ -184,7 +184,7 @@ def test_installing_does_not_overwrite_a_corrected_rate(tmp_path):
 
 def test_daily_cost_uses_the_rate_of_that_day(tmp_path):
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         # 09-25 那天 100 万 input + 200 万 output
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
@@ -200,7 +200,7 @@ def test_daily_cost_uses_the_rate_of_that_day(tmp_path):
 
 def test_daily_cost_is_null_when_the_model_has_no_rate(tmp_path):
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         # 种子里没有这个模型 → 算不出价
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "OPENAI",
@@ -217,7 +217,7 @@ def test_daily_cost_is_null_when_the_model_has_no_rate(tmp_path):
 def test_without_the_seed_flag_there_is_no_pricing(tmp_path):
     """默认不装种子：价目是**数据**，自动写入生产库会让「这批价哪来的」说不清。"""
     with TestClient(make_pricing_app(tmp_path, seed=False)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-25", 12),
                      "DEEPSEEK", input_tokens=1_000_000)
         body = daily(api).json()
@@ -229,14 +229,14 @@ def test_without_the_seed_flag_there_is_no_pricing(tmp_path):
 
 def test_budget_spend_is_computed_from_priced_days(tmp_path):
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         # output 显式给 0：`insert_usage` 默认会塞 5 个 output token，
         # 那会多出 2 微美元（5 * 563380 // 1e6），让断言变得难读。
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
         body = api.get(f"/api/relay/budgets/{MONTH}",
-                       headers={"Authorization": "Bearer " + RELAY_KEY}).json()
+                       headers={"Authorization": "Bearer " + TOKEN}).json()
         assert body["spentMicros"] == cny_per_1m_to_usd_micros(1)
         assert body["pricingAvailable"] is True
         assert body["unpricedDays"] == []
@@ -249,14 +249,14 @@ def test_budget_reports_unpriced_days_instead_of_counting_them_as_zero(tmp_path)
     「价格未知」而不是一个偏低的总额。
     """
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
         insert_usage(tmp_path, digest, cst_millis("2026-09-26", 12), "OPENAI",
                      model="gpt-5", input_tokens=9_000_000, output=0)
         body = api.get(f"/api/relay/budgets/{MONTH}",
-                       headers={"Authorization": "Bearer " + RELAY_KEY}).json()
+                       headers={"Authorization": "Bearer " + TOKEN}).json()
         # 有价的那天算进去了，没价的那天没有
         assert body["spentMicros"] == cny_per_1m_to_usd_micros(1)
         assert body["unpricedDays"] == ["2026-09-26"]
@@ -267,7 +267,7 @@ def test_budget_reports_unpriced_days_instead_of_counting_them_as_zero(tmp_path)
 
 def test_pricing_listing_shows_rate_metadata(tmp_path):
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = pricing_list(api).json()
         assert body["count"] == len(SEED)
         assert body["cnyPerUsdMicros"] == CNY_PER_USD_MICROS
@@ -279,9 +279,9 @@ def test_pricing_listing_shows_rate_metadata(tmp_path):
 
 def test_recording_a_rate_round_trips(tmp_path):
     with TestClient(make_pricing_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = api.put("/api/relay/pricing/MIMO/mimo-v2.6-pro",
-                           headers={"Authorization": "Bearer " + RELAY_KEY},
+                           headers={"Authorization": "Bearer " + TOKEN},
                            json={"effectiveFrom": "2026-09-01", "rateVersion": "manual-v1",
                                  "inputMicrosPer1M": 100000, "cacheReadMicrosPer1M": 10000,
                                  "cacheWriteMicrosPer1M": 0, "outputMicrosPer1M": 400000,
@@ -293,9 +293,9 @@ def test_recording_a_rate_round_trips(tmp_path):
 
 def test_pricing_convert_does_the_math_server_side(tmp_path):
     with TestClient(make_pricing_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = api.post("/api/relay/pricing/convert",
-                        headers={"Authorization": "Bearer " + RELAY_KEY},
+                        headers={"Authorization": "Bearer " + TOKEN},
                         json={"cnyPer1M": 4}).json()
         # 换算只有一处实现——让录入的人手算等于多一份实现，而且错了不报错。
         assert body["inputMicrosPer1M"] == cny_per_1m_to_usd_micros(4)
@@ -305,9 +305,9 @@ def test_pricing_convert_does_the_math_server_side(tmp_path):
 @pytest.mark.parametrize("bad", ["2026-2-01", "20260901", "2026-13-01", "2026-02-30", "abc"])
 def test_bad_effective_dates_are_400_not_500(tmp_path, bad):
     with TestClient(make_pricing_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = api.put("/api/relay/pricing/DEEPSEEK/deepseek-chat",
-                           headers={"Authorization": "Bearer " + RELAY_KEY},
+                           headers={"Authorization": "Bearer " + TOKEN},
                            json={"effectiveFrom": bad, "rateVersion": "v", "inputMicrosPer1M": 1,
                                  "cacheReadMicrosPer1M": 0, "cacheWriteMicrosPer1M": 0,
                                  "outputMicrosPer1M": 1})
@@ -316,9 +316,9 @@ def test_bad_effective_dates_are_400_not_500(tmp_path, bad):
 
 def test_unknown_provider_is_rejected(tmp_path):
     with TestClient(make_pricing_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = api.put("/api/relay/pricing/NOT_A_PROVIDER/m",
-                           headers={"Authorization": "Bearer " + RELAY_KEY},
+                           headers={"Authorization": "Bearer " + TOKEN},
                            json={"effectiveFrom": "2026-09-01", "rateVersion": "v",
                                  "inputMicrosPer1M": 1, "cacheReadMicrosPer1M": 0,
                                  "cacheWriteMicrosPer1M": 0, "outputMicrosPer1M": 1})
@@ -328,7 +328,7 @@ def test_unknown_provider_is_rejected(tmp_path):
 
 def test_pricing_endpoints_require_a_relay_key(tmp_path):
     with TestClient(make_pricing_app(tmp_path, seed=True)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert api.get("/api/relay/pricing").status_code == 401
         assert api.post("/api/relay/pricing/convert", json={"cnyPer1M": 1}).status_code == 401
         # 写接口用一个**合法**的 body 来测鉴权：body 不合法时 Pydantic 会先挡成 400

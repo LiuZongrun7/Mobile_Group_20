@@ -24,7 +24,6 @@ import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
 import com.mobilegroup20.modelpilot.data.Money;
 import com.mobilegroup20.modelpilot.data.RepositoryProvider;
-import com.mobilegroup20.modelpilot.data.RelayCredentials;
 import com.mobilegroup20.modelpilot.databinding.ActivityMainBinding;
 import com.mobilegroup20.modelpilot.ui.dashboard.DashboardUsage;
 import com.mobilegroup20.modelpilot.util.TimeUtils;
@@ -49,10 +48,10 @@ import java.util.Random;
  * {@code ../ModelPilot_Game/} 里，要翻旧账或搬回来去那边找。
  *
  * <p>剩下的四个板块是<b>统计 / 论坛 / 我的</b>（游戏去掉后底部导航只有三项）：
- * 统计读的是仓库里的按天用量，论坛是独立 Fragment，「我的」页挂着账号与中转设置。
+ * 统计读的是仓库里的按天用量，论坛是独立 Fragment，「我的」页挂着账号状态。
 
  * <p>2026-09-30 按新大纲（ModelPilot）收过一遍：塔防、赛季/资源余额、以及那套
- * 用量问答助手都整块删了——见提交信息。现在这一页只做统计，账户与中转在「我的」。
+ * 用量问答助手都整块删了——见提交信息。现在这一页只做统计，账号在「我的」。
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -80,13 +79,10 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // 身份是**账号**（`AccountSession`）：中转只影响「用量怎么进来」，
-        // 不配中转的用户照样读得到自己的用量与预算。
+        // 身份是**账号**（`AccountSession`）：用量和预算都挂在账号上，
+        // 登录了就都读得到自己的那一份。
         setUpBottomNav();
-        binding.accountButton.setOnClickListener(v -> {
-            if (getSupportFragmentManager().findFragmentByTag("account") == null)
-                new com.mobilegroup20.modelpilot.ui.auth.AccountDialog().show(getSupportFragmentManager(), "account");
-        });
+        binding.accountButton.setOnClickListener(v -> openAccount());
         getSupportFragmentManager().setFragmentResultListener("accountChanged", this, (key, result) -> {
             MenuItem selected = binding.bottomNav.getMenu().findItem(binding.bottomNav.getSelectedItemId());
             showTab(selected.getItemId(), selected.getTitle());
@@ -201,11 +197,9 @@ public class MainActivity extends AppCompatActivity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
     /**
-     * 服务端的账号身份：**账号的 `userId`**，不是 relay key 的 sha256。
+     * 服务端的账号身份：**账号的 `userId`**。
      *
-     * <p>2026-02 改。以前这里是 `RelayCredentials.uid()`，于是没配中转就没身份、
-     * 换个 key 余额就断。现在账号是身份，中转只是其中一条通道。
-     * 没登录时返回 null，账本那边会走空实现。
+     * <p>没登录时返回 null，账本那边会走空实现。
      */
     private String uid() {
         return com.mobilegroup20.modelpilot.data.AccountSession.get(this).accountId();
@@ -266,24 +260,22 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!forum && !dashboard) {
             com.mobilegroup20.modelpilot.data.AccountSession session = com.mobilegroup20.modelpilot.data.AccountSession.get(this);
-            boolean relay = com.mobilegroup20.modelpilot.data.RelayCredentials.get(this).configured();
-            // 「我的」页：账号状态 + 中转状态。中转设置挂在同一个标签上（点标题进设置），
-            // 这样不用新建页面。
+            // 「我的」页只有账号状态：登录/未登录 + 账号名 +（Debug 的）论坛测试身份。
+            // 点标题开账号弹窗，和右上角那个按钮是同一个入口。
             binding.emptyLabel.setText(account
                     ? getString(session.signedIn()
                             ? session.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in
                             : R.string.my_page_signed_out, session.signedIn() ? session.accountName() : "")
-                            + "\n\n" + getString(relay ? R.string.my_page_relay_on : R.string.my_page_relay_off)
                     : getString(R.string.nav_not_built, title));
             binding.emptyLabel.setClickable(account);
-            binding.emptyLabel.setOnClickListener(account ? v -> openRelaySetup() : null);
+            binding.emptyLabel.setOnClickListener(account ? v -> openAccount() : null);
         }
     }
-    /** 打开中转设置。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
-    private void openRelaySetup() {
+    /** 打开账号弹窗（登录/注册/退出）。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
+    private void openAccount() {
         androidx.fragment.app.FragmentManager manager = getSupportFragmentManager();
-        if (manager.findFragmentByTag("relay") == null)
-            new com.mobilegroup20.modelpilot.ui.auth.RelaySetupDialog().show(manager, "relay");
+        if (manager.findFragmentByTag("account") == null)
+            new com.mobilegroup20.modelpilot.ui.auth.AccountDialog().show(manager, "account");
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {

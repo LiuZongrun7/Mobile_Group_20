@@ -1,36 +1,32 @@
-"""中转服务的存储层：relay key、上游凭据、转发用量。
+"""用量账本的存储层（原 `relay_store.py`，2026-09-30 随中转一起改名）。
 
-与论坛表分开的原因不是「好看」，是三件事真的不一样：
+**这里现在只有一件事：用量。** 中转删掉之后，`relay_keys`（凭据）与
+`relay_secrets`（用户的上游 key 明文）两张表连同它们的代码一起没了——
+用户不再把自己的 API key 交给我们，"这条用量是谁交上来的"也不再是一个问题。
 
-1. **上游凭据是这整个服务里最敏感的东西。** 它和别的分开一张表之后，
-   「查身份」这条路径永远不碰它（`key()` 不 join `relay_secrets`）。
-2. **用量要走结算和 agent，帖子不走。** `CONTRACTS.md` §5 把「用量私有」和
-   「论坛公开」列为必须分开的两类校验，中转用量属于前者。
-3. **这张表里有两样东西，别混**：`relay_keys` 是**凭据**（怎么把用量交上来），
-   `relay_usage` 的归属列是**账号的 `user_id`**（这是谁的账）。
+留下来的：
 
-§2026-02 改§ 身份口径原来写的是「`uid = sha256(relay key)`」，现在**不是**了：
-relay key 只是挂在账号下面的一条通道，用量、余额、预算、结算全部按账号的
-`user_id` 记。`key_hash`（sha256(relay key)，十六进制 64 字符）仍然存在，
-但它的用途只剩两个——查这条 key 的上游凭据、以及审计这条 key 用过多少次。
-relay key 是 32 字节随机数的 base64url，所以原像空间足够大，sha256 不需要
-加盐也不需要慢哈希。但**它仍然不许进日志**——见 `relay_auth.py` 里
-`describe()` 的说明。
+1. `relay_usage` —— 每次模型调用的四个 token 桶、provider、model、时间、`call_id`。
+   归属列是**账号的 `user_id`**（2026-02 改的，之前挂在 relay key 上，
+   于是"换个 key 就换个人"）。
+2. 按天 / 按次读回来的三个查询（`daily_for` / `calls_for` / `usage_for`），
+   Insights、预算、赛季三处都用它。
+3. 「一天」的口径（`Asia/Shanghai`）——和 App 侧 `util/TimeUtils.ZONE` 必须是同一个。
+
+**表名保留 `relay_usage`**：改表名要写迁移、要动已经在跑的生产库，而不改变任何行为；
+下次真的动 schema 时一起做。`record()` 现在是**唯一**的写入口，但生产上暂时没有
+调用方——"用户在 App 里提问、后端调模型"那条路还没写（新大纲 4–15 周的主体），
+写完由它来记账，所以这个方法留着。
 """
-import hashlib
-import re
 import json
+import re
 import secrets
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from .store import now_ms
 
 
-PREFIX = "tt_"
-MIN_CUSTOM_LENGTH = 24
-GENERATED_BYTES = 32
 
 # 「一天」的口径，和 App 侧 `util/TimeUtils.ZONE` 必须是同一个。
 #
@@ -52,33 +48,6 @@ UTC_TO_FINANCIAL = DAY_OFFSET_SECONDS
 FINANCIAL_TO_UTC = -DAY_OFFSET_SECONDS
 
 TABLES = """
--- 身份总表。**这是「一个人」的唯一落点，别的地方都引用它。**
---
--- `user_id` 是**我们自己发的 UUID**（方案 B，2026-09-27 定）。为什么不用团队
--- user_id 当主键：那样「注册中转」就必须先登录团队账号，而 relay key 是
--- relay key、团队账号是团队账号——两件事能各自独立发生，身份表该能表达这一点。
---
--- `team_uid` 可空：填了表示「这个我们的用户 = 那个团队账号」。
--- 它只为一个功能服务：`getMyThreads`（查自己发过的帖子及反响）。
--- 论坛帖子的 `author_uid` 存的是**团队 uid**（那是团队后端给的，改不了），
--- 所以查「我的帖子」要靠这张表把两端对上。
---
--- **不要求登录也能用中转和智能体**：没绑定过 team_uid 的用户照样有 user_id，
--- 只是 `getMyThreads` 会如实说「不知道你在论坛是谁」。
--- relay key：**中转那条路专用的凭据**，属于一个账号。
---
--- 方位必须是这样：账号是身份（`accounts`），relay key 挂在账号下面。
--- 反过来（relay key 自带身份）会让用量、余额、结算全挂到 relay key 上，
--- 于是「换个 key 就换个人」——而实际上只是换了条提交用量的路。
-CREATE TABLE IF NOT EXISTS relay_keys (
- key_hash TEXT PRIMARY KEY, user_id TEXT, display_name TEXT NOT NULL,
- created INTEGER NOT NULL, last_used INTEGER, request_count INTEGER NOT NULL DEFAULT 0,
- disabled INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS relay_secrets (
- key_hash TEXT PRIMARY KEY REFERENCES relay_keys(key_hash), upstream_url TEXT NOT NULL,
- upstream_secret TEXT NOT NULL, created INTEGER NOT NULL
-);
 -- 用量的归属是**账号**（`user_id`），不是 relay key。
 --
 -- 2026-02 改：这一列原来叫 `key_hash`，指向注册它的那条 key。那是「relay key
@@ -119,13 +88,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS relay_usage_call ON relay_usage(user_id, call_
 MIGRATIONS = (
     ("relay_usage", "provider", "ALTER TABLE relay_usage ADD COLUMN provider TEXT"),
     ("relay_usage", "call_id", "ALTER TABLE relay_usage ADD COLUMN call_id TEXT"),
-    # 方案 B：`relay_keys` 一开始是自带一个随机 uid、没有 users 表的。
-    # 这份迁移把老行补上一个 users 记录，让外键指向有意义的东西——
-    # **不改 key_hash**（那是历史数据的归属，改了等于把过去记到别人名下）。
-    # relay key 挂到账号上（2026-09-27）。老行没有 user_id 时留空——
-    # 它们是在「relay key 自带身份」那个阶段注册的，谁是谁已经说不清了；
-    # 开发阶段没有真实用户，所以直接当没绑过。
-    ("relay_keys", "user_id", "ALTER TABLE relay_keys ADD COLUMN user_id TEXT"),
 )
 
 
@@ -254,61 +216,46 @@ _OWNERSHIP_RENAMES = (
 
 
 def migrate_ownership(db):
-    """把上面那四张表的归属列改名并回填。幂等：改过一遍之后再跑是空操作。"""
+    """把上面那四张表的归属列改名并回填。幂等：改过一遍之后再跑是空操作。
+
+    **回填只在 `relay_keys` 还在的时候做。** 那张表是"老行属于谁"的唯一线索，
+    而它现在已经从 TABLES 里删掉了（2026-09-30），新库上根本不会存在：
+    这时候只改名、不回填——值保持原样，等于"自成一户"，
+    和取不到账号时的处理一致（宁可孤立，也不记到别人名下）。
+    """
     changed = []
+    legacy_keys = "relay_keys" in {row["name"] for row in
+                                   db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table, backfill in _OWNERSHIP_RENAMES:
+        if not legacy_keys:
+            backfill = None
         try:
             if _rebuild_column(db, table, "key_hash", "user_id", backfill):
                 changed.append(table)
         except Exception as error:  # noqa: BLE001 —— 见下面的说明
             # 迁移失败**不能把服务带崩**：库里的表可能根本不存在（没启用中转），
             # 或者形状和预期不一样。如实记一行，让后续查询去报它自己的错。
-            print(f"[relay_store] ownership migration skipped for {table}: {error}")
+            print(f"[usage_store] ownership migration skipped for {table}: {error}")
     return changed
 
 
-def upstream_host(url):
-    """上游地址 → 主机名。**和中转解析上游时同一个口径**（`relay.upstream_target` 也是
-    按 hostname 判 SSRF 的），所以这里不用另写一套规则。取不出来返回 None，
-    不猜——猜出来的域名会让「这条 key 指向哪儿」这句话变成假的。
+
+
+
+
+def drop_relay_tables(db):
+    """把中转时代的 `relay_keys` / `relay_secrets` 从老库里删掉。
+
+    `CREATE TABLE IF NOT EXISTS` 不会删掉已经存在的表，所以不写这一步的话，
+    生产库上那两张表会一直留着——里面没有任何代码会读它，但**只要有数据，
+    它就是"用户上游 key 明文"的残留**。删表比留一张没人管的凭据表安全。
+
+    幂等：`IF EXISTS`，新库上什么也不做。
     """
-    if not url:
-        return None
-    try:
-        return urlsplit(url).hostname or None
-    except ValueError:
-        return None
-
-
-def key_hash(value):
-    """relay key → uid。十六进制而不是 base64：uid 会出现在 JSON 和查询里，
-    十六进制没有 `-`/`_`，不用担心被当成 URL 安全字符处理。"""
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def generate_key():
-    """自动生成的 key。`tt_` 前缀让它一眼能从团队账号 token 里认出来，
-    和测试身份的 `tt_test_` 是同一个思路。"""
-    return PREFIX + secrets.token_urlsafe(GENERATED_BYTES)
-
-
-def validate_custom_key(value):
-    """自定义 key 的校验。返回 None 表示通过，否则返回给用户看的错误说明。
-
-    长度下限不是形式主义：**自定义 key 同时是登录凭据**，太短就等于把
-    「读我的用量」和「用我的上游 key 转发」这两件事一起交出去。
-    """
-    if not value or not isinstance(value, str):
-        return "Relay key is required"
-    if not value.startswith(PREFIX):
-        return f"Relay key must start with {PREFIX!r}"
-    if len(value) < MIN_CUSTOM_LENGTH:
-        return f"Relay key must be at least {MIN_CUSTOM_LENGTH} characters"
-    if len(value) > 200:
-        return "Relay key is too long (maximum 200 characters)"
-    if any(character.isspace() for character in value):
-        return "Relay key must not contain whitespace"
-    return None
+    db.executescript("""
+DROP TABLE IF EXISTS relay_secrets;
+DROP TABLE IF EXISTS relay_keys;
+""")
 
 
 def migrate(db):
@@ -323,8 +270,13 @@ def migrate(db):
             db.execute(statement)
 
 
-class RelayStore:
-    """中转相关表的读写。挂在内核的 `Store` 上，共用同一个 sqlite 连接工厂。"""
+class UsageStore:
+    """用量账本的读写（原 `RelayStore`，2026-09-30 随中转一起改名）。
+
+    中转删掉之后这里只剩「记一笔用量」和「按天 / 按次读回来」——它是 Insights、
+    预算、赛季三处共同的数据源。`relay_usage` 这个**表名**保留：改表名要写迁移，
+    而且不改变任何行为，等下次真动 schema 时一起做。
+    """
 
     def __init__(self, store):
         self.store = store
@@ -338,166 +290,18 @@ class RelayStore:
             # "no such column"（这个坑前面踩过两次，见 INDEXES 的注释）。
             migrate_ownership(db)
             db.executescript(INDEXES)
-
-    # ---- 注册与身份 ----------------------------------------------------
-
-    def register(self, key, upstream_url, upstream_secret, display_name="", user_id=None):
-        """给**某个账号**注册一个 relay key。撞了返回 None（调用方转 409）。
-
-        `user_id` 是**账号的 id**（`accounts.user_id`）——relay key 没有自己的身份，
-        它只是一个「怎么把用量交上来」的凭据，挂在账号下面。
-
-        **没给 user_id 就拒绝。** 早期版本让 relay key 自带身份（uid = 它的 sha256），
-        结果是用量、余额、结算全挂在一个凭据上——换个 key 就换个人。
-        方位错了，所以现在必须显式给账号。
-        """
-        if not user_id:
-            raise ValueError("relay key must belong to an account")
-        digest = key_hash(key)
-        with self.store.connect(write=True) as db:
-            if db.execute("SELECT 1 FROM relay_keys WHERE key_hash=?", (digest,)).fetchone() is not None:
-                return None
-            created = now_ms()
-            db.execute("""INSERT INTO relay_keys(key_hash,user_id,display_name,created)
-                VALUES(?,?,?,?)""",
-                (digest, user_id, display_name or default_name(digest), created))
-            db.execute("INSERT INTO relay_secrets VALUES(?,?,?,?)",
-                       (digest, upstream_url, upstream_secret, created))
-        return self.summary(digest)
-
-    def account_for(self, digest):
-        """这个 relay key 属于哪个账号。**
-        这就是上游 key → 账号的那一步**：转发时按它记用量，
-        于是用量和论坛身份天然是同一个 user_id，不需要任何绑定表。
-        """
-        with self.store.connect() as db:
-            row = db.execute("SELECT user_id FROM relay_keys WHERE key_hash=?", (digest,)).fetchone()
-        return None if row is None else row["user_id"]
-
-    def belongs_to(self, uid, user_id):
-        """这条 key 是不是这个账号的。**一次查询**，不是把名下 key 拉回来再比。"""
-        with self.store.connect() as db:
-            row = db.execute("SELECT 1 FROM relay_keys WHERE key_hash=? AND user_id=?",
-                             (uid, user_id)).fetchone()
-        return row is not None
-
-    def keys_for(self, user_id, with_upstream=False):
-        """这个账号注册过哪些 relay key（一个账号可以有多条，比如换了上游）。
-
-        **返回的是元数据，永远不含 key 明文**——库里只有 sha256，取不回来。
-        所以「我的 key 长什么样」这件事只能靠 `displayName` 认，
-        这也是注册时那个备注名值得填的原因（见 `docs/RELAY_API.md`）。
-        """
-        query = "SELECT key_hash, display_name, created, last_used, request_count, disabled " \
-                "FROM relay_keys WHERE user_id=? ORDER BY created DESC"
-        with self.store.connect() as db:
-            rows = db.execute(query, (user_id,)).fetchall()
-            urls = {}
-            if with_upstream:
-                # 上游地址在另一张表里（刻意的：查身份那条路不碰凭据表）。
-                # 这里要 join 是因为用户得知道「这条 key 指向哪个上游」，
-                # 否则多条 key 之间没法区分。**上游密钥仍然不返回。**
-                urls = {row["key_hash"]: row["upstream_url"] for row in db.execute(
-                    "SELECT key_hash, upstream_url FROM relay_secrets WHERE key_hash IN "
-                    "(SELECT key_hash FROM relay_keys WHERE user_id=?)", (user_id,))}
-        items = [{"uid": row["key_hash"], "displayName": row["display_name"],
-                  "createdAtEpochMillis": row["created"],
-                  "lastUsedAtEpochMillis": row["last_used"],
-                  "requestCount": row["request_count"],
-                  "disabled": bool(row["disabled"])} for row in rows]
-        if with_upstream:
-            for item in items:
-                url = urls.get(item["uid"])
-                item["upstreamUrl"] = url
-                # 主机名在服务端算好给界面用：客户端不该为了显示一个域名去解析 URL，
-                # 那种解析在各平台上的边界行为都不一样（端口、IPv6、末尾斜杠）。
-                item["upstreamHost"] = upstream_host(url)
-                item["hasUpstreamSecret"] = url is not None
-        return items
-
-
-    def owner_of(self, secret):
-        """任意凭据（relay key **或账号 token**）→ 账号 `user_id`。认不出来返回 None。
-
-        §这是「relay key 只出现在中转里」的落点§：用量、赛季、预算这些接口
-        既收账号 token 也收 relay key，但**先把它解成账号**，后面的账都记在账号上。
-        于是：
-          * 一个账号换了几条 key，余额和赛季都不断；
-          * 智能体（只有账号 token）也能读同一份用量，不需要 relay key；
-          * 手机上只存账号 token 就够了。
-        """
-        if not secret:
-            return None
-        if secret.startswith(PREFIX):
-            return self.account_for(key_hash(secret))
-        from .accounts import Accounts
-        identity = Accounts(self.store).resolve("Bearer " + secret)
-        return None if identity is None else identity[0]
-
-    def key(self, digest):
-        """按 uid 取身份信息（**不含上游凭据**）。"""
-        with self.store.connect() as db:
-            row = db.execute("SELECT * FROM relay_keys WHERE key_hash=?", (digest,)).fetchone()
-        return None if row is None else {
-            "uid": row["key_hash"], "displayName": row["display_name"],
-            "createdAtEpochMillis": row["created"], "lastUsedAtEpochMillis": row["last_used"],
-            "requestCount": row["request_count"], "disabled": bool(row["disabled"])}
-
-    def summary(self, digest):
-        """身份信息 + 上游地址。**上游密钥本身永远不返回给任何调用方。**"""
-        identity = self.key(digest)
-        if identity is None:
-            return None
-        with self.store.connect() as db:
-            row = db.execute("SELECT upstream_url FROM relay_secrets WHERE key_hash=?", (digest,)).fetchone()
-        identity["upstreamUrl"] = row["upstream_url"] if row else None
-        identity["hasUpstreamSecret"] = row is not None
-        return identity
-
-    def forwarding(self, digest):
-        """转发时才取的东西：上游地址 + 上游密钥。别的地方不要调。"""
-        with self.store.connect() as db:
-            row = db.execute("SELECT upstream_url,upstream_secret FROM relay_secrets WHERE key_hash=?",
-                             (digest,)).fetchone()
-        return None if row is None else {"url": row["upstream_url"], "secret": row["upstream_secret"]}
-
-    def update_upstream(self, digest, upstream_url=None, upstream_secret=None):
-        """换上游地址或上游密钥。**不动 key_hash**，所以历史归属不会断——
-        这正是 relay key 和上游凭据要分开的原因（见模块开头）。"""
-        with self.store.connect(write=True) as db:
-            if db.execute("SELECT 1 FROM relay_keys WHERE key_hash=?", (digest,)).fetchone() is None:
-                return None
-            if upstream_url is not None:
-                db.execute("UPDATE relay_secrets SET upstream_url=? WHERE key_hash=?", (upstream_url, digest))
-            if upstream_secret is not None:
-                db.execute("UPDATE relay_secrets SET upstream_secret=? WHERE key_hash=?", (upstream_secret, digest))
-        return self.summary(digest)
-
-    def revoke(self, digest):
-        """停用。**不删行**：用量虽然记在账号上，但这条 key 本身是审计线索
-        （哪天注册的、用过多少次），删了就说不出过去了。"""
-        with self.store.connect(write=True) as db:
-            changed = db.execute("UPDATE relay_keys SET disabled=1 WHERE key_hash=?", (digest,)).rowcount
-        return changed > 0
-
-    def listing(self, digests):
-        return [item for item in (self.summary(digest) for digest in digests) if item is not None]
-
-    # ---- 转发记账 ------------------------------------------------------
-
-    def touch(self, db, digest):
-        """一次成功转发之后更新计数。连接由调用方传进来，和 `record` 同一个事务。"""
-        db.execute("UPDATE relay_keys SET last_used=?, request_count=request_count+1 WHERE key_hash=?",
-                   (now_ms(), digest))
-
+            # **删凭据表必须排在 `migrate_ownership` 之后**：那个迁移要把老的
+            # `key_hash` 列按 `relay_keys.user_id` 回填，先把表删了它就查不到来源
+            # （只在老库上会走到，但那时正是最不能出错的时候）。
+            drop_relay_tables(db)
     def record(self, db, digest, tokens):
-        """把一次转发的用量落库。
+        """把一次模型调用的用量落库。
 
-        `digest` 是**账号的 user_id**（转发那条路已经解出来了，见
-        `RelayStore.account_for`）——一个账号的多条 key 合起来算一笔账。
+        `digest` 是**账号的 user_id**：一个账号无论从哪条路产生用量（App 内提问、
+        导入的记录），账都记在同一个人头上。
 
-        和 `touch` 传同一个 `db`，由调用方的 `with store.connect(write=True)` 保证
-        在同一个写事务里。分开写的话「计数涨了但用量没落」这种半截状态会在崩溃时留下。
+        `db` 由调用方的 `with store.connect(write=True)` 传进来，让「记用量」和
+        同一批里的其它写在一个事务里——分开写的话，崩在半路会留下半截状态。
 
         `call_id` 在这里生成，形状按 `UsageCall.id` 的约定：
         `call:<provider>:<uid 前缀>:<毫秒>:<随机>`。
@@ -588,11 +392,6 @@ class RelayStore:
                  "cacheWrite": row["cache_write"], "output": row["output"], "calls": row["calls"]}
                 for row in rows]
 
-
-def default_name(digest):
-    """没给名字时用 uid 前 8 位。**不是从 key 本身截的**——那样等于把凭据的一部分
-    显示在屏幕上，uid 是 hash，显示它才安全。"""
-    return "relay-" + digest[:8]
 
 
 def json_body(value):

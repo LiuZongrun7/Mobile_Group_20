@@ -45,8 +45,8 @@ from fastapi import HTTPException
 from .agent_tools import SCHEMAS as TOOL_SCHEMAS
 from .agent_tools import describe_result, execute, parse_arguments
 from .pricing import cost_micros as pricing_cost_micros
-from .relay import split_usage
-from .relay_store import UTC_TO_FINANCIAL
+from .usage import split_usage
+from .usage_store import UTC_TO_FINANCIAL
 from .budgets import month_bounds
 from .seasons import day_millis_range
 from .store import now_ms
@@ -106,7 +106,7 @@ class Agent:
     """一次问答 + 记账。挂在内核的 `Store` 上，用独立的 `agent_usage` 表。"""
 
     def __init__(self, store, api_key, model=DEFAULT_MODEL, endpoint=DEFAULT_ENDPOINT,
-                 client=None, day_provider=None):
+                 client=None, day_provider=None, now_provider=None):
         self.store = store
         self.api_key = api_key
         self.model = model
@@ -119,6 +119,11 @@ class Agent:
             from .seasons import today_in_financial_timezone
             day_provider = today_in_financial_timezone
         self.today = day_provider
+        # 写入时间也要能注入：注入的"今天"和真实的"现在"不是同一天时（测试里就是
+        # 这样），用量会记到真实那一天、而查询按注入的那个月去找——**查出来是 0，
+        # 而账其实记上了**。生产上两者永远一致（`now_provider` 是 None），
+        # 这里只是让测试里那两件事一起被固定住。
+        self.now = now_provider or now_ms
         with store.connect() as db:
             db.executescript(SCHEMA)
 
@@ -171,7 +176,7 @@ class Agent:
     def ask(self, digest, question, model=None, context=None, max_turns=4):
         """问一句，拿一次回答。**带工具调用循环。**
 
-        `context` 是工具执行需要的东西（relay / pricing / budgets / store / uid）。
+        `context` 是工具执行需要的东西（usage / pricing / budgets / store / uid）。
         传 None 时**不注册工具**——那样模型只能凭自己答，而且 `missingData` 里会
         明说没有数据（这也是没接工具时那条测试验证的行为）。
 
@@ -254,7 +259,7 @@ class Agent:
         with self.store.connect(write=True) as db:
             db.execute("""INSERT INTO agent_usage(user_id,created,model,input,cache_read,
                 cache_write,output,calls) VALUES(?,?,?,?,?,?,?,?)""",
-                (digest, now_ms(), used_model, total["input"], total["cacheRead"],
+                (digest, self.now(), used_model, total["input"], total["cacheRead"],
                  total["cacheWrite"], total["output"], total["calls"]))
         return answer, total, used_model, evidence, records, missing
 

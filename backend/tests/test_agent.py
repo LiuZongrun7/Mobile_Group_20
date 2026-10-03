@@ -15,10 +15,9 @@ from fastapi.testclient import TestClient
 from tokentrail_forum.agent import DEFAULT_MODEL, SYSTEM_PROMPT
 from tokentrail_forum.app import Settings, create_app
 from tokentrail_forum.pricing import Pricing, cny_per_1m_to_usd_micros
-from tokentrail_forum.relay_store import key_hash
 from conftest import verifier
-from test_relay import (RELAY_KEY, account_login, account_token, completion, enroll,
-                        insert_usage, cst_millis)
+from helpers import (account_login, account_token, bearer, completion,
+                      cst_millis, daily, insert_usage)
 from test_seasons import TODAY as _TODAY
 
 OUR_KEY = "sk-our-own-agent-key-do-not-leak"
@@ -54,13 +53,12 @@ class FakeModel:
 
 def make_agent_app(path, fake=None, key=OUR_KEY, seed=True, **overrides):
     settings = Settings(str(path), "https://forum.example", relay_enabled=True,
-                        relay_allow_private=True, relay_self_hosts=(),
                         pricing_seed=seed, agent_key=key,
                         agent_requests_per_minute=overrides.pop("agent_requests_per_minute", 10),
                         **overrides)
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    app = create_app(settings, verifier(), client)
+    app = create_app(settings, verifier())
     if fake is not None:
         # 把假上游装进去：Agent 是在 build_router 里建的，所以直接替换它的 client。
         app.state.store  # 触发一次无副作用的访问，保持可读性
@@ -96,8 +94,7 @@ def agent_app(tmp_path):
         # **身份自助注册**（`/keys`）和转发。只开 agent 的话 `/keys` 不存在，
         # 测试就注册不出身份——这个耦合是已知的，见 build_agent_router 的注释。
         settings = Settings(str(path), "https://forum.example", agent_enabled=True,
-                            relay_enabled=True,
-                            relay_allow_private=True, relay_self_hosts=(), pricing_seed=True,
+                            relay_enabled=True, pricing_seed=True,
                             agent_key=OUR_KEY)
         client = httpx.AsyncClient(transport=httpx.MockTransport(
             lambda request: httpx.Response(200, json=completion())))
@@ -105,16 +102,17 @@ def agent_app(tmp_path):
 
         class Wired(original):
             def __init__(self, store, api_key, model=DEFAULT_MODEL, endpoint=None, client=None,
-                         day_provider=None):
+                         day_provider=None, now_provider=None):
                 super().__init__(store, api_key, model, endpoint or "https://api.deepseek.com",
-                                 client=fake, day_provider=day_provider)
+                                 client=fake, day_provider=day_provider,
+                                 now_provider=now_provider)
 
-        import tokentrail_forum.relay_routes as routes
+        import tokentrail_forum.api_routes as routes
         routes.Agent = Wired
         try:
             # 「今天」注入成固定值：提示词里那句日期是**服务端给**的，
             # 不注入的话这条断言就变成「跑测试那天必须正好是 2026-09-27」。
-            app = create_app(settings, verifier(), client, day_provider=lambda: _TODAY)
+            app = create_app(settings, verifier(), day_provider=lambda: _TODAY)
         finally:
             routes.Agent = original
         holder["app"] = app
@@ -128,7 +126,7 @@ def agent_app(tmp_path):
 def test_ask_returns_the_answer_and_records_own_usage(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = ask(api)
         assert response.status_code == 200, response.text
         body = response.json()
@@ -143,7 +141,7 @@ def test_ask_returns_the_answer_and_records_own_usage(agent_app, tmp_path):
 def test_the_system_prompt_states_the_three_boundaries(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         ask(api)
     sent = fake.seen[0]["body"]
     system = sent["messages"][0]
@@ -167,7 +165,7 @@ def test_the_tools_are_registered_and_named_after_the_contract(agent_app, tmp_pa
     """
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         ask(api)
     sent = fake.seen[0]["body"]
     assert "tools" in sent, "tools must be offered to the model"
@@ -182,7 +180,7 @@ def test_the_tools_are_registered_and_named_after_the_contract(agent_app, tmp_pa
 def test_the_request_never_carries_a_uid_or_a_key(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         ask(api)
     sent = fake.seen[0]
     # 客户端只发问题：身份从凭据解出（契约 §6），key 在服务端
@@ -201,17 +199,14 @@ def test_agent_usage_never_lands_in_the_relay_ledger(agent_app, tmp_path):
     """
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
-        # 先造一笔真实的编码用量（走中转那条路）
+        # 先造一笔真实的用量（走记账那条路；中转删掉后它是唯一的写入口）
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
         ask(api)
 
         app = holder["app"]
-        from tokentrail_forum.relay_store import RelayStore
-        relay = RelayStore(app.state.store)
-        agent_rows = app.state.store.connect
         with app.state.store.connect() as db:
             in_relay = db.execute("SELECT COUNT(*) FROM relay_usage").fetchone()[0]
             in_agent = db.execute("SELECT COUNT(*) FROM agent_usage").fetchone()[0]
@@ -220,7 +215,7 @@ def test_agent_usage_never_lands_in_the_relay_ledger(agent_app, tmp_path):
         assert in_agent == 1
         # 而且智能体的用量不参与用户的日汇总
         daily = api.get("/api/relay/usage/daily",
-                        headers={"Authorization": "Bearer " + RELAY_KEY}).json()
+                        headers={"Authorization": "Bearer " + TOKEN}).json()
         # 日汇总里只有那一笔编码用量，**没有**智能体那一笔
         assert sum(item["input"] for item in daily["items"]) == 1_000_000
 
@@ -229,7 +224,7 @@ def test_repeated_questions_do_not_inflate_the_users_coding_usage(agent_app, tmp
     """问三次不该让用户的编码用量涨——那正是账本混在一起会出的错。"""
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-25", 12),
                      "DEEPSEEK", input_tokens=500_000, output=0)
         for _ in range(3):
@@ -245,7 +240,7 @@ def test_repeated_questions_do_not_inflate_the_users_coding_usage(agent_app, tmp
 def test_own_cost_uses_the_pricing_table(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         ask(api)
         body = api.get("/api/relay/agent/status",
                        headers={"Authorization": "Bearer " + account_token(api)}).json()
@@ -264,7 +259,7 @@ def test_own_cost_uses_the_pricing_table(agent_app, tmp_path):
 def test_the_key_never_appears_in_any_response(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         asked = ask(api)
         status = api.get("/api/relay/agent/status",
                          headers={"Authorization": "Bearer " + account_token(api)})
@@ -283,12 +278,12 @@ def test_without_a_key_the_assistant_says_so(tmp_path):
     建完再换类名已经晚了（闭包里captured 的是实例）。直接把 `agent_key` 留空建一个。
     """
     settings = Settings(str(tmp_path), "https://forum.example", agent_enabled=True,
-                        relay_enabled=True, relay_allow_private=True, relay_self_hosts=(),
+                        relay_enabled=True,
                         agent_key="")
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    with TestClient(create_app(settings, verifier(), client)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+    with TestClient(create_app(settings, verifier())) as api:
+        TOKEN = account_token(api)
         response = ask(api)
         assert response.status_code == 503
         assert "not configured" in response.text
@@ -301,7 +296,7 @@ def test_an_upstream_failure_is_not_an_empty_answer(agent_app, tmp_path):
     build, fake, holder = agent_app
     fake.status = 500
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert ask(api).status_code == 502
 
 
@@ -311,7 +306,7 @@ def test_a_rejected_key_does_not_echo_the_upstream_error(agent_app, tmp_path):
     build, fake, holder = agent_app
     fake.status = 401
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = ask(api)
         assert response.status_code == 503
         assert OUR_KEY not in response.text
@@ -323,25 +318,25 @@ def test_a_rejected_key_does_not_echo_the_upstream_error(agent_app, tmp_path):
 def test_an_empty_question_is_rejected(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         # Pydantic 的 min_length 先挡一次
         assert api.post("/api/relay/agent/ask", json={"question": ""},
-                        headers={"Authorization": "Bearer " + RELAY_KEY}).status_code == 400
+                        headers={"Authorization": "Bearer " + TOKEN}).status_code == 400
 
 
 def test_extra_fields_are_rejected(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         # `uid` 不是参数——传了直接拒，而不是静默忽略
         assert api.post("/api/relay/agent/ask", json={"question": "hi", "uid": "someone"},
-                        headers={"Authorization": "Bearer " + RELAY_KEY}).status_code == 400
+                        headers={"Authorization": "Bearer " + TOKEN}).status_code == 400
 
 
 def test_the_agent_requires_a_relay_key(agent_app, tmp_path):
     build, fake, holder = agent_app
     with TestClient(build(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert api.post("/api/relay/agent/ask", json={"question": "hi"}).status_code == 401
         assert api.get("/api/relay/agent/status").status_code == 401
         assert ask(api, token="team-token").status_code == 401
@@ -359,11 +354,11 @@ def test_the_forwarding_route_is_gone_when_the_relay_is_off(tmp_path):
     **现在的部署两个开关都开着**，所以碰不到这个组合。）
     """
     settings = Settings(str(tmp_path), "https://forum.example", agent_enabled=True,
-                        relay_enabled=False, relay_allow_private=True, relay_self_hosts=(),
+                        relay_enabled=False,
                         agent_key=OUR_KEY)
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    with TestClient(create_app(settings, verifier(), client)) as api:
+    with TestClient(create_app(settings, verifier())) as api:
         # 转发兜底路由没注册
         assert api.post("/api/relay/v1/chat/completions", json={}).status_code == 404
         # 而 `/keys`（也在中转那套里）同样不存在——这是已知耦合
@@ -409,20 +404,20 @@ def loop_app(tmp_path):
 
         class Wired(original):
             def __init__(self, store, api_key, md=DEFAULT_MODEL, endpoint=None, client=None,
-                         day_provider=None):
+                         day_provider=None, now_provider=None):
                 super().__init__(store, api_key, md, endpoint or "https://api.deepseek.com",
-                                 client=model, day_provider=day_provider)
+                                 client=model, day_provider=day_provider,
+                                 now_provider=now_provider)
 
-        import tokentrail_forum.relay_routes as routes
+        import tokentrail_forum.api_routes as routes
         holder = routes.Agent
         routes.Agent = Wired
         try:
             settings = Settings(str(tmp_path), "https://forum.example", agent_enabled=True,
-                                relay_enabled=True, relay_allow_private=True,
-                                relay_self_hosts=(), pricing_seed=True, agent_key=OUR_KEY)
+                                relay_enabled=True, pricing_seed=True, agent_key=OUR_KEY)
             client = httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda request: httpx.Response(200, json=completion())))
-            app = create_app(settings, verifier(), client, day_provider=lambda: _TODAY)
+            app = create_app(settings, verifier(), day_provider=lambda: _TODAY)
         finally:
             routes.Agent = holder
         return app, model
@@ -443,7 +438,7 @@ def test_the_model_can_call_a_tool_and_then_answer(loop_app, tmp_path):
         {"content": "你这周有 2 天有记录。"},
     ])
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         insert_usage(tmp_path, digest, cst_millis("2026-09-25", 12), "DEEPSEEK",
                      input_tokens=1_000_000, output=0)
@@ -469,7 +464,7 @@ def test_the_tool_sees_the_users_data_only_through_the_server_resolved_uid(loop_
         {"content": "ok"},
     ])
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         # 播种要用**账号**的 `userId`：智能体的工具按用户的身份取数（见
         # `build_agent_router` —— 身份是账号，不是 relay key）。
         insert_usage(tmp_path, account_login(api)["userId"], cst_millis("2026-09-25", 12),
@@ -492,7 +487,7 @@ def test_usage_is_summed_across_turns(loop_app, tmp_path):
         {"content": "done"},
     ])
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = ask(api).json()
     # 两轮各 100 input / 50 output
     assert body["usage"]["input"] == 200, body["usage"]
@@ -511,7 +506,7 @@ def test_the_loop_stops_at_the_turn_limit(loop_app, tmp_path):
     app, model = build([{"tool_calls": [tool_call("c", "getBudgetStatus",
                                                   {"month": "2026-09"})]}] * 10)
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = ask(api).json()
     assert body["usage"]["calls"] == 4, body["usage"]
     assert body["text"], "must still return something readable"
@@ -526,7 +521,7 @@ def test_an_unknown_tool_is_refused(loop_app, tmp_path):
         {"content": "ok"},
     ])
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = ask(api)
     # 工具执行抛 400（HTTPException），整条请求就失败了——这是刻意的：
     # 模型调了不存在的东西，不该被当成一次正常的「没查到」。
@@ -542,7 +537,7 @@ def test_a_malformed_tool_argument_does_not_crash_the_request(loop_app, tmp_path
         {"content": "我拿到参数有问题，重新说。"},
     ])
     with TestClient(app) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = ask(api)
     # 空参数会让工具报「必须有 from/to」→ 400。这**是**预期行为：
     # 至少不该是 500 或者一个崩掉的进程。

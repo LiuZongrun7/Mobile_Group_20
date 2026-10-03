@@ -18,10 +18,9 @@ import javax.crypto.spec.GCMParameterSpec;
 /**
  * APP 账号的会话：`userId` + 会话 token。<b>负责人：刘宗润。</b>
  *
- * <p><b>它是全 App 的身份来源。</b> §方位§：账号是身份，其它一切都是它下面的通道——
- * relay key 是「怎么把用量交上来」的通道，中转的用量、赛季余额、预算、
- * 智能体记账全都挂在 `userId` 上。所以这个类不叫 `RelayXxx`：
- * 没配中转的用户照样有账号，照样能看用量、玩游戏、问智能体。
+ * <p><b>它是全 App 的身份来源。</b>账号是身份，其它一切都是它下面的通道——
+ * 用量、预算、智能体记账全都挂在 `userId` 上。所以这个类叫 `AccountSession`：
+ * 账号不依赖任何一条用量通道，换通道不该换一个人。
  *
  * <p><b>它同时管「论坛测试身份」那一支。</b>测试身份走的是后端的
  * `/test-api/forum/test-session`（仅 Debug），拿到的是 `tt_test_` 前缀的 token，
@@ -29,11 +28,10 @@ import javax.crypto.spec.GCMParameterSpec;
  * `SessionProvider`**，否则「当前是谁」会有两个来源，而它们必然对不上。
  * 服务端也从来不混用：测试 token 只在 `/test-api` 那个挂载点里认。
  *
- * <p><b>用 Keystore 加密，和 {@link RelayCredentials} 的明文存法不同。</b>
- * 那个取舍是「relay key 和 provider 凭据攻击面一样，别为它多引一层」；
- * 这里是**密码换来的会话**：token 泄露等于别人能以你的身份发帖、读你的用量，
- * 而且用户为它敲过一个密码。Keystore 的代价（换设备/恢复备份后解不开、
- * 得重新登录一次）在这里是可以接受的——重新登录本来就有密码。
+ * <p><b>用 Keystore 加密，不是明文存。</b>这里是**密码换来的会话**：
+ * token 泄露等于别人能以你的身份发帖、读你的用量，而且用户为它敲过一个密码。
+ * Keystore 的代价（换设备/恢复备份后解不开、得重新登录一次）在这里是可以接受的
+ * ——重新登录本来就有密码。
  */
 public final class AccountSession implements SessionProvider {
     private static final String FILE = "app_account_session";
@@ -92,7 +90,7 @@ public final class AccountSession implements SessionProvider {
             current = new Snapshot(token, id, name, forumTest);
         } catch (Exception ignored) {
             // 解不开（换设备、恢复备份、或者数据坏了）就当作没登录过。
-            // 用户重新登一次即可——他有密码，这正是和 relay key 存法不同的地方。
+            // 用户重新登一次即可——他有密码。
             preferences.edit().remove("encrypted").apply();
         }
     }
@@ -156,7 +154,7 @@ public final class AccountSession implements SessionProvider {
 
     @Override public String token() { Snapshot value = current; return value == null ? null : value.token; }
 
-    /** 账号的 `userId`。**用量、赛季、预算、智能体都按它记账。** */
+    /** 账号的 `userId`。**用量、预算和智能体都按它记账。** */
     @Override public String accountId() { Snapshot value = current; return value == null ? null : value.id; }
 
     public String accountName() { Snapshot value = current; return value == null ? null : value.name; }

@@ -19,7 +19,7 @@
 | `getForumHighlights` | ✅ 官方帖（我们采集的资讯）+ 社区热帖，**两类各自带 `source`** |
 | `getMyThreads` | ✅ 靠 `users.team_uid` 的绑定关系查；没绑过会如实说「查不到」 |
 
-**`getMyThreads` 的身份是两套，靠 `users.team_uid` 连起来。** 智能体用 relay key，
+**`getMyThreads` 的身份曾经是两套，靠 `users.team_uid` 连起来。** 智能体用 relay key，
 而论坛帖子的 `author_uid` 是**团队账号**的 uid（团队后端给的，改不了）。
 所以绑定关系是必需的，没有它查不了。**没绑过时返回结构化的「不知道」而不是空列表**：
 空列表读起来是「你没发过帖子」，真相是「我查不到」。
@@ -97,19 +97,19 @@ class ToolContext:
     """工具执行需要的东西。
 
     §2026-02 改§ 原来这里写的是「`digest` 和 `uid` 是两套身份，别混」——
-    `digest` 是 relay key 的 sha256，`uid` 是团队账号 uid。**现在它们必然相等**：
-    身份统一成账号之后，服务端解出来的就是账号的 `user_id`，而
-    `posts.author_uid` 存的也是它，所以 `getMyThreads` 直接 join，不需要绑定表。
-    两个字段都留着是因为调用点很多，改签名换不来什么，但**新的代码只该用 `uid`**。
+    `digest` 是**账号的 `user_id`**（2026-09-30 之前是 relay key 的 sha256，中转删掉
+    之后没有第二种凭据了）。`uid` 也是同一个值——`posts.author_uid` 存的就是它，
+    所以 `getMyThreads` 直接查，不需要绑定表。两个字段都留着是因为调用点很多，
+    改签名换不来什么，但**新的代码只该用 `uid`**。
 
 
-    - `digest` —— relay 身份（`sha256(relay key)`）。用量、预算、赛季都按它过滤。
+    - `digest` —— 账号身份（`user_id`）。用量、预算、赛季都按它过滤。
     - `uid` —— 账号的 `user_id`。帖子的 `author_uid` 就是这个（同一个值）。
       `CONTRACTS.md` §5 明确把两套分开，所以 `getMyThreads` 现在查不了（见下）。
     """
     digest: str
     uid: str | None
-    relay: object
+    usage: object
     pricing: object
     seasons: object
     budgets: object
@@ -122,7 +122,7 @@ class ToolContext:
 def execute(name, arguments, **context):
     """执行一个工具。**名单外一律拒绝**（不是「返回空」，是拒绝）。
 
-    `digest` 是 relay 身份（用量和预算都按它过滤）；`uid` 是**论坛身份**
+    `digest` 是账号身份（用量和预算都按它过滤）；`uid` 是**论坛身份**
     （团队账号），目前只有 `getForumHighlights` 需要它（读公共帖），
     `getMyThreads` 需要但拿不到（见模块开头）。
 
@@ -160,7 +160,7 @@ def _coverage_of(payload):
 def _usage_summary(arguments, **context):
     from .summary import summarize
     from_day, to_day = _range(arguments)
-    payload = summarize(context["relay"], context["pricing"], context["digest"],
+    payload = summarize(context["usage"], context["pricing"], context["digest"],
                         from_day, to_day, arguments.get("groupBy") or "MODEL")
     coverage, gap = _coverage_of(payload)
     # 算不出价这件事也要说出去（§4：算不出价和花了 0 元要分得开）
@@ -198,7 +198,7 @@ def _budget_status(arguments, **context):
 def _compare(arguments, **context):
     from .summary import compare
     from_day, to_day = _range(arguments)
-    payload = compare(context["relay"], context["pricing"], context["digest"],
+    payload = compare(context["usage"], context["pricing"], context["digest"],
                       from_day, to_day, arguments.get("metric") or "COST")
     coverage, gap = _coverage_of(payload)
     if not payload.get("pricingComplete", True):
@@ -259,7 +259,7 @@ def _my_threads(arguments, **context):
 
     身份要两样东西才能对上：
 
-    1. **relay key 的 sha256**（`digest`）—— 谁在问；
+    1. **账号的 `user_id`**（`digest`）—— 谁在问；
     2. **账号的 `user_id`** —— 帖子记的就是它（`posts.author_uid`）。
 
     两者由 `users.team_uid` 那张绑定关系连起来。**没绑过就如实说「不知道你在论坛

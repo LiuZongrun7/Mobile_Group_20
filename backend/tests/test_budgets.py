@@ -11,21 +11,20 @@ from fastapi.testclient import TestClient
 
 from tokentrail_forum.app import Settings, create_app
 from tokentrail_forum.budgets import DEFAULT_WARN_RATIO, month_bounds
-from tokentrail_forum.relay_store import key_hash
 from conftest import verifier
-from test_relay import (RELAY_KEY, account_login, account_token, completion, enroll,
-                        insert_usage)
+from helpers import (account_login, account_token, bearer, completion,
+                      cst_millis, daily, insert_usage)
 from test_seasons import TODAY, day, make_season_app, usage_on
 
 MONTH = "2026-09"
-OTHER_USER = "tt_second_user_key_0123456789"
 
-
-def budget(api, relay_key=RELAY_KEY, month=MONTH):
+def budget(api, relay_key=None, month=MONTH):
+    relay_key = relay_key or account_token(api)
     return api.get(f"/api/relay/budgets/{month}", headers={"Authorization": "Bearer " + relay_key})
 
 
-def save(api, cap, ratio=None, relay_key=RELAY_KEY, month=MONTH):
+def save(api, cap, ratio=None, relay_key=None, month=MONTH):
+    relay_key = relay_key or account_token(api)
     payload = {"capMicros": cap}
     if ratio is not None:
         payload["warnAtRatio"] = ratio
@@ -37,7 +36,7 @@ def save(api, cap, ratio=None, relay_key=RELAY_KEY, month=MONTH):
 
 def test_without_a_budget_configured_is_false_and_cap_is_null(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         body = budget(api).json()
         # 关键：**不是** capMicros == 0。没设预算和设了 0 元预算在界面上
         # 要说两句不同的话（「你还没设预算」/「你已经超了」）。
@@ -48,7 +47,7 @@ def test_without_a_budget_configured_is_false_and_cap_is_null(tmp_path):
 
 def test_a_zero_cap_is_configured_and_distinguishable(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert save(api, 0).status_code == 200
         body = budget(api).json()
         assert body["configured"] is True
@@ -57,7 +56,7 @@ def test_a_zero_cap_is_configured_and_distinguishable(tmp_path):
 
 def test_saving_twice_overwrites(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         save(api, 20_000_000, 0.5)
         assert budget(api).json()["capMicros"] == 20_000_000
         save(api, 5_000_000)
@@ -70,14 +69,14 @@ def test_saving_twice_overwrites(tmp_path):
 @pytest.mark.parametrize("bad", [-1, 10**16])
 def test_absurd_caps_are_rejected(tmp_path, bad):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert save(api, bad).status_code == 400
 
 
 @pytest.mark.parametrize("bad", [1.5, -0.1])
 def test_warn_ratio_must_be_a_ratio(tmp_path, bad):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert save(api, 1_000_000, bad).status_code == 400
 
 
@@ -90,7 +89,7 @@ def test_spend_is_reported_as_unavailable_not_as_zero(tmp_path):
     把「不知道」显示成 0 是「数字看着没错、结论是错的」。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000)
         body = budget(api).json()
         assert body["pricingAvailable"] is False
@@ -101,7 +100,7 @@ def test_spend_is_reported_as_unavailable_not_as_zero(tmp_path):
 
 def test_days_with_data_are_counted_and_others_are_missing(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         # 本月有记录的两天（今天是 2026-09-27，所以只能算到 27 号）
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1000)
         usage_on(tmp_path, account_login(api)["userId"], day(-2), input_tokens=1000)
@@ -123,7 +122,7 @@ def test_a_month_with_no_records_is_entirely_missing(tmp_path):
     这是 `Coverage` 类注释点名的区别：前者进 `daysMissing`，后者不进。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         coverage = budget(api).json()["coverage"]
         assert coverage["daysWithData"] == 0
         assert len(coverage["daysMissing"]) == 27      # 9/1 – 9/27
@@ -132,7 +131,7 @@ def test_a_month_with_no_records_is_entirely_missing(tmp_path):
 
 def test_the_current_month_stops_at_today(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         coverage = budget(api).json()["coverage"]
         # 9 月有 30 天，但今天是 27 号 —— 28/29/30 不该出现在缺失里
         for future in ("2026-09-28", "2026-09-29", "2026-09-30"):
@@ -142,9 +141,9 @@ def test_the_current_month_stops_at_today(tmp_path):
 def test_a_past_month_counts_its_whole_length(tmp_path):
     """已经过完的月按整月算，不受「今天」影响。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         coverage = api.get("/api/relay/budgets/2026-08",
-                           headers={"Authorization": "Bearer " + RELAY_KEY}).json()["coverage"]
+                           headers={"Authorization": "Bearer " + TOKEN}).json()["coverage"]
         assert coverage["from"] == "2026-08-01"
         assert coverage["to"] == "2026-08-31"          # 8 月有 31 天，全算进去
         assert len(coverage["daysMissing"]) == 31
@@ -152,9 +151,9 @@ def test_a_past_month_counts_its_whole_length(tmp_path):
 
 def test_february_length_is_handled(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         coverage = api.get("/api/relay/budgets/2026-02",
-                           headers={"Authorization": "Bearer " + RELAY_KEY}).json()["coverage"]
+                           headers={"Authorization": "Bearer " + TOKEN}).json()["coverage"]
         assert coverage["to"] == "2026-02-28"          # 2026 不是闰年
 
 
@@ -170,31 +169,30 @@ def test_bad_months_are_400_not_500(tmp_path, bad):
     """格式错必须是 400。手写校验而不是直接 `date.fromisoformat`——
     后者会抛内部异常，返回给客户端就成了 500。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert budget(api, month=bad).status_code == 400
         assert save(api, 1000, month=bad).status_code == 400
 
 
 def test_budgets_are_per_account(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         # 第二个用户要有**自己的账号**：不然两条 key 都挂在同一个账号下面，
         # 「预算按账号隔离」这条就测了个寂寞（会红成 configured=True）。
-        enroll(api, relay_key=OTHER_USER, upstream_key="sk-2",
-               account=account_token(api, "second"))
+        OTHER = account_token(api, "second")
         save(api, 20_000_000)
         # 另一个账号没设过，不能看到我的
-        theirs = budget(api, relay_key=OTHER_USER).json()
+        theirs = budget(api, relay_key=OTHER).json()
         assert theirs["configured"] is False
         assert theirs["capMicros"] is None
-        save(api, 1_000_000, relay_key=OTHER_USER)
+        save(api, 1_000_000, relay_key=OTHER)
         assert budget(api).json()["capMicros"] == 20_000_000
-        assert budget(api, relay_key=OTHER_USER).json()["capMicros"] == 1_000_000
+        assert budget(api, relay_key=OTHER).json()["capMicros"] == 1_000_000
 
 
 def test_a_budget_survives_a_restart(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         save(api, 42_000_000, 0.9)
     with TestClient(make_season_app(tmp_path)) as restarted:
         body = budget(restarted).json()
@@ -204,7 +202,7 @@ def test_a_budget_survives_a_restart(tmp_path):
 
 def test_budget_endpoints_require_a_relay_key(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert api.get(f"/api/relay/budgets/{MONTH}").status_code == 401
         assert api.put(f"/api/relay/budgets/{MONTH}", json={"capMicros": 1}).status_code == 401
         for bad in ("team-token", "tt_not_registered_0123456789"):
@@ -217,8 +215,8 @@ def test_budget_endpoints_require_a_relay_key(tmp_path):
 def test_unknown_fields_are_rejected(tmp_path):
     """`extra="forbid"`：拼错字段名不会静默忽略。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         response = api.put(f"/api/relay/budgets/{MONTH}",
-                           headers={"Authorization": "Bearer " + RELAY_KEY},
+                           headers={"Authorization": "Bearer " + TOKEN},
                            json={"capMicros": 1, "capUsd": 5})
         assert response.status_code == 400

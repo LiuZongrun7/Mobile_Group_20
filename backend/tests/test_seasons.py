@@ -10,11 +10,10 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 from tokentrail_forum.app import Settings, create_app
-from tokentrail_forum.relay_store import key_hash
 from tokentrail_forum.seasons import MAX_BACKFILL_DAYS, TOKENS_PER_UNIT, tokens_to_resources
 from conftest import verifier
-from test_relay import (RELAY_KEY, UPSTREAM, account_login, account_token, completion,
-                        cst_millis, enroll, insert_usage)
+from helpers import (account_login, account_token, bearer, completion,
+                      cst_millis, daily, insert_usage)
 
 TODAY = date(2026, 9, 27)
 
@@ -24,25 +23,27 @@ def day(offset):
     return (TODAY + timedelta(days=offset)).isoformat()
 
 
-def make_season_app(path, handler=None, today=TODAY):
-    if handler is None:
-        def handler(request):
-            return httpx.Response(200, json=completion())
-    settings = Settings(str(path), "https://forum.example", relay_enabled=True,
-                        relay_allow_private=True, relay_self_hosts=())
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    return create_app(settings, verifier(), client, day_provider=lambda: today)
+def make_season_app(path, today=TODAY):
+    """开记账接口的 app，「今天」注入成固定值。
+
+    **不再需要假上游**：赛季/预算/汇总都是读库里的用量行，和中转在不在没关系。
+    """
+    settings = Settings(str(path), "https://forum.example", relay_enabled=True)
+    return create_app(settings, verifier(), day_provider=lambda: today)
 
 
-def season(api, relay_key=RELAY_KEY):
+def season(api, relay_key=None):
+    relay_key = relay_key or account_token(api)
     return api.get("/api/relay/season", headers={"Authorization": "Bearer " + relay_key})
 
 
-def settle(api, relay_key=RELAY_KEY):
+def settle(api, relay_key=None):
+    relay_key = relay_key or account_token(api)
     return api.post("/api/relay/season/settle", headers={"Authorization": "Bearer " + relay_key})
 
 
-def spend(api, amounts, relay_key=RELAY_KEY):
+def spend(api, amounts, relay_key=None):
+    relay_key = relay_key or account_token(api)
     return api.post("/api/relay/season/spend", headers={"Authorization": "Bearer " + relay_key},
                     json=amounts)
 
@@ -90,7 +91,7 @@ def test_three_resources_do_not_convert_into_each_other():
 
 def test_today_is_never_settled(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         usage_on(tmp_path, digest, day(0), input_tokens=1_000_000)      # 今天
         usage_on(tmp_path, digest, day(-1), input_tokens=1_000_000)     # 昨天
@@ -104,7 +105,7 @@ def test_today_is_never_settled(tmp_path):
 
 def test_a_day_with_only_today_usage_settles_nothing(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(0), input_tokens=5_000_000)
         result = settle(api).json()
         assert result["settledDays"] == []
@@ -115,7 +116,7 @@ def test_a_day_with_only_today_usage_settles_nothing(tmp_path):
 
 def test_settling_twice_does_not_grant_twice(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000, cache_read=500_000)
 
         first = settle(api).json()
@@ -132,7 +133,7 @@ def test_settling_twice_does_not_grant_twice(tmp_path):
 def test_usage_added_to_an_already_settled_day_does_not_change_history(tmp_path):
     """规则 4：已结算的天不可变。之后落进来的记录不回头改历史。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         usage_on(tmp_path, digest, day(-1), input_tokens=1_000_000)
         before = settle(api).json()["balanceAfter"]
@@ -149,7 +150,7 @@ def test_usage_added_to_an_already_settled_day_does_not_change_history(tmp_path)
 
 def test_three_missed_days_are_settled_in_one_call(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         for offset in (-3, -2, -1):
             usage_on(tmp_path, digest, day(offset), input_tokens=100_000)
@@ -168,7 +169,7 @@ def test_catch_up_converts_per_day_not_per_row(tmp_path):
     这条和 `test_cache_read_and_write_merge_into_one_resource` 是同一个口径的两面。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         for model in ("a", "b", "c"):
             usage_on(tmp_path, digest, day(-1), input_tokens=5_000, model=model)
@@ -180,7 +181,7 @@ def test_catch_up_converts_per_day_not_per_row(tmp_path):
 
 def test_spend_deducts_and_refuses_to_go_negative(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000, output=1_000_000)
         settle(api)
 
@@ -197,7 +198,7 @@ def test_spend_deducts_and_refuses_to_go_negative(tmp_path):
 def test_spend_does_not_let_one_resource_cover_another(tmp_path):
     """三种资源互不通兑：input 再多也不能拿来买吃 output 的东西。"""
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=10_000_000)
         settle(api)
         assert season(api).json()["balance"]["input"] == 1000
@@ -207,13 +208,13 @@ def test_spend_does_not_let_one_resource_cover_another(tmp_path):
 
 def test_spend_before_any_settlement_is_refused(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert spend(api, {"input": 1}).status_code == 409
 
 
 def test_spend_rejects_empty_and_negative_amounts(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000)
         settle(api)
         assert spend(api, {}).status_code == 400                 # 什么都没扣
@@ -224,7 +225,7 @@ def test_spend_rejects_empty_and_negative_amounts(tmp_path):
 
 def test_season_state_reports_month_tokens_and_rate(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         usage_on(tmp_path, digest, day(-1), input_tokens=1_000_000, cache_read=200_000, output=300_000)
 
@@ -239,12 +240,12 @@ def test_season_state_reports_month_tokens_and_rate(tmp_path):
 
 def test_settled_days_are_listed_for_audit(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-2), input_tokens=1_000_000)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=2_000_000)
         settle(api)
         items = api.get("/api/relay/season/days",
-                        headers={"Authorization": "Bearer " + RELAY_KEY}).json()["items"]
+                        headers={"Authorization": "Bearer " + TOKEN}).json()["items"]
         assert [item["day"] for item in items] == [day(-1), day(-2)]
         assert items[0]["gained"]["input"] == 200
         assert items[1]["gained"]["input"] == 100
@@ -255,23 +256,22 @@ def test_settled_days_are_listed_for_audit(tmp_path):
 def test_two_users_settle_separately(tmp_path):
     other = "tt_second_user_key_0123456789"
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
-        enroll(api, relay_key=other, upstream_key="sk-2",
-               account=account_token(api, "second"))
+        TOKEN = account_token(api)
+        OTHER = account_token(api, "second")
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000)
         usage_on(tmp_path, account_login(api, "second")["userId"], day(-1), input_tokens=5_000_000)
 
         assert settle(api).json()["balanceAfter"]["input"] == 100
-        assert settle(api, other).json()["balanceAfter"]["input"] == 500
+        assert settle(api, OTHER).json()["balanceAfter"]["input"] == 500
         # 各自只看到自己的流水
         mine = api.get("/api/relay/season/days",
-                       headers={"Authorization": "Bearer " + RELAY_KEY}).json()["items"]
+                       headers={"Authorization": "Bearer " + TOKEN}).json()["items"]
         assert len(mine) == 1
 
 
 def test_season_endpoints_require_a_relay_key(tmp_path):
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         assert api.get("/api/relay/season").status_code == 401
         assert api.post("/api/relay/season/settle").status_code == 401
         assert api.post("/api/relay/season/spend", json={"input": 1}).status_code == 401
@@ -289,7 +289,7 @@ def test_backfill_is_bounded_for_a_brand_new_account(tmp_path):
     但真出现时要有边界，否则一次请求就能造出一个巨大的余额。
     """
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         digest = account_login(api)["userId"]
         usage_on(tmp_path, digest, day(-5), input_tokens=1_000_000)                  # 窗口内
         usage_on(tmp_path, digest, day(-MAX_BACKFILL_DAYS - 10), input_tokens=9_000_000)  # 窗口外
@@ -301,9 +301,8 @@ def test_backfill_is_bounded_for_a_brand_new_account(tmp_path):
 
 def test_settlement_survives_a_restart(tmp_path):
     """余额在服务端，重启进程不该丢——这正是「以服务端为准」要解决的问题。"""
-    # 先起一次、注册 key 拿到账号的 userId，才能把用量播到**账号**头上。
+    # 先起一次、登录账号拿到 userId，才能把用量播到**账号**头上。
     with TestClient(make_season_app(tmp_path)) as first:
-        enroll(first, relay_key=RELAY_KEY)
         usage_on(tmp_path, account_login(first)["userId"], day(-1), input_tokens=1_000_000)
         settle(first)
     with TestClient(make_season_app(tmp_path)) as restarted:
@@ -318,7 +317,7 @@ def test_concurrent_settle_requests_cannot_double_grant(tmp_path):
     """并发调用不能发两次。靠 `BEGIN IMMEDIATE` + `(uid, day)` 主键。"""
     import threading
     with TestClient(make_season_app(tmp_path)) as api:
-        enroll(api, relay_key=RELAY_KEY)
+        TOKEN = account_token(api)
         usage_on(tmp_path, account_login(api)["userId"], day(-1), input_tokens=1_000_000)
         results = []
         threads = [threading.Thread(target=lambda: results.append(settle(api).json()))

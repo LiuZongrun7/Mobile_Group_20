@@ -14,8 +14,7 @@
          同一行，右边只剩约 490px（约 26 个字符），原来那条
          "Balance: demo estimate (relay not set up)" 要 760px，
          被 `ellipsize` 从**开头**裁成了"alance: demo estimate…"——正是最该看见的
-         "Balance:" 那截没了。信息没丢：(relay not set up) 那层意思在中继设置
-         弹窗里，这里只要区分得出"信不信这个数"就够了。 -->
+         "Balance:" 那截没了。信息没丢：这里只要区分得出"信不信这个数"就够了。 -->
     <string name="wallet_source_server">Balance: from server</string>
     <string name="wallet_source_demo">Balance: demo estimate</string>
     <string name="wallet_source_loading">Balance: loading…</string>

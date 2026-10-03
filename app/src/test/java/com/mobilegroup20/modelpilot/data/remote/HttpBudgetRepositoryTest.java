@@ -5,7 +5,6 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Observer;
 import com.mobilegroup20.modelpilot.contract.model.Budget;
 import com.mobilegroup20.modelpilot.contract.tool.BudgetStatus;
-import com.mobilegroup20.modelpilot.data.RelayCredentials;
 import com.mobilegroup20.modelpilot.data.repository.SessionProvider;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -30,8 +29,9 @@ public class HttpBudgetRepositoryTest {
 
     @Rule public InstantTaskExecutorRule executor = new InstantTaskExecutorRule();
 
-    private static final String RELAY_KEY = "tt_test_budget_key_0123456789";
-    private static final String UID = RelayCredentials.digestOf(RELAY_KEY);
+    /** 身份是**账号**：token 是 `AccountSession` 那种 `tt_app_` 会话 token，id 是账号的 `userId`。 */
+    private static final String TOKEN = "tt_app_test_budget_account";
+    private static final String UID = "user-budget-test-0001";
     private static final String MONTH = "2026-09";
 
     private MockWebServer server;
@@ -39,7 +39,7 @@ public class HttpBudgetRepositoryTest {
     private HttpBudgetRepository repository;
 
     private static final class Session implements SessionProvider {
-        volatile String token = RELAY_KEY, id = UID;
+        volatile String token = TOKEN, id = UID;
         public String token() { return token; }
         public String accountId() { return id; }
     }
@@ -99,7 +99,7 @@ public class HttpBudgetRepositoryTest {
 
         RecordedRequest request = server.takeRequest();
         assertEquals("/api/relay/budgets/" + MONTH, request.getPath());
-        assertEquals("Bearer " + RELAY_KEY, request.getHeader("Authorization"));
+        assertEquals("Bearer " + TOKEN, request.getHeader("Authorization"));
     }
 
     @Test public void aZeroCapIsReturnedAsAConfiguredBudget() throws Exception {

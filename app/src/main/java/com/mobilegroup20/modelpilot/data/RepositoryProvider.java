@@ -168,25 +168,22 @@ public final class RepositoryProvider {
     public static synchronized BudgetRepository budget() {
         if (budget == null) {
             budget = USE_STUBS ? new StubBudgetRepository()
-                    : new HttpBudgetRepository(forumBaseUrl, relaySession());
+                    : new HttpBudgetRepository(forumBaseUrl, accountSession());
             requireReady(budget, "BudgetRepository（数据侧，张莉）");
         }
         return budget;
     }
     /**
-     * 用量/赛季/预算这套的身份：**账号会话**，不是 relay key。
+     * 用量/预算这套的身份：**账号会话**。
      *
-     * <p>2026-02 改。原来这里用 relay key，`accountId()` 是它的 sha256——
-     * 于是「换个 key 就换个人」，而且没配中转的用户读不到自己的用量。
-     * 现在服务端把这两条路都解到**账号的 `user_id`**（`relay_store.owner_of`），
-     * 所以手机上只要账号 token 就够；relay key 只用来转发
-     * （{@code /api/relay/v1/...}，见 {@link #relayKeyForForwarding()}）。
+     * <p>服务端把用量和预算都解到**账号的 `user_id`** 上，所以手机上只要账号
+     * token 就够，没有第二条凭据。
      *
      * <p>做成一个 {@code SessionProvider} 而不是直接把 token 传进仓储，是为了复用
      * 仓储里那套「中途换了身份就把结果丢掉」的判断——换账号后回来的旧响应
      * 不能被显示成新账号的余额。
      */
-    private static SessionProvider relaySession() {
+    private static SessionProvider accountSession() {
         return new SessionProvider() {
             @Override public String token() {
                 return appContext == null ? null : AccountSession.get(appContext).token();
@@ -197,15 +194,6 @@ public final class RepositoryProvider {
         };
     }
 
-    /**
-     * 转发用的 relay key（`/api/relay/v1/...` 的 Authorization）。
-     *
-     * <p><b>这是 relay key 在 App 侧唯一的用处。</b>用量、赛季、预算都不用它——
-     * 那些走 {@link #relaySession()} 的账号 token。没配中转时返回 null。
-     */
-    public static String relayKeyForForwarding() {
-        return appContext == null ? null : RelayCredentials.get(appContext).relayKey();
-    }
     /** 测试要换实现时，用它把缓存清掉。 */
     public static synchronized void reset() {
         usage = null;

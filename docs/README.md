@@ -15,6 +15,13 @@
 > ② 归档目录 `archive-tokentrail/` 与游戏归档 `TokenTrail_Game/` 的名字（它们记录的就是那一段）；
 > ③ 服务端的 Python 包 `backend/tokentrail_forum/`、systemd 服务名与 `/opt/tokentrail` 部署路径
 > ——那套东西改了要重新部署，**还没动**。
+>
+> **中转已随新方向删除（2026-09-30）。** 原来那一层是「用户填自己的上游 key、我们把
+> cc-switch 的请求替他转发上去、顺手记用量」，整块没了：服务端只剩**记账 / 预算 /
+> 价目 / 赛季 / 智能体**五组接口（`docs/SERVER_API.md`，由 `RELAY_API.md` 改名而来），
+> relay key（`tt_`）这种凭据不再签发也不再认，身份只有账号 token（`tt_app_`）一种。
+> **`relay` 前缀（`/api/relay/*`）和 env 变量名（`FORUM_ENABLE_RELAY` 等）是历史遗留
+> 字面量**，改了要同时动 App、部署脚本和文档，先留着。
 
 ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静态设计稿入口；页面使用示例数据，不包含前端原型代码，也不代表 Android / 后端已实现全部新功能。
 
@@ -42,7 +49,7 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 | --- | --- | --- |
 | [`CONTRACTS.md`](CONTRACTS.md) | 接口契约：命名口径、时间口径、存储、结算规则、三种资源、TBD 清单 | **动手前先看一遍**，改字段前再查一次 |
 | [`FORUM_API.md`](FORUM_API.md) | 论坛 UI、后端接口、账号接入与英文 RSS 采集 | 论坛联调与后端实现之前 |
-| [`RELAY_API.md`](RELAY_API.md) | **中转服务**：relay key 注册、转发、四桶记账、SSRF 防护 | 动中转、接 cc-switch、改上游之前 |
+| [`SERVER_API.md`](SERVER_API.md) | **服务端 API**：账号、四桶用量、预算、价目、赛季结算、智能体；以及「中转已删」这件事 | 动服务端接口、查成本为什么算不出来之前 |
 | [`TASKS.md`](TASKS.md) | 三个人的待办、验收标准、依赖谁 | 认领任务、判断「做完了没」 |
 | ~~`ART.md`~~ | 游戏贴图的规格。**已随游戏移出**，现在在 `../../TokenTrail_Game/docs/ART.md` | 要翻旧账时 |
 | [`OPEN_SOURCE.md`](OPEN_SOURCE.md) | 第三方库的清单：许可证、出处、谁在用、怎么加新库 | **加依赖之前先看**，写报告的开源节时照抄 |
@@ -145,9 +152,10 @@ public static final boolean USE_STUBS = true;
 
 **论坛是例外**：新论坛与 agent 论坛接口已经统一走 HttpForumRepository，不受 USE_STUBS 控制；**账号已经换成这个 App 自己的账号**（`data/AccountSession`，后端 `/api/account/*`，注册/登录/退出都在「我的」和论坛里），论坛和“我的”均有入口。未配置后端时显示准备中，不返回假帖子。
 
-> **2026-02：身份只有一个。**`AccountSession`（APP 账号，`tt_app_` token）是「当前是谁」的唯一来源；
-> 论坛测试身份（`tt_test_`，仅 Debug）也在它里面。`RelayCredentials` 只剩 relay key 和上游地址，
-> **它不再是身份**——用量、赛季、预算、智能体全部按账号的 `userId` 记账（见 [`CONTRACTS.md`](CONTRACTS.md) §5）。
+> **2026-02 起身份只有一个；2026-09-30 中转删除后它成了唯一一种凭据。**`AccountSession`（APP 账号，`tt_app_` token）是「当前是谁」的唯一来源；
+> 论坛测试身份（`tt_test_`，仅 Debug）也在它里面。~~`RelayCredentials` 只剩 relay key 和上游地址~~ ——
+> **那个类已随中转一起删除（2026-09-30）**：relay key 不再签发也不再认，
+> 用量、赛季、预算、智能体全部按账号的 `userId` 记账（见 [`CONTRACTS.md`](CONTRACTS.md) §5）。
 
 桩数据里 `importCalls()` 会如实报告「全部被拒」（`rejected` 等于传入条数）：
 桩没有真的存进去。这样谁误以为导入已经能用了，会立刻发现。
@@ -184,8 +192,8 @@ public static final boolean USE_STUBS = true;
 | 桩数据（`data/stub/`） | **完成**，可以照着做界面和玩法 |
 | 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行）；`ui/forum` 和 `ui/auth` 也有了真页面（汪庭栋，见上一行），`ui/dashboard` 已经落地（`DashboardUsage` + 测试），**`ui/game` 已随游戏移出** |
 | 数据侧真实现 | **进行中，服务端已是权威**。`data/local` 落地了三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 建表语句导出在 `app/schemas/`。**App 侧连服务端的仓储已有两个**：`HttpSeasonRepository`（余额/结算，12 个 HTTP 契约测试）和 `HttpBudgetRepository`（预算上限，12 个）。**还没有**：`data/remote` 的用量 fetcher、`data/importer` 的解析器、`UsageRepository` 的 HTTP 实现（它的读和写混在一起，要等导入路径也搬到服务端，见 [`CONTRACTS.md`](CONTRACTS.md) §5）。**价目表是空的**——没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
-| API 中转与服务端（汪庭栋） | **已上线，默认关闭**。用户**先登录账号**，再在「我的」页填上游地址 + 上游 key，服务端发一个 relay key（可自定义，挂在账号下面），把 cc-switch 的供应商指向 `https://43.140.212.47/api/relay` 就能转发，**响应里的 usage 顺手落库**。契约见 [`RELAY_API.md`](RELAY_API.md)。服务端还持有**日汇总**（`GET /usage/daily`）、**逐次记录**（`GET /usage/calls`）、**资源余额与结算**（`/season*`）和**预算**（`/budgets/{month}`）——结算是服务端算的，客户端一行判断都没有（见 [`CONTRACTS.md`](CONTRACTS.md) §7）。App 侧 `HttpSeasonRepository`、`HttpBudgetRepository` 已实现。客户端那套消费方（游戏）已移出（2026-09-30），赛季与预算接口保留。**relay key 只用于转发**——用量、赛季、预算、智能体走账号 token（2026-02 改）。**启用前必须先关掉服务器上对公网开放的其它端口**，理由见 `DATA_SOURCES.md` §5 |
+| API 服务端（汪庭栋） | **记账那一组已上线，默认关闭**。~~用户先登录账号，再在「我的」页填上游地址 + 上游 key，服务端发一个 relay key，把 cc-switch 的供应商指向 `https://43.140.212.47/api/relay` 就能转发~~ ——**中转 2026-09-30 整块删除**（App 侧不用再配任何东西，`RelayCredentials` / 中转设置页都没了）。服务端现在只有五组接口：**账号**（`/api/account/*`）、**用量**（`GET /usage`、`/usage/daily`、`/usage/calls`、`/usage/summary`、`/usage/compare`）、**预算**（`/budgets/{month}`）、**价目**（`/pricing*`）、**赛季结算**（`/season*`，消费者游戏已移出）和**智能体**（`/agent/ask|status`）。契约见 [`SERVER_API.md`](SERVER_API.md)。结算是服务端算的，客户端一行判断都没有（见 [`CONTRACTS.md`](CONTRACTS.md) §7）。App 侧 `HttpSeasonRepository`、`HttpBudgetRepository` 已实现。**身份只有账号 token 一种**——relay key 不再签发也不再认（2026-09-30）。**`/api/relay/*` 这个前缀是历史字面量**，和"中转"已经没关系。**「用户提问 → 后端调模型 → 记用量」那条新路还没写**，所以用量接口现在读到的可能是一张空表 |
 | 论坛（汪庭栋） | News / Community、图文发布、点赞评论、账号注册/登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md。**账号现在是 App 自己的账号**（`/api/account/*`，不再是团队那台机器上的账号服务），和用量、结算共用同一个 `userId` |
-| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/tokentrail_forum/agent.py` + `/agent/ask`（见 [`RELAY_API.md`](RELAY_API.md)）|
+| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/tokentrail_forum/agent.py` + `/agent/ask`（见 [`SERVER_API.md`](SERVER_API.md)）|
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。

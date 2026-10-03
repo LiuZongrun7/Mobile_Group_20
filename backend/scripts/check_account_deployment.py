@@ -116,7 +116,7 @@ def run(base, keep):
   check("me 返回同一个 userId", status == 200 and me.get("userId") == uid, f"{status} {me}")
   check("没凭据时 me 是 401", call("/api/account/me")[0] == 401)
 
-  print("2. 没有 relay key 也能读自己的账（这是本次改动的要点）")
+  print("2. 只凭账号 token 就能读自己的账")
   status, season, _ = call("/api/relay/season", token=app)
   check("账号 token 能读赛季状态", status == 200, f"{status} {season}")
   check("uid 就是账号 userId", season.get("uid") == uid, str(season.get("uid")))
@@ -125,53 +125,14 @@ def run(base, keep):
   status, budget, _ = call("/api/relay/budgets/2026-09", token=app)
   check("账号 token 能读预算", status == 200 and budget.get("uid") == uid, f"{status} {budget.get('uid')}")
 
-  print("3. relay key 归到账号名下")
-  status, key, _ = call("/api/relay/keys", "POST",
-    {"upstreamUrl": "https://api.deepseek.com", "upstreamKey": "sk-not-a-real-key", "displayName": "verify"},
-    app)
-  check("带账号 token 能注册 relay key", status == 201, f"{status} {key}")
-  relay_key = key.get("relayKey", "")
-  check("返回了 tt_ 开头的 key", relay_key.startswith("tt_"), relay_key[:12])
-  check("响应里没有上游密钥", "sk-not-a-real-key" not in json.dumps(key))
-  check("没带账号 token 时注册是 401", call("/api/relay/keys", "POST",
-    {"upstreamUrl": "https://api.deepseek.com", "upstreamKey": "x"})[0] == 401)
-  status, same, _ = call("/api/relay/season", token=relay_key)
-  check("relay key 读到**同一个账号**的赛季", status == 200 and same.get("uid") == uid, f"{status} {same.get('uid')}")
-
-  print("4. 「我录了什么」必须答得出来")
-  status, listed, _ = call("/api/relay/keys/all", token=app)
-  check("账号 token 能列出名下所有 key", status == 200, f"{status} {listed}")
-  items = (listed or {}).get("items") or []
-  check("列表里有刚注册的那条", any(item.get("uid") == key.get("uid") for item in items),
-        str(items))
-  check("每条都带指向哪个上游（多条 key 时唯一的区分依据）",
-        all("upstreamHost" in item for item in items), str(items))
-  # §永远没有明文§：库里只有 sha256，列表里也不该出现 key 本身。
-  check("列表里没有 key 明文", relay_key not in json.dumps(listed), "列表泄漏了 key")
-  check("relay key 打这个接口是 401（它只能看自己那一条）",
-        call("/api/relay/keys/all", token=relay_key)[0] == 401)
-  # 再注册一条，列表要变成两条，而且要能按 uid 停用**指定**的那条
-  status, third, _ = call("/api/relay/keys", "POST",
-                          {"upstreamUrl": "https://api.deepseek.com",
-                           "upstreamKey": "sk-not-a-real-key", "displayName": "verify-3"}, app)
-  check("能再注册一条（一个账号多条 key）", status == 201, f"{status} {third}")
-  status, listed, _ = call("/api/relay/keys/all", token=app)
-  check("列表变成两条", len((listed or {}).get("items") or []) == 2, str(listed))
-  status, _, _ = call(f"/api/relay/keys/{third.get('uid')}", "DELETE", token=app)
-  check("能按 uid 停用指定那一条", status == 200, str(status))
-  status, listed, _ = call("/api/relay/keys/all", token=app)
-  disabled = [item for item in (listed or {}).get("items") or [] if item.get("uid") == third.get("uid")]
-  check("停用的是那一条，另一条不受影响",
-        disabled and disabled[0].get("disabled") is True
-        and sum(1 for item in listed["items"] if item.get("disabled")) == 1, str(listed))
-
-  print("5. 智能体只认账号 token")
-  check("relay key 打智能体是 401", call("/api/relay/agent/status", token=relay_key)[0] == 401)
+  print("3. 智能体只认账号 token")
+  check("旧格式的 relay key 打智能体是 401",
+        call("/api/relay/agent/status", token="tt_not_a_thing_0123456789")[0] == 401)
   status, agent, _ = call("/api/relay/agent/status", token=app)
   check("账号 token 能查智能体状态", status == 200 and agent.get("configured") is True, f"{status} {agent}")
   check("智能体账本独立", agent.get("separateLedger") is True, str(agent))
 
-  print("6. 真的问一句（花的是我们的 key）")
+  print("4. 真的问一句（花的是我们的 key）")
   status, answer, _ = call("/api/relay/agent/ask", "POST", {"question": "我 2026 年 9 月一共用了多少 input token？"}, app)
   # **没开就说没开**，不要把它算成通过——静默跳过等于「以为验过了」。
   if status == 404 or (status == 503 and "not configured" in json.dumps(answer)):
@@ -188,16 +149,7 @@ def run(base, keep):
           all("uid" not in json.dumps(c) or uid in json.dumps(c) or "someone" not in json.dumps(c)
               for c in answer.get("toolCalls", [])))
 
-  print("7. 换一条 relay key，账不断")
-  status, second, _ = call("/api/relay/keys", "POST",
-    {"upstreamUrl": "https://api.deepseek.com", "upstreamKey": "sk-not-a-real-key", "displayName": "verify-2"},
-    app)
-  check("同账号能再注册一条 key", status == 201, f"{status} {second}")
-  status, after, _ = call("/api/relay/season", token=second.get("relayKey", ""))
-  check("新 key 读到同一份余额", status == 200 and after.get("uid") == uid, f"{status} {after.get('uid')}")
-
-
-  print("8. 论坛这条链路（图文、共享池、幂等、点赞评论）")
+  print("5. 论坛这条链路（图文、共享池、幂等、点赞评论）")
   # 这一段原来在 `check_deployment.py` 里，用的是**团队账号**——账号搬过来之后
   # 那个脚本就断了（用团队 token 读论坛 401），于是这一段没有任何东西守着。
   # 改成用我们自己的账号之后，脚本里再没有一处碰别人的服务。
@@ -371,9 +323,6 @@ rows = db.execute("SELECT user_id, username FROM accounts WHERE username IN ("
 if not rows:
     print("账号已经不在了")
 for uid, who in rows:
-    for (key,) in db.execute("SELECT key_hash FROM relay_keys WHERE user_id=?",
-                             (uid,)).fetchall():
-        db.execute("DELETE FROM relay_secrets WHERE key_hash=?", (key,))
     # 图片要**先删文件再删行**：反过来会留下一堆没人认领的文件，
     # 而文件名是随机的，事后认不出来该删哪个。
     for (name,) in db.execute("SELECT filename FROM images WHERE owner_uid=?",
@@ -383,7 +332,7 @@ for uid, who in rows:
     # **列名不一样，别照抄**：中转和游戏那几张表是 `user_id`（这次改动的结果），
     # 论坛早期那几张是 `uid` / `owner_uid`。写错列名会报 no such column，
     # 而那一刻正好是清理阶段，报错就意味着数据留在生产库里。
-    for table, column in (("relay_usage", "user_id"), ("relay_keys", "user_id"),
+    for table, column in (("relay_usage", "user_id"),
                           ("season_balances", "user_id"), ("season_settlements", "user_id"),
                           ("budgets", "user_id"), ("agent_usage", "user_id"),
                           ("account_sessions", "user_id"), ("images", "owner_uid"),
