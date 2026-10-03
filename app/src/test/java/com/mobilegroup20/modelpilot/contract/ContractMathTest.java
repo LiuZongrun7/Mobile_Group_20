@@ -9,10 +9,6 @@ import org.junit.Test;
 import com.mobilegroup20.modelpilot.contract.model.PricingRate;
 import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
-import com.mobilegroup20.modelpilot.contract.tool.BudgetStatus;
-import com.mobilegroup20.modelpilot.contract.tool.CompareResult;
-import com.mobilegroup20.modelpilot.contract.tool.Coverage;
-import com.mobilegroup20.modelpilot.contract.tool.UsageSummary;
 
 /**
  * 契约类型的算法测试：金额换算、除零、幂等判断、工具名映射。
@@ -79,74 +75,4 @@ public class ContractMathTest {
         assertEquals(110, total.total());
     }
 
-    /** 除零保护：空区间的平均值为 0，而不是崩掉。 */
-    @Test
-    public void averagesGuardAgainstDivisionByZero() {
-        UsageSummary.Row row = new UsageSummary.Row();
-        assertEquals(0L, row.costPerCallMicros());
-
-        CompareResult.Row compare = new CompareResult.Row();
-        assertEquals(0L, compare.costPer1MTokensMicros());
-    }
-
-    /** 单次均价和每百万 token 均价是答「哪个模型贵」的两个不同口径。 */
-    @Test
-    public void averagesAreComputedCorrectly() {
-        UsageSummary.Row row = new UsageSummary.Row();
-        row.calls = 4;
-        row.costMicros = 1_000_000L;
-        assertEquals(250_000L, row.costPerCallMicros());
-
-        CompareResult.Row compare = new CompareResult.Row();
-        compare.tokens = new TokenBundle(1_000_000L, 0, 0, 0);
-        compare.costMicros = 3_000_000L;
-        assertEquals(3_000_000L, compare.costPer1MTokensMicros());
-    }
-
-    /** 覆盖度：缺了哪天要说得出来，"没记录" 和 "用量为 0" 不能混为一谈。 */
-    @Test
-    public void coverageReportsMissingDays() {
-        Coverage coverage = new Coverage();
-        coverage.from = "2026-09-01";
-        coverage.to = "2026-09-03";
-        coverage.daysWithData = 2;
-        coverage.daysMissing.add("2026-09-02");
-
-        assertFalse(coverage.complete());
-
-        coverage.daysMissing.clear();
-        assertTrue(coverage.complete());
-    }
-
-    /** 结算幂等：同一天判断两次结果必须一样，而且只认「已结算到哪天」。 */
-    /** 三种资源互不通兑：加进去的和取出来的必须对得上，且不会串到别的类型。 */
-    /** 预算：没设预算和设了 0 元是两回事，措辞和判断都要分得开。 */
-    @Test
-    public void budgetDistinguishesUnsetFromZeroCap() {
-        BudgetStatus unset = new BudgetStatus();
-        unset.capMicros = 0;
-        unset.configured = false;
-        assertFalse(unset.warnThresholdCrossed());
-        assertEquals(0.0, unset.spentRatio(), 0.0001);
-
-        BudgetStatus zeroCap = new BudgetStatus();
-        zeroCap.capMicros = 0;
-        zeroCap.spentMicros = 0;
-        zeroCap.configured = true;
-        assertFalse(zeroCap.warnThresholdCrossed());
-
-        BudgetStatus over = new BudgetStatus();
-        over.capMicros = 20_000_000L;
-        over.spentMicros = 17_000_000L;
-        over.warnAtRatio = 0.8;
-        over.configured = true;
-        assertTrue("17/20 已经过了 80% 的线", over.warnThresholdCrossed());
-        assertEquals(3_000_000L, over.remainingMicros());
-
-        // 超支时剩余是负数，不要夹到 0——超了多少本身就是要告诉用户的信息
-        over.spentMicros = 25_000_000L;
-        assertEquals(-5_000_000L, over.remainingMicros());
-    }
-
-    /** 服务端按函数名分发工具调用，名字对不上就等于工具不存在。 */
 }

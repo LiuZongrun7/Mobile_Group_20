@@ -12,10 +12,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from tokentrail_forum.accounts import (Accounts, TOKEN_PREFIX, hash_password,
+from modelpilot_forum.accounts import (Accounts, TOKEN_PREFIX, hash_password,
                                        verify_password)
-from tokentrail_forum.app import Settings, create_app
-from tokentrail_forum.store import Store
+from modelpilot_forum.app import Settings, create_app
+from modelpilot_forum.store import Store
 
 PASSWORD = "correct horse battery"
 
@@ -48,7 +48,7 @@ def test_password_is_never_stored_in_plaintext(tmp_path):
     store = Store(str(tmp_path), "/api")
     accounts = Accounts(store)
     accounts.register("alice", PASSWORD)
-    blob = (tmp_path / "forum.sqlite3").read_bytes()
+    blob = (tmp_path / "modelpilot.sqlite3").read_bytes()
     assert PASSWORD.encode() not in blob, "plaintext password must never reach the database"
     # 也不该是裸 sha256——那太快了，密码字典一撞就开
     assert hashlib.sha256(PASSWORD.encode()).hexdigest().encode() not in blob
@@ -158,7 +158,7 @@ def test_a_wrong_password_and_an_unknown_username_look_identical(tmp_path):
 def test_the_session_token_is_only_stored_hashed(tmp_path):
     with TestClient(make_app(tmp_path)) as api:
         token = session(api)
-    blob = (tmp_path / "forum.sqlite3").read_bytes()
+    blob = (tmp_path / "modelpilot.sqlite3").read_bytes()
     # token 泄露等于别人能用你的账号，没理由把原文留着
     assert token.encode() not in blob
     assert hashlib.sha256(token.encode()).hexdigest().encode() in blob
@@ -214,7 +214,7 @@ def test_an_expired_session_is_refused(tmp_path):
     created = accounts.register("alice", PASSWORD)
     issued = accounts.issue(created["userId"])
     token_hash = hashlib.sha256(issued["token"].encode()).hexdigest()
-    from tokentrail_forum.store import now_ms
+    from modelpilot_forum.store import now_ms
     with store.connect(write=True) as db:
         db.execute("UPDATE account_sessions SET expires=? WHERE token_hash=?",
                    (now_ms() - 1000, token_hash))

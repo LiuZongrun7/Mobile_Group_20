@@ -9,8 +9,6 @@ import com.mobilegroup20.modelpilot.contract.model.PricingRate;
 import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
 import com.mobilegroup20.modelpilot.contract.model.UsageCall;
-import com.mobilegroup20.modelpilot.contract.tool.CompareResult;
-import com.mobilegroup20.modelpilot.contract.tool.UsageSummary;
 
 /**
  * 用量数据的读写口。<b>数据侧（张莉）实现，游戏和 agent 只依赖这个接口。</b>
@@ -59,14 +57,6 @@ public interface UsageRepository {
      * @param month 格式 {@code yyyy-MM}
      */
     LiveData<TokenBundle> monthTokens(String uid, String month);
-
-    /** 给 agent 的 {@code getUsageSummary} 用。分组维度和日期区间由服务端定。 */
-    LiveData<UsageSummary> summary(String uid, String from, String to,
-                                   UsageSummary.GroupBy groupBy);
-
-    /** 给 agent 的 {@code compareAgentCosts} 用。 */
-    LiveData<CompareResult> compare(String uid, String from, String to,
-                                    CompareResult.Metric metric);
 
     /** 某天某个模型当前生效的费率。查不到返回 null——「查不到」和「免费」是两回事。 */
     LiveData<PricingRate> rateFor(Provider provider, String model, String day);

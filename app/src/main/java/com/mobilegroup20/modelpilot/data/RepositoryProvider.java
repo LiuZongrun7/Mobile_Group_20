@@ -2,7 +2,6 @@ package com.mobilegroup20.modelpilot.data;
 
 import android.content.Context;
 import com.mobilegroup20.modelpilot.BuildConfig;
-import com.mobilegroup20.modelpilot.data.remote.HttpBudgetRepository;
 import com.mobilegroup20.modelpilot.data.remote.HttpForumRepository;
 import com.mobilegroup20.modelpilot.data.repository.ForumFeedRepository;
 import com.mobilegroup20.modelpilot.data.repository.SessionProvider;
@@ -12,10 +11,8 @@ import androidx.room.Room;
 import com.mobilegroup20.modelpilot.data.local.AppDatabase;
 import com.mobilegroup20.modelpilot.data.local.BundledPricingSource;
 import com.mobilegroup20.modelpilot.data.local.RoomUsageRepository;
-import com.mobilegroup20.modelpilot.data.repository.BudgetRepository;
 import com.mobilegroup20.modelpilot.data.repository.ForumRepository;
 import com.mobilegroup20.modelpilot.data.repository.UsageRepository;
-import com.mobilegroup20.modelpilot.data.stub.StubBudgetRepository;
 import com.mobilegroup20.modelpilot.data.stub.StubUsageRepository;
 
 /**
@@ -46,7 +43,6 @@ public final class RepositoryProvider {
     private static HttpForumRepository forumHttp;
     private static String forumBaseUrl = BuildConfig.FORUM_BASE_URL;
     private static volatile SessionProvider forumSession = SessionProvider.SIGNED_OUT;
-    private static BudgetRepository budget;
 
     /**
      * 应用级的 Context，只用来建数据库。
@@ -157,49 +153,11 @@ public final class RepositoryProvider {
         return forumHttp;
     }
 
-    /**
-     * 预算数据。桩 → 服务端（{@code HttpBudgetRepository}）。
-     *
-     * <p>**上限存在服务端**，和余额、结算一样（`CONTRACTS.md` §5）。原来这里
-     * `USE_STUBS=false` 时返回 null，靠 `requireReady` 抛一句「还没实现」——
-     * 现在有真实现了。花销仍然算不出来（没有价目表），那件事由
-     * `BudgetStatus.coverage` 和后端的 `pricingAvailable` 表达，不在这里伪装。
-     */
-    public static synchronized BudgetRepository budget() {
-        if (budget == null) {
-            budget = USE_STUBS ? new StubBudgetRepository()
-                    : new HttpBudgetRepository(forumBaseUrl, accountSession());
-            requireReady(budget, "BudgetRepository（数据侧，张莉）");
-        }
-        return budget;
-    }
-    /**
-     * 用量/预算这套的身份：**账号会话**。
-     *
-     * <p>服务端把用量和预算都解到**账号的 `user_id`** 上，所以手机上只要账号
-     * token 就够，没有第二条凭据。
-     *
-     * <p>做成一个 {@code SessionProvider} 而不是直接把 token 传进仓储，是为了复用
-     * 仓储里那套「中途换了身份就把结果丢掉」的判断——换账号后回来的旧响应
-     * 不能被显示成新账号的余额。
-     */
-    private static SessionProvider accountSession() {
-        return new SessionProvider() {
-            @Override public String token() {
-                return appContext == null ? null : AccountSession.get(appContext).token();
-            }
-            @Override public String accountId() {
-                return appContext == null ? null : AccountSession.get(appContext).accountId();
-            }
-        };
-    }
-
     /** 测试要换实现时，用它把缓存清掉。 */
     public static synchronized void reset() {
         usage = null;
         forum = null;
         forumHttp = null;
-        budget = null;
     }
 
     private static void requireReady(Object impl, String what) {

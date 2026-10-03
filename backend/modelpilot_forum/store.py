@@ -64,7 +64,7 @@ class Store:
         self.directory = Path(directory)
         self.media = self.directory / "media"
         self.media.mkdir(parents=True, exist_ok=True)
-        self.path = self.directory / "forum.sqlite3"
+        self.path = self.directory / "modelpilot.sqlite3"
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)

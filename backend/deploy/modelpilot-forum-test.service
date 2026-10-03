@@ -1,0 +1,23 @@
+[Unit]
+Description=ModelPilot isolated test area (test sessions)
+After=network.target modelpilot-forum.service
+
+[Service]
+User=tokentrail
+Group=tokentrail
+WorkingDirectory=/opt/modelpilot/backend
+EnvironmentFile=/etc/modelpilot-forum-test.env
+ExecStart=/opt/modelpilot/venv/bin/uvicorn modelpilot_forum.app:application --factory --host 127.0.0.1 --port 8011 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/modelpilot-forum-test
+MemoryMax=512M
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,0 @@
-[Unit]
-Description=Renew TokenTrail HTTPS IP certificate
-After=network-online.target nginx.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/opt/tokentrail/certbot-venv/bin/certbot renew --cert-name tokentrail-ip --quiet --no-random-sleep-on-renew --deploy-hook "/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx"
-TimeoutStartSec=180

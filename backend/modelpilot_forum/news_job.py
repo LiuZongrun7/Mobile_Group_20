@@ -68,7 +68,7 @@ def main():
     spec = importlib.util.spec_from_file_location("rss_collector", source_dir / "rss_collector.py")
     collector = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(collector)
-    store = Store(os.environ["FORUM_DATA_DIR"])
+    store = Store(os.environ["MODELPILOT_DATA_DIR"])
     staging = store.directory / "news-staging.json"
     sources = json.loads((source_dir / "sources.json").read_text())["sources"]
     previous = json.loads(staging.read_text()).get("items", []) if staging.exists() else []

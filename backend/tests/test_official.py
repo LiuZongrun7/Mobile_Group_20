@@ -16,14 +16,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from tokentrail_forum.app import Settings, create_app
-from tokentrail_forum.news_job import import_articles
-from tokentrail_forum.store import OFFICIAL_AUTHOR_NAME, OFFICIAL_AUTHOR_UID, Store
-from tokentrail_forum.usage_store import UsageStore
+from modelpilot_forum.app import Settings, create_app
+from modelpilot_forum.news_job import import_articles
+from modelpilot_forum.store import OFFICIAL_AUTHOR_NAME, OFFICIAL_AUTHOR_UID, Store
 from conftest import verifier
 from test_forum import png
-from helpers import account_login, account_token, bearer, completion, insert_usage
-from test_seasons import make_season_app
+from helpers import account_login, account_token, bearer, completion
+from helpers import account_token, bearer
 
 TODAY_MS = 1_790_500_000_000
 
@@ -189,20 +188,14 @@ def test_an_empty_news_table_gives_an_empty_official_list(tmp_path):
 
 def test_the_agent_tool_reports_both_counts(tmp_path):
     """agent 的 `getForumHighlights` 要能拿官方帖，而且**说明两者可信度不同**。"""
-    from tokentrail_forum.agent_tools import ToolContext, execute
-    from tokentrail_forum.budgets import Budgets
-    from tokentrail_forum.pricing import Pricing
-    from tokentrail_forum.seasons import Seasons
+    from modelpilot_forum.agent_tools import ToolContext, execute
 
     # 自己建一份：这个测试要同时拿到 app 和**它用的那个路径**
     # （读写器必须和 app 指向同一个库，塞进子目录就会读空）。
     make_app_with_news(tmp_path, TWO_ARTICLES)
     store = Store(str(tmp_path), "/api")
-    usage_store = UsageStore(store)
-    pricing = Pricing(store)
-    context = ToolContext(digest="u_test_account", uid=None, usage=usage_store, pricing=pricing,
-                          seasons=Seasons(store, usage_store), budgets=Budgets(store, usage_store, pricing),
-                          store=store)
+    # 工具上下文现在只剩「谁在问 + 库」——用量/预算/价目那几样随记账删掉了。
+    context = ToolContext(digest="u_test_account", uid=None, store=store)
     payload, evidence = execute("getForumHighlights", {"limit": 5}, **vars(context))
     # 官方帖在（新闻是公共内容，不需要论坛身份）
     assert payload["officialCount"] == 2, payload

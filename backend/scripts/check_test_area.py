@@ -15,7 +15,7 @@ import uuid
 from PIL import Image
 
 ORIGIN = "https://43.140.212.47"
-ROOT = Path("/var/lib/tokentrail-forum-test")
+ROOT = Path("/var/lib/modelpilot-forum-test")
 
 
 def call(path, session=None, body=None, method=None, key=None, mime="application/json"):
@@ -59,7 +59,7 @@ def main():
             raise AssertionError("Production accepted a test identity")
         except HTTPError as error:
             assert error.code == 401
-        subprocess.run(["systemctl", "restart", "tokentrail-forum-test.service"], check=True)
+        subprocess.run(["systemctl", "restart", "modelpilot-forum-test.service"], check=True)
         for attempt in range(20):
             try:
                 assert call(path, a)["commentCount"] == 1
@@ -78,7 +78,7 @@ def main():
                           "sharedPostsLikesComments": True, "news": True, "productionRejectsTestTokens": True,
                           "restartPersistence": True, "exitRevokesTestIdentity": True}))
     finally:
-        with sqlite3.connect(ROOT / "forum.sqlite3") as db:
+        with sqlite3.connect(ROOT / "modelpilot.sqlite3") as db:
             for session in sessions:
                 uid = session["accountId"]
                 images = db.execute("SELECT filename FROM images WHERE owner_uid=?", (uid,)).fetchall()

@@ -22,7 +22,7 @@ HTTP，和 App 侧 `AccountSession` / `RelayApi` 发的是同一批请求。
    图文上传、两个账号共享同一个帖子池、图片跨账号取回逐字节一致、
    发帖与点赞的幂等、计数不重复、帖子能被删干净。
 
-`FORUM_ENABLE_AGENT` 没开的服务器上第 6 段会跳过（会明确说跳过了，不是静默通过）。
+`MODELPILOT_ENABLE_AGENT` 没开的服务器上第 6 段会跳过（会明确说跳过了，不是静默通过）。
 
 ## 用法
 
@@ -116,27 +116,18 @@ def run(base, keep):
   check("me 返回同一个 userId", status == 200 and me.get("userId") == uid, f"{status} {me}")
   check("没凭据时 me 是 401", call("/api/account/me")[0] == 401)
 
-  print("2. 只凭账号 token 就能读自己的账")
-  status, season, _ = call("/api/relay/season", token=app)
-  check("账号 token 能读赛季状态", status == 200, f"{status} {season}")
-  check("uid 就是账号 userId", season.get("uid") == uid, str(season.get("uid")))
-  status, summary, _ = call("/api/relay/usage/summary?from=2026-09-01&to=2026-09-27", token=app)
-  check("账号 token 能读用量汇总", status == 200 and summary.get("uid") == uid, f"{status} {summary.get('uid')}")
-  status, budget, _ = call("/api/relay/budgets/2026-09", token=app)
-  check("账号 token 能读预算", status == 200 and budget.get("uid") == uid, f"{status} {budget.get('uid')}")
-
-  print("3. 智能体只认账号 token")
+  print("2. 智能体只认账号 token")
   check("旧格式的 relay key 打智能体是 401",
-        call("/api/relay/agent/status", token="tt_not_a_thing_0123456789")[0] == 401)
-  status, agent, _ = call("/api/relay/agent/status", token=app)
+        call("/api/agent/status", token="tt_not_a_thing_0123456789")[0] == 401)
+  status, agent, _ = call("/api/agent/status", token=app)
   check("账号 token 能查智能体状态", status == 200 and agent.get("configured") is True, f"{status} {agent}")
   check("智能体账本独立", agent.get("separateLedger") is True, str(agent))
 
-  print("4. 真的问一句（花的是我们的 key）")
-  status, answer, _ = call("/api/relay/agent/ask", "POST", {"question": "我 2026 年 9 月一共用了多少 input token？"}, app)
+  print("3. 真的问一句（花的是我们的 key）")
+  status, answer, _ = call("/api/agent/ask", "POST", {"question": "我 2026 年 9 月一共用了多少 input token？"}, app)
   # **没开就说没开**，不要把它算成通过——静默跳过等于「以为验过了」。
   if status == 404 or (status == 503 and "not configured" in json.dumps(answer)):
-    print("  － 跳过：这台服务器没开 FORUM_ENABLE_AGENT（不是通过，是没验）")
+    print("  － 跳过：这台服务器没开 MODELPILOT_ENABLE_AGENT（不是通过，是没验）")
   else:
    check("agent/ask 200", status == 200, f"{status} {answer}")
    if status == 200:
@@ -149,7 +140,7 @@ def run(base, keep):
           all("uid" not in json.dumps(c) or uid in json.dumps(c) or "someone" not in json.dumps(c)
               for c in answer.get("toolCalls", [])))
 
-  print("5. 论坛这条链路（图文、共享池、幂等、点赞评论）")
+  print("4. 论坛这条链路（图文、共享池、幂等、点赞评论）")
   # 这一段原来在 `check_deployment.py` 里，用的是**团队账号**——账号搬过来之后
   # 那个脚本就断了（用团队 token 读论坛 401），于是这一段没有任何东西守着。
   # 改成用我们自己的账号之后，脚本里再没有一处碰别人的服务。
@@ -276,7 +267,7 @@ def on_server(script):
 
 def remove_forum_rows(base, title, image_id):
   """删掉这次验证发的帖子和图片。**只按标题精确匹配自己那一行。**"""
-  database = "/var/lib/tokentrail-forum/forum.sqlite3"
+  database = "/var/lib/modelpilot-forum/modelpilot.sqlite3"
   script = f"""
 import os, sqlite3
 db = sqlite3.connect({database!r})
@@ -286,7 +277,7 @@ if row is None:
 else:
     post = row[0]
     for (name,) in db.execute("SELECT filename FROM images WHERE post_id=?", (post,)).fetchall():
-        try: os.unlink("/var/lib/tokentrail-forum/media/" + name)
+        try: os.unlink("/var/lib/modelpilot-forum/media/" + name)
         except FileNotFoundError: pass
     db.execute("DELETE FROM likes WHERE post_id=?", (post,))
     db.execute("DELETE FROM replies WHERE post_id=?", (post,))
@@ -312,7 +303,7 @@ def cleanup(base, username, second=None):
     **先删数据、后删账号**，顺序反了会因为外键删不掉；每张表都按账号 id 删，
     因为归属列**就是**账号——这正是这次改动的结果，所以清理只需要 id。
     """
-    database = "/var/lib/tokentrail-forum/forum.sqlite3"
+    database = "/var/lib/modelpilot-forum/modelpilot.sqlite3"
     wanted = [username] + ([second] if second else [])
     script = f"""
 import os, sqlite3
@@ -327,14 +318,15 @@ for uid, who in rows:
     # 而文件名是随机的，事后认不出来该删哪个。
     for (name,) in db.execute("SELECT filename FROM images WHERE owner_uid=?",
                               (uid,)).fetchall():
-        try: os.unlink("/var/lib/tokentrail-forum/media/" + name)
+        try: os.unlink("/var/lib/modelpilot-forum/media/" + name)
         except FileNotFoundError: pass
-    # **列名不一样，别照抄**：中转和游戏那几张表是 `user_id`（这次改动的结果），
+    # **列名不一样，别照抄**：智能体那本账是 `user_id`，
     # 论坛早期那几张是 `uid` / `owner_uid`。写错列名会报 no such column，
     # 而那一刻正好是清理阶段，报错就意味着数据留在生产库里。
-    for table, column in (("relay_usage", "user_id"),
-                          ("season_balances", "user_id"), ("season_settlements", "user_id"),
-                          ("budgets", "user_id"), ("agent_usage", "user_id"),
+    #
+    # 2026-09-30 之后这里只剩这几张：用量/预算/价目/赛季那几张连同中转一起删了，
+    # 而且 App 启动时会把它们从老库里 DROP 掉——对着不存在的表写 DELETE 会直接报错。
+    for table, column in (("agent_usage", "user_id"),
                           ("account_sessions", "user_id"), ("images", "owner_uid"),
                           ("idempotency", "uid"), ("write_events", "uid")):
         db.execute("DELETE FROM " + table + " WHERE " + column + "=?", (uid,))

@@ -35,7 +35,7 @@ class FakeAuth:
         known = self.ACCOUNTS.get(authorization[7:].strip())
         if known is None:
             raise HTTPException(401, "Sign in required", headers={"WWW-Authenticate": "Bearer"})
-        from tokentrail_forum.auth import Identity
+        from modelpilot_forum.auth import Identity
         return Identity(*known)
 
     def close(self):

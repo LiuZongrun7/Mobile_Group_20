@@ -21,10 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .account_routes import build_account_router
 from .accounts import Accounts
 from .auth import Identity, TableAuth
-from .pricing import Pricing
-from .api_routes import build_agent_router
-from .api_routes import build_router as build_api_router
-from .seed_pricing import install as install_seed
+from .agent_routes import build_agent_router
+from .schema import drop_obsolete_tables
 from .test_sessions import ForumAuth
 from .store import (Store, decode_cursor, news_json, now_ms, official_post, official_posts,
                     page, rate_limit, reply_json)
@@ -36,59 +34,46 @@ class Settings:
     public_origin: str
     # `auth_url` / `auth_uid_field` / `auth_name_field` 三个字段删掉了（2026-02）：
     # 那是「拿 token 去问团队那台机器的账号服务」用的，`TeamAuth` 已经不存在，
-    # 环境变量 `FORUM_AUTH_*` 从此**读了也不起作用**。留着字段的话，旧的 env 文件
+    # 环境变量 `MODELPILOT_AUTH_*` 从此**读了也不起作用**。留着字段的话，旧的 env 文件
     # 会让健康检查报一个 `authConfigured: true`，而那个 true 什么也不代表。
     test_sessions_enabled: bool = False
     public_api_prefix: str = "/api"
     news_database: str = ""
-    # 用量/预算/价目/赛季这几组接口的开关。默认关闭，打开后 `/<前缀>/relay/*` 才注册。
-    #
-    # **名字是历史遗留**：2026-09-30 之前它管的是"中转转发"（用户把自己的 key 交上来、
-    # 我们替他把请求转给上游）。转发整块删掉之后，这个开关守的是记账那几组接口。
-    # 改名字要动服务器上的 `FORUM_ENABLE_RELAY` 和部署脚本，等下次一起改；
-    # `/health` 里那个 `relayEnabled` 同理。
-    relay_enabled: bool = False
-    # 应用内 AI 智能体。**和上面的记账开关分开**：两件事的风险与用途都不一样。
-    agent_enabled: bool = False
-    # 启动时把内置的价目种子录进去（幂等）。默认关闭：价目是**数据**不是代码，
-    # 自动写入生产库会让「这批价是哪来的」变成一个没人说得清的问题。
-    pricing_seed: bool = False
-    # 应用内 AI 智能体。用的是**我们自己的**模型 key（不是用户的上游 key），
-    # 所以它和中转是两套东西、账本也分开（见 agent.py 开头）。
+    # 应用内 AI 智能体。用的是**我们自己的**模型 key（用户不需要交任何 key 给我们），
+    # 它自己那本用量账和用户的账分开（见 agent.py 开头）。
     # key 只从环境变量读：不进数据库、不进日志、不进任何响应。
+    agent_enabled: bool = False
     agent_key: str = ""
     agent_model: str = "deepseek-chat"
     agent_endpoint: str = "https://api.deepseek.com"
-        # 智能体每次问答都要花我们的钱，所以限流比转发更严。
+    # 智能体每次问答都要花我们的钱，所以限流比别的接口严。
     agent_requests_per_minute: int = 10
 
     @classmethod
     def from_environment(cls):
-        # `FORUM_RELAY_ALLOWED_HOSTS` / `_ALLOW_PRIVATE` / `_SELF_HOSTS` /
-        # `_REQUESTS_PER_MINUTE` 四个变量**已经不起作用**了（2026-09-30）：
-        # 它们是给"转发到用户自己的上游"做 SSRF 防护与限流的，那条路整块删掉之后
-        # 没有东西可防。env 文件里留着这四个不会报错，但也不会生效——
-        # `FORUM_RELAY_REQUESTS_PER_MINUTE` 这个名字现在只出现在旧文档里。
-        return cls(os.getenv("FORUM_DATA_DIR", "./runtime"),
-                   os.getenv("FORUM_PUBLIC_ORIGIN", ""),
-                   os.getenv("FORUM_ENABLE_TEST_SESSIONS", "0") == "1",
-                   os.getenv("FORUM_PUBLIC_API_PREFIX", "/api"),
-                   os.getenv("FORUM_NEWS_DATABASE", ""),
-                   os.getenv("FORUM_ENABLE_RELAY", "0") == "1",
-                   os.getenv("FORUM_ENABLE_AGENT", "0") == "1",
-                   os.getenv("FORUM_PRICING_SEED", "0") == "1",
-                   os.getenv("FORUM_AGENT_KEY", ""),
-                   os.getenv("FORUM_AGENT_MODEL", "deepseek-chat"),
-                   os.getenv("FORUM_AGENT_ENDPOINT", "https://api.deepseek.com"),
-                   int(os.getenv("FORUM_AGENT_REQUESTS_PER_MINUTE", "10")))
+        # 变量前缀 2026-09-30 从 `MODELPILOT_*` 改成 `MODELPILOT_*`（和包名一起改的）。
+        # 老名字**不再读**：服务器上的 env 文件在同一个部署里换成新名字，
+        # 所以不会出现"改了一半、服务用默认值静默起来"的情况。
+        return cls(os.getenv("MODELPILOT_DATA_DIR", "./runtime"),
+                   os.getenv("MODELPILOT_PUBLIC_ORIGIN", ""),
+                   os.getenv("MODELPILOT_ENABLE_TEST_SESSIONS", "0") == "1",
+                   os.getenv("MODELPILOT_PUBLIC_API_PREFIX", "/api"),
+                   os.getenv("MODELPILOT_NEWS_DATABASE", ""),
+                   os.getenv("MODELPILOT_ENABLE_AGENT", "0") == "1",
+                   os.getenv("MODELPILOT_AGENT_KEY", ""),
+                   os.getenv("MODELPILOT_AGENT_MODEL", "deepseek-chat"),
+                   os.getenv("MODELPILOT_AGENT_ENDPOINT", "https://api.deepseek.com"),
+                   int(os.getenv("MODELPILOT_AGENT_REQUESTS_PER_MINUTE", "10")))
 
     @property
-    def relay_prefix(self):
-        """记账与智能体的路由挂在公共前缀下面：`/api/relay` 或 `/test-api/relay`。
+    def agent_prefix(self):
+        """智能体的路由挂在公共前缀下面：`/api/agent` 或 `/test-api/agent`。
 
-        路径里那个 `relay` 是历史字面量（App 的 `ServerApi`、文档、部署脚本都写死了它），
-        和"中转"这件事已经没有关系。"""
-        return self.public_api_prefix.rstrip("/") + "/relay"
+        2026-09-30 之前是 `/api/relay`——那套记账接口删掉之后，`relay` 这个
+        字面量就没有任何意义了（只剩智能体），所以一起改掉。App 侧目前**没有**
+        调智能体，所以这次改动不需要动客户端；将来 App 要接的时候用新前缀。
+        """
+        return self.public_api_prefix.rstrip("/") + "/agent"
 
 
 
@@ -171,12 +156,17 @@ def create_app(settings=None, verifier=None, day_provider=None):
     origin = settings.public_origin.rstrip("/")
     parsed = urlsplit(origin)
     if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username:
-        raise ValueError("FORUM_PUBLIC_ORIGIN must be an HTTPS origin, e.g. https://43.140.212.47")
+        raise ValueError("MODELPILOT_PUBLIC_ORIGIN must be an HTTPS origin, e.g. https://43.140.212.47")
     if settings.public_api_prefix not in {"/api", "/test-api"}:
         raise ValueError("Unsupported public API prefix")
     if settings.test_sessions_enabled and settings.public_api_prefix != "/test-api":
         raise ValueError("Anonymous test sessions require the isolated /test-api service")
     store = Store(settings.data_dir, settings.public_api_prefix)
+    # **把废弃的表从老库里删掉**（幂等，见 `schema.drop_obsolete_tables`）。
+    # 放在这里而不是某个业务模块的 `__init__`：它不属于任何一块功能，
+    # 而且必须在任何查询之前跑完——那些表里有 relay_secrets（用户上游 key 明文）。
+    with store.connect(write=True) as db:
+        drop_obsolete_tables(db)
     # 账号归我们：用自己的 `accounts` 表。**没有第二条路**——
     # `verifier` 只是测试注入点（单测里不想真注册账号时用），生产永远是 `TableAuth`。
     auth = verifier or TableAuth(store)
@@ -209,23 +199,14 @@ def create_app(settings=None, verifier=None, day_provider=None):
     # 智能体和转发是两个开关、两个 router（见 `build_agent_router` 的注释）。
     # **顺序仍然重要**：兜底转发路由 `/{path:path}` 必须最后注册——
     # `APIRouter` 按路径长度排序，它比 `/keys`、`/agent/ask` 都短，
-    # 先注册的话会把那些具体路径全吃掉。
-    # **账号路由永远注册**，而且排在中转那套之前——中转的兜底路由
-    # `/{path:path}` 会吃掉具体路径，顺序错了登录接口就 404。
+    # **账号路由永远注册。** 以前这里还有一条 `/{path:path}` 兜底转发，逼着人
+    # 反复交代"必须最后注册"；那条路删掉之后，路由表只剩两个具体前缀，
+    # 顺序不再是个坑。
     app.include_router(build_account_router(settings, store), prefix=settings.public_api_prefix)
 
     if settings.agent_enabled:
-        app.include_router(build_agent_router(settings, store, Pricing(store),
-                                             day_provider=day_provider),
-                           prefix=settings.relay_prefix)
-    if settings.relay_enabled:
-        if settings.pricing_seed:
-            install_seed(store, Pricing(store))
-        # **没有兜底转发了**（2026-09-30）：原来这里还注册一条 `/{path:path}`，
-        # 把客户端的请求原样转给"用户自己的上游"。那条路连同 `/keys` 一起删了，
-        # 所以现在也不需要再操心"兜底路由必须最后注册"这个顺序问题。
-        app.include_router(build_api_router(settings, store, day_provider=day_provider),
-                           prefix=settings.relay_prefix)
+        app.include_router(build_agent_router(settings, store, day_provider=day_provider),
+                           prefix=settings.agent_prefix)
 
     @app.get("/health")
     def health():
@@ -237,7 +218,6 @@ def create_app(settings=None, verifier=None, day_provider=None):
                 "newsLastCollectedAt": metadata.get("newsLastCollectedAt"),
                 "newsSourceErrors": json.loads(metadata.get("newsSourceErrors", "{}")),
                 "testSessionsEnabled": settings.test_sessions_enabled,
-                "relayEnabled": settings.relay_enabled,
                 # 只报「配没配」，**永远不报 key 本身**。
                 "agentConfigured": bool(settings.agent_key),
                 "agentModel": settings.agent_model}

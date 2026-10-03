@@ -11,9 +11,6 @@ import com.mobilegroup20.modelpilot.contract.model.PricingRate;
 import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
 import com.mobilegroup20.modelpilot.contract.model.UsageCall;
-import com.mobilegroup20.modelpilot.contract.tool.CompareResult;
-import com.mobilegroup20.modelpilot.contract.tool.Coverage;
-import com.mobilegroup20.modelpilot.contract.tool.UsageSummary;
 import com.mobilegroup20.modelpilot.data.repository.UsageRepository;
 import com.mobilegroup20.modelpilot.util.TimeUtils;
 
@@ -78,60 +75,6 @@ public class StubUsageRepository implements UsageRepository {
     }
 
     @Override
-    public LiveData<UsageSummary> summary(String uid, String from, String to,
-                                          UsageSummary.GroupBy groupBy) {
-        UsageSummary out = new UsageSummary();
-        out.groupBy = groupBy;
-        out.coverage = coverageOf(from, to);
-        out.rateVersions.add(RATE_VERSION);
-
-        // 桩实现只做「按天」这一种分组，另外两种留给真实现——反正调用方看到的
-        // 是同一个 UsageSummary，换实现不影响上层。
-        for (String day : TimeUtils.daysBetween(from, to)) {
-            UsageSummary.Row row = new UsageSummary.Row();
-            row.key = day;
-            for (DailyUsage d : sampleDay(uid, day)) {
-                row.tokens.add(TokenBundle.from(d));
-                row.calls += d.calls;
-                row.costMicros += d.costMicros;
-            }
-            row.rateVersion = RATE_VERSION;
-            out.totals.add(row.tokens);
-            out.rows.add(row);
-        }
-        return live(out);
-    }
-
-    @Override
-    public LiveData<CompareResult> compare(String uid, String from, String to,
-                                           CompareResult.Metric metric) {
-        CompareResult out = new CompareResult();
-        out.from = from;
-        out.to = to;
-        out.metric = metric;
-        out.coverage = coverageOf(from, to);
-        out.rateVersions.add(RATE_VERSION);
-
-        for (Provider provider : Provider.values()) {
-            CompareResult.Row row = new CompareResult.Row();
-            row.provider = provider;
-            row.model = modelOf(provider);
-            for (String day : TimeUtils.daysBetween(from, to)) {
-                for (DailyUsage d : sampleDay(uid, day)) {
-                    if (d.provider != provider) {
-                        continue;
-                    }
-                    row.tokens.add(TokenBundle.from(d));
-                    row.calls += d.calls;
-                    row.costMicros += d.costMicros;
-                }
-            }
-            out.rows.add(row);
-        }
-        return live(out);
-    }
-
-    @Override
     public LiveData<PricingRate> rateFor(Provider provider, String model, String day) {
         PricingRate rate = new PricingRate();
         rate.provider = provider;
@@ -190,16 +133,6 @@ public class StubUsageRepository implements UsageRepository {
             default:
                 throw new IllegalArgumentException("未知提供方: " + provider);
         }
-    }
-
-    /** 桩的数据总是「每天都有」，所以缺失列表是空的。真实现要如实填。 */
-    private static Coverage coverageOf(String from, String to) {
-        Coverage c = new Coverage();
-        c.from = from;
-        c.to = to;
-        List<String> days = TimeUtils.daysBetween(from, to);
-        c.daysWithData = days.size();
-        return c;
     }
 
     private static <T> LiveData<T> live(T value) {

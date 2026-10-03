@@ -8,9 +8,9 @@ from PIL import Image
 import pytest
 
 from conftest import verifier
-from tokentrail_forum.app import Settings, create_app
-from tokentrail_forum.news_job import cleanup_unused_images, import_articles
-from tokentrail_forum.store import now_ms
+from modelpilot_forum.app import Settings, create_app
+from modelpilot_forum.news_job import cleanup_unused_images, import_articles
+from modelpilot_forum.store import now_ms
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@
 
 | | 中转 | 智能体（这个模块） |
 |---|---|---|
-| 用谁的 key | **用户的**（他填的上游 key，存在服务端） | **我们自己的**（`FORUM_AGENT_KEY`） |
+| 用谁的 key | **用户的**（他填的上游 key，存在服务端） | **我们自己的**（`MODELPILOT_AGENT_KEY`） |
 | 为什么存在 | 采集用户的编码用量 | 回答问题 |
 | 用量归属 | 用户的编码消耗，进他的日汇总/预算/结算 | **agent 自己的开销，绝不能混进用户的编码用量** |
 
@@ -24,7 +24,7 @@ separate ledger, excluded from coding-agent totals and game resources」。
 大纲 §8 写着 "no client holds a model key"，`data/remote/package-info.java` 也写着
 「客户端不持有建议服务调模型用的那个 key」。所以：
 
-- key 从环境变量读（`FORUM_AGENT_KEY`），**不进数据库、不进日志、不进响应**；
+- key 从环境变量读（`MODELPILOT_AGENT_KEY`），**不进数据库、不进日志、不进响应**；
 - 客户端只发问题，服务端负责调用；
 - 没配 key 时接口返回 503 并说明原因，**而不是拿别的东西凑一个答案**。
 
@@ -44,11 +44,8 @@ from fastapi import HTTPException
 
 from .agent_tools import SCHEMAS as TOOL_SCHEMAS
 from .agent_tools import describe_result, execute, parse_arguments
-from .pricing import cost_micros as pricing_cost_micros
 from .usage import split_usage
-from .usage_store import UTC_TO_FINANCIAL
-from .budgets import month_bounds
-from .seasons import day_millis_range
+from .schema import UTC_TO_FINANCIAL, day_millis_range
 from .store import now_ms
 
 SCHEMA = """
@@ -112,11 +109,11 @@ class Agent:
         self.model = model
         self.endpoint = endpoint.rstrip("/")
         self.client = client
-        # 「今天」要能注入，和 `seasons.Seasons` 同一个理由：提示词里那句
-        # "Today is ..." 直接决定模型把「3 号」算到哪一年，而测试没法改系统时钟。
-        # 默认还是真实时区的今天，生产行为一个字不变。
+        # 「今天」要能注入：提示词里那句 "Today is ..." 直接决定模型把「3 号」
+        # 算到哪一年，而测试没法改系统时钟。默认还是真实时区的今天，
+        # 生产行为一个字不变。
         if day_provider is None:
-            from .seasons import today_in_financial_timezone
+            from .schema import today_in_financial_timezone
             day_provider = today_in_financial_timezone
         self.today = day_provider
         # 写入时间也要能注入：注入的"今天"和真实的"现在"不是同一天时（测试里就是
@@ -132,8 +129,13 @@ class Agent:
         """没配 key 就不该假装能回答。`configured` 是公开可读的（健康检查用）。"""
         return bool(self.api_key)
 
-    def own_cost_ledger(self, digest, since=0):
-        """智能体自己的用量合计。**和中转的 `relay_usage` 完全分开。**"""
+    def own_usage_ledger(self, digest, since=0):
+        """智能体自己这个月用了多少 token。**和用户的用量完全分开。**
+
+        2026-09-30 之前这个方法叫 `own_usage_ledger`：那时候还有价目表，能顺手算出
+        金额。价目随记账一起删掉之后只剩 token——**算不出钱就不报钱**，
+        而不是填个 0（`CONTRACTS.md` §4）。
+        """
         with self.store.connect() as db:
             row = db.execute("""SELECT SUM(input) AS input, SUM(cache_read) AS cache_read,
                 SUM(cache_write) AS cache_write, SUM(output) AS output, SUM(calls) AS calls
@@ -142,41 +144,11 @@ class Agent:
                 "cacheWrite": row["cache_write"] or 0, "output": row["output"] or 0,
                 "calls": row["calls"] or 0}
 
-    def month_cost_micros(self, digest, pricing, month):
-        """这个月智能体自己花了多少钱。
-
-        `AdviceRepository.ownCostThisMonth` 要的就是这个数。和编码用量的成本
-        用**同一套价目表和同一套换算**，但走的表不同、聚合也不同——
-        两边混起来的话，「问 agent 花了多少钱」会把用户的编码开销算进去。
-        """
-        first, following = month_bounds(month)
-        start, _ = day_millis_range(first)
-        above, _ = day_millis_range(following)
-        with self.store.connect() as db:
-            rows = db.execute("""SELECT date(created/1000 + ?, 'unixepoch') AS day,
-                model, SUM(input) AS input, SUM(cache_read) AS cache_read,
-                SUM(cache_write) AS cache_write, SUM(output) AS output
-                FROM agent_usage WHERE user_id=? AND created>=? AND created<?
-                GROUP BY day, model""",
-                (UTC_TO_FINANCIAL, digest, start, above)).fetchall()
-        total = 0
-        for row in rows:
-            rate = pricing.rate_for("DEEPSEEK", row["model"], row["day"])
-            if rate is None:
-                # 算不出价就**不猜**。返回 None 让调用方说「价格未知」，
-                # 而不是把这一段当 0 加进去（那样总额偏低而看不出来）。
-                return None
-            amount = cost_of(rate, row)
-            if amount is None:
-                # 费率行本身缺某个桶。同一个判断，同样不猜。
-                return None
-            total += amount
-        return total
 
     def ask(self, digest, question, model=None, context=None, max_turns=4):
         """问一句，拿一次回答。**带工具调用循环。**
 
-        `context` 是工具执行需要的东西（usage / pricing / budgets / store / uid）。
+        `context` 是工具执行需要的东西（store / uid）。
         传 None 时**不注册工具**——那样模型只能凭自己答，而且 `missingData` 里会
         明说没有数据（这也是没接工具时那条测试验证的行为）。
 
@@ -295,15 +267,3 @@ class Agent:
                                headers=headers, json=payload)
 
 
-def cost_of(rate, row):
-    """按一版费率算一行 `agent_usage` 的成本。
-
-    **复用 `pricing.cost_micros`，不另写一遍乘法。** 那个函数负责
-    「缺任何一桶就整体算不出来」那条口径——这里再实现一次的话，
-    两处对「什么叫算不出来」的判断迟早会不一样，而症状是同一笔钱两个答案。
-    `row` 的列名是下划线（`cache_read`），那个函数要的是契约的驼峰
-    （`cacheRead`），所以这里转一次。
-    """
-    return pricing_cost_micros({
-        "input": row["input"], "cacheRead": row["cache_read"],
-        "cacheWrite": row["cache_write"], "output": row["output"]}, rate)

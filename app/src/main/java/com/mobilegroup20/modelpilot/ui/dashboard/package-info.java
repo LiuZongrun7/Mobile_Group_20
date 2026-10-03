@@ -8,7 +8,7 @@
  *
  * <p><b>依赖记录的部分在没有数据时要显示空状态，不能显示 0。</b>
  * 「这天没花钱」和「这天没记录」是两件事，画成一样的柱子会让人得出相反结论。
- * 缺失的日期从 {@link com.mobilegroup20.modelpilot.contract.tool.Coverage#daysMissing} 拿。
+ * 缺失的日期由 `DashboardUsage` 自己按「这个月已经过完的天」算（`daysWithRecords`）。
  *
  * <p>所有金额都标明是估算，并能点回费率来源页面。
  */

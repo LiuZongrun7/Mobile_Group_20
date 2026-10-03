@@ -2,32 +2,33 @@
 
 ## 两条硬约束（`CONTRACTS.md` §6）
 
-1. **全部只读，按白名单分发，名单外一律拒绝。** 名单是 `contract/tool/AgentTool.java`
-   那五个函数名。这里不额外放行任何东西——模型能调的只有这五个。
+1. **全部只读，按白名单分发，名单外一律拒绝。** 这里不额外放行任何东西——
+   模型能调的只有 `ALLOWED` 里列出的那些（2026-09-30 起是论坛那两个）。
 2. **`uid` 不作为任何工具的参数。** 由服务端从请求凭据解出来传进来
    （`execute` 的 `digest` 参数），模型传什么都不影响算谁的账。
    **工具的 JSON Schema 里也没有 `uid`**——模型看得见的参数表里不存在这个东西，
    所以它没有机会「传一个 uid 试试」。
 
-## 哪些工具能给出真实数据（这一步的诚实边界）
+## 现在还剩哪些工具（2026-09-30 收缩之后）
 
 | 工具 | 状态 |
 |---|---|
-| `getUsageSummary` | ✅ 走 `summary.summarize`，和 HTTP 接口同一套聚合 |
-| `compareAgentCosts` | ✅ 走 `summary.compare`，同上 |
-| `getBudgetStatus` | ✅ 走 `Budgets.status`（花销现算，算不出价会说明） |
 | `getForumHighlights` | ✅ 官方帖（我们采集的资讯）+ 社区热帖，**两类各自带 `source`** |
-| `getMyThreads` | ✅ 靠 `users.team_uid` 的绑定关系查；没绑过会如实说「查不到」 |
+| `getMyThreads` | ✅ 按账号的 `user_id` 查自己发过的帖子与收到的回复 |
 
-**`getMyThreads` 的身份曾经是两套，靠 `users.team_uid` 连起来。** 智能体用 relay key，
-而论坛帖子的 `author_uid` 是**团队账号**的 uid（团队后端给的，改不了）。
-所以绑定关系是必需的，没有它查不了。**没绑过时返回结构化的「不知道」而不是空列表**：
+另外三个（`getUsageSummary` / `getBudgetStatus` / `compareAgentCosts`）读的是用量、
+预算、价目——那三组接口与表随记账一起删掉了。**没有数据源的工具留着只会让模型编
+数字**，所以整块删了；将来"后端替用户调模型"那条路写出来、账重新开始记之后，
+再按当时的表结构重新设计它们。
+
+**`getMyThreads` 查不到时返回结构化的「不知道」，而不是空列表**：
 空列表读起来是「你没发过帖子」，真相是「我查不到」。
 
-## 覆盖度必须带出来
+## 查不到就说查不到
 
-每个返回数字的工具都要带 `coverage`，服务端把它拼进答案的 `missingData`。
 这是「agent 承认自己不知道」的**机制保证**，不靠提示词祈祷模型老实。
+以前每个带数字的工具还要带 `coverage`，那些工具删掉之后，这条规矩只剩
+`getMyThreads` 的 `unavailable` / `reason` 一个落点。
 """
 import json
 from dataclasses import dataclass
@@ -35,46 +36,20 @@ from datetime import date
 
 from fastapi import HTTPException
 
-from .budgets import Budgets, month_bounds
-from .pricing import cost_micros
-from .seasons import day_millis_range
 from .store import reply_json
 
 # 工具白名单。**必须和 `contract/tool/AgentTool.java` 的 functionName 一一对应。**
 # 多一个少一个都会让「模型问了个不存在的工具」变成一句内部错误。
-ALLOWED = ("getUsageSummary", "getBudgetStatus", "compareAgentCosts",
-           "getForumHighlights", "getMyThreads")
+# **2026-09-30 起只剩论坛那两个。** 另外三个（getUsageSummary / getBudgetStatus /
+# compareAgentCosts）读的是用量、预算、价目——那三组接口与表随记账一起删了，
+# 留一个没有数据源的工具只会让模型编数字。将来"后端替用户调模型"那条路写出来、
+# 账重新开始记之后，再按当时的表结构重新设计它们（别照抄现在这份）。
+ALLOWED = ("getForumHighlights", "getMyThreads")
 
 # 给模型的工具定义（OpenAI function-calling 格式，DeepSeek 兼容）。
 #
 # **注意每个 schema 里都没有 `uid`**：模型看不见它，也就传不了它。
 SCHEMAS = (
-    {"type": "function", "function": {
-        "name": "getUsageSummary",
-        "description": "查一段日期区间的用量汇总，按天 / 模型 / 提供方分组。"
-                       "返回四类 token 和成本，并说明区间里哪些天没有记录。",
-        "parameters": {"type": "object", "properties": {
-            "from": {"type": "string", "description": "起始日，yyyy-MM-dd，含当天"},
-            "to": {"type": "string", "description": "结束日，yyyy-MM-dd，含当天"},
-            "groupBy": {"type": "string", "enum": ["DAY", "MODEL", "PROVIDER"],
-                        "description": "分组维度，默认 MODEL"},
-        }, "required": ["from", "to"], "additionalProperties": False}}},
-    {"type": "function", "function": {
-        "name": "getBudgetStatus",
-        "description": "查某个月的预算上限、现算花销、覆盖度和是否越过警告线。",
-        "parameters": {"type": "object", "properties": {
-            "month": {"type": "string", "description": "月份，yyyy-MM"},
-        }, "required": ["month"], "additionalProperties": False}}},
-    {"type": "function", "function": {
-        "name": "compareAgentCosts",
-        "description": "在同一区间里对比各提供方与模型的成本、token 用量和单价。"
-                       "只比成本和用量，不评价回答质量。",
-        "parameters": {"type": "object", "properties": {
-            "from": {"type": "string", "description": "起始日，yyyy-MM-dd，含当天"},
-            "to": {"type": "string", "description": "结束日，yyyy-MM-dd，含当天"},
-            "metric": {"type": "string", "enum": ["COST", "TOKENS", "COST_PER_1M"],
-                       "description": "排序指标，默认 COST"},
-        }, "required": ["from", "to"], "additionalProperties": False}}},
     {"type": "function", "function": {
         "name": "getForumHighlights",
         "description": "读官方发布的资讯（模型与价格公告）以及社区里的热门帖子。"
@@ -103,16 +78,11 @@ class ToolContext:
     改签名换不来什么，但**新的代码只该用 `uid`**。
 
 
-    - `digest` —— 账号身份（`user_id`）。用量、预算、赛季都按它过滤。
-    - `uid` —— 账号的 `user_id`。帖子的 `author_uid` 就是这个（同一个值）。
-      `CONTRACTS.md` §5 明确把两套分开，所以 `getMyThreads` 现在查不了（见下）。
+    - `digest` —— 账号身份（`user_id`）。工具的过滤条件都按它。
+    - `uid` —— 同一个值；帖子的 `author_uid` 存的就是它，`getMyThreads` 直接查。
     """
     digest: str
     uid: str | None
-    usage: object
-    pricing: object
-    seasons: object
-    budgets: object
     store: object
     # 「今天」由路由层注入（`build_agent_router` 里那个 `today`）。给默认值是为了
     # 单独调工具时也能跑：那时退回真实时区的今天，生产路径永远走注入的那个。
@@ -135,84 +105,6 @@ def execute(name, arguments, **context):
     handler = _HANDLERS[name]
     return handler(arguments or {}, **context)
 
-
-def _range(arguments):
-    from_day = arguments.get("from")
-    to_day = arguments.get("to")
-    if not isinstance(from_day, str) or not isinstance(to_day, str):
-        raise HTTPException(400, "from and to are required (yyyy-MM-dd)")
-    return from_day, to_day
-
-
-def _coverage_of(payload):
-    """把工具结果里的 `coverage` 摘出来。返回 `(coverage, 缺失说明或 None)`。"""
-    coverage = payload.get("coverage")
-    if not isinstance(coverage, dict):
-        return None, None
-    missing = coverage.get("daysMissing") or []
-    if not missing:
-        return coverage, None
-    # 只报天数和首尾，别把三十个日期塞进回答——模型会照抄进正文。
-    summary = f"{coverage['from']} 到 {coverage['to']} 之间有 {len(missing)} 天没有记录"
-    return coverage, summary
-
-
-def _usage_summary(arguments, **context):
-    from .summary import summarize
-    from_day, to_day = _range(arguments)
-    payload = summarize(context["usage"], context["pricing"], context["digest"],
-                        from_day, to_day, arguments.get("groupBy") or "MODEL")
-    coverage, gap = _coverage_of(payload)
-    # 算不出价这件事也要说出去（§4：算不出价和花了 0 元要分得开）
-    if not payload.get("pricingComplete", True):
-        gap = (gap + "；" if gap else "") + \
-            f"有些模型没有价目（{', '.join(payload.get('unpricedModels') or [])}），成本不完整"
-    return payload, {
-        "display": f"{payload['from']} 到 {payload['to']} 共 {payload['totals']['input']} 输入 token，"
-                   f"成本 {payload['costMicros']} 微美元",
-        "basis": gap or "区间内每天都有记录",
-        "fromTool": "getUsageSummary"}
-
-
-def _budget_status(arguments, **context):
-    month = arguments.get("month")
-    if not isinstance(month, str) or len(month) != 7:
-        raise HTTPException(400, "month is required (yyyy-MM)")
-    from .seasons import today_in_financial_timezone
-    today = context.get("today") or today_in_financial_timezone
-    payload = context["budgets"].status(context["digest"], month, today())
-    gaps = []
-    if payload.get("unpricedDays"):
-        gaps.append(f"{len(payload['unpricedDays'])} 天算不出价，所以花销不完整")
-    coverage = payload.get("coverage") or {}
-    if coverage.get("daysMissing"):
-        gaps.append(f"{len(coverage['daysMissing'])} 天没有记录")
-    return payload, {
-        "display": f"{month} 上限 {payload.get('capMicros')} 微美元，"
-                   f"现算花销 {payload.get('spentMicros')} 微美元"
-                   + ("（未设预算）" if not payload.get("configured") else ""),
-        "basis": "；".join(gaps) if gaps else "本月每天都有记录且都能算价",
-        "fromTool": "getBudgetStatus"}
-
-
-def _compare(arguments, **context):
-    from .summary import compare
-    from_day, to_day = _range(arguments)
-    payload = compare(context["usage"], context["pricing"], context["digest"],
-                      from_day, to_day, arguments.get("metric") or "COST")
-    coverage, gap = _coverage_of(payload)
-    if not payload.get("pricingComplete", True):
-        gap = (gap + "；" if gap else "") + \
-            f"这些模型没有价目：{', '.join(payload.get('unpricedModels') or [])}"
-    leaders = payload.get("rows") or []
-    top = leaders[0] if leaders else None
-    return payload, {
-        "display": (f"{payload['from']} 到 {payload['to']} 共 {len(leaders)} 组，"
-                    f"按 {payload['metric']} 排首位的是 "
-                    f"{top['model'] if top else '（没有数据）'}")
-                   if top else f"{payload['from']} 到 {payload['to']} 没有可用记录",
-        "basis": gap or "区间内每天都有记录且都能算价",
-        "fromTool": "compareAgentCosts"}
 
 
 def _forum_highlights(arguments, **context):
@@ -296,9 +188,6 @@ def _my_threads(arguments, **context):
 
 
 _HANDLERS = {
-    "getUsageSummary": _usage_summary,
-    "getBudgetStatus": _budget_status,
-    "compareAgentCosts": _compare,
     "getForumHighlights": _forum_highlights,
     "getMyThreads": _my_threads,
 }
@@ -324,12 +213,6 @@ def parse_arguments(raw):
 # 回给模型的字段白名单。**必须瘦身**：日汇总可能有几十行、热帖正文可能几千字，
 # 原样塞回去会让下一轮的上下文爆掉，而且花的还是我们的钱。
 _RESULT_FIELDS = {
-    "getUsageSummary": ("from", "to", "groupBy", "totals", "costMicros",
-                        "pricingComplete", "unpricedModels", "rateVersions", "coverage"),
-    "getBudgetStatus": ("month", "configured", "capMicros", "warnAtRatio", "spentMicros",
-                        "pricingAvailable", "unpricedDays", "coverage"),
-    "compareAgentCosts": ("from", "to", "metric", "rows", "coverage",
-                          "pricingComplete", "unpricedModels"),
     "getForumHighlights": ("posts", "since"),
     "getMyThreads": ("threads", "unavailable", "reason"),
 }

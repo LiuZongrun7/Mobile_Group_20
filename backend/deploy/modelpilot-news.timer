@@ -6,7 +6,7 @@ OnBootSec=2min
 OnCalendar=hourly
 RandomizedDelaySec=60
 Persistent=true
-Unit=tokentrail-news.service
+Unit=modelpilot-news.service
 
 [Install]
 WantedBy=timers.target

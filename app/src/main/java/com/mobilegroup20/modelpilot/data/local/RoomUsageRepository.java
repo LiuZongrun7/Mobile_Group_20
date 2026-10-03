@@ -7,10 +7,8 @@ import androidx.lifecycle.Transformations;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -20,9 +18,6 @@ import com.mobilegroup20.modelpilot.contract.model.PricingRate;
 import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
 import com.mobilegroup20.modelpilot.contract.model.UsageCall;
-import com.mobilegroup20.modelpilot.contract.tool.CompareResult;
-import com.mobilegroup20.modelpilot.contract.tool.Coverage;
-import com.mobilegroup20.modelpilot.contract.tool.UsageSummary;
 import com.mobilegroup20.modelpilot.data.PricingSource;
 import com.mobilegroup20.modelpilot.data.repository.UsageRepository;
 import com.mobilegroup20.modelpilot.util.TimeUtils;
@@ -161,20 +156,6 @@ public class RoomUsageRepository implements UsageRepository {
                 totals -> totals == null ? new TokenBundle() : totals.toTokenBundle());
     }
 
-    @Override
-    public LiveData<UsageSummary> summary(String uid, String from, String to,
-                                          UsageSummary.GroupBy groupBy) {
-        return Transformations.map(db.dailyUsageDao().observeRange(uid, from, to),
-                rows -> buildSummary(from, to, groupBy, rows));
-    }
-
-    @Override
-    public LiveData<CompareResult> compare(String uid, String from, String to,
-                                           CompareResult.Metric metric) {
-        return Transformations.map(db.dailyUsageDao().observeRange(uid, from, to),
-                rows -> buildCompare(from, to, metric, rows));
-    }
-
     /**
      * 查价。
      *
@@ -233,157 +214,6 @@ public class RoomUsageRepository implements UsageRepository {
     }
 
     // ------------------------------------------------------------ 组装返回值
-
-    /**
-     * 把 {@code daily_usage} 的行拼成 {@link UsageSummary}。
-     *
-     * <p>完整度不额外查一次数据库：区间里<b>有行就是那天有记录，没行就是没记录</b>，
-     * 这正是 {@link Coverage#daysMissing} 的定义（「一条记录都没有」，
-     * 而不是「用量为 0」——用量为 0 也会有一行，因为那天有调用）。
-     */
-    private static UsageSummary buildSummary(String from, String to,
-                                             UsageSummary.GroupBy groupBy,
-                                             List<DailyUsageEntity> rows) {
-        UsageSummary out = new UsageSummary();
-        out.groupBy = groupBy;
-
-        Map<String, UsageSummary.Row> grouped = new LinkedHashMap<>();
-        for (DailyUsageEntity e : rows) {
-            String key = summaryKeyOf(e, groupBy);
-            UsageSummary.Row row = grouped.get(key);
-            if (row == null) {
-                row = new UsageSummary.Row();
-                row.key = summaryLabelOf(e, groupBy);
-                row.provider = groupBy == UsageSummary.GroupBy.DAY ? null : e.provider;
-                row.model = groupBy == UsageSummary.GroupBy.MODEL ? e.model : null;
-                grouped.put(key, row);
-            }
-            row.tokens.add(TokenBundle.from(e.toModel()));
-            row.calls += e.calls;
-            row.costMicros += e.costMicros;
-            // 行是按天升序来的，所以最后赋值的那一版就是最新的那版。
-            // 跨了涨价日的分组只能留一个版本号，逐日的准确版本在 rateVersions 里。
-            if (e.rateVersion != null) {
-                row.rateVersion = e.rateVersion;
-            }
-        }
-
-        out.rows.addAll(grouped.values());
-        for (UsageSummary.Row row : out.rows) {
-            out.totals.add(row.tokens);
-        }
-        out.coverage = coverageOf(from, to, rows);
-        out.rateVersions.addAll(rateVersionsOf(rows));
-        return out;
-    }
-
-    /**
-     * 把 {@code daily_usage} 的行拼成 {@link CompareResult}，按指标从大到小排。
-     *
-     * <p>排在最前面的是花得最多的那个——这个方向是刻意的：问「比一比」的人
-     * 通常想知道「谁最贵」，而不是「谁最便宜」。
-     */
-    private static CompareResult buildCompare(String from, String to,
-                                              CompareResult.Metric metric,
-                                              List<DailyUsageEntity> rows) {
-        CompareResult out = new CompareResult();
-        out.from = from;
-        out.to = to;
-        out.metric = metric;
-        out.coverage = coverageOf(from, to, rows);
-        out.rateVersions.addAll(rateVersionsOf(rows));
-
-        Map<String, CompareResult.Row> grouped = new LinkedHashMap<>();
-        for (DailyUsageEntity e : rows) {
-            String key = keyOf(e.provider, e.model);
-            CompareResult.Row row = grouped.get(key);
-            if (row == null) {
-                row = new CompareResult.Row();
-                row.provider = e.provider;
-                row.model = e.model;
-                grouped.put(key, row);
-            }
-            row.tokens.add(TokenBundle.from(e.toModel()));
-            row.calls += e.calls;
-            row.costMicros += e.costMicros;
-        }
-
-        out.rows.addAll(grouped.values());
-        out.rows.sort((a, b) -> Long.compare(metricValue(b, metric), metricValue(a, metric)));
-        return out;
-    }
-
-    private static long metricValue(CompareResult.Row row, CompareResult.Metric metric) {
-        switch (metric) {
-            case TOKENS:
-                return row.tokens.total();
-            case COST_PER_1M:
-                return row.costPer1MTokensMicros();
-            case COST:
-            default:
-                return row.costMicros;
-        }
-    }
-
-    private static String summaryKeyOf(DailyUsageEntity e, UsageSummary.GroupBy groupBy) {
-        switch (groupBy) {
-            case MODEL:
-                return keyOf(e.provider, e.model);
-            case PROVIDER:
-                return e.provider.name();
-            case DAY:
-            default:
-                return e.day;
-        }
-    }
-
-    private static String summaryLabelOf(DailyUsageEntity e, UsageSummary.GroupBy groupBy) {
-        switch (groupBy) {
-            case MODEL:
-                return e.model;
-            case PROVIDER:
-                return e.provider.displayName;
-            case DAY:
-            default:
-                return e.day;
-        }
-    }
-
-    private static Coverage coverageOf(String from, String to, List<DailyUsageEntity> rows) {
-        Coverage c = new Coverage();
-        c.from = from;
-        c.to = to;
-        Set<String> present = new HashSet<>();
-        for (DailyUsageEntity e : rows) {
-            present.add(e.day);
-        }
-        c.daysWithData = present.size();
-        for (String day : TimeUtils.daysBetween(from, to)) {
-            if (!present.contains(day)) {
-                c.daysMissing.add(day);
-            }
-        }
-        return c;
-    }
-
-    /**
-     * 这个区间里用到了哪几版价目表，去重后按版本号排序。
-     *
-     * <p>跳过 null：null 的意思是「这天没录到价」，不是「一版价目表」。
-     * 哪些天没价要靠 {@code DailyUsage.rateVersion} 逐行看，或者看
-     * {@link Coverage}——这里只回答「用到过哪几版」。
-     */
-    private static List<String> rateVersionsOf(List<DailyUsageEntity> rows) {
-        Set<String> versions = new LinkedHashSet<>();
-        for (DailyUsageEntity e : rows) {
-            if (e.rateVersion != null) {
-                versions.add(e.rateVersion);
-            }
-        }
-        List<String> sorted = new ArrayList<>(versions);
-        Collections.sort(sorted);
-        return sorted;
-    }
 
     private static List<DailyUsage> toModelList(List<DailyUsageEntity> rows) {
         List<DailyUsage> out = new ArrayList<>();
