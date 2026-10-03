@@ -328,15 +328,20 @@ public final class ContextEngine {
      *
      * <p>原消息**不删**（它们还在规范化日志里，用户能翻回去看），只是不再进上下文——
      * "上下文"和"历史"是两件事，混起来就会出现"用户看到的和模型看到的不是一回事"。
+     *
+     * @return 新建的那条记忆。**返回出来是为了让调用方落库时用它自己的 id**：
+     *         如果调用方另算一个 id（比如又拼一遍 `mem-<chatId>-<n>`），
+     *         两处算法哪天不一致，库里就会多出一条永远不被引用、也永远不被覆盖的记忆。
      */
-    public void applyCompression(String fromMessageId, String toMessageId, String summary,
-                                 String madeByProvider, String madeByModel,
-                                 long tokensIn, long tokensOut, long now) {
+    public Memory applyCompression(String fromMessageId, String toMessageId, String summary,
+                                   String madeByProvider, String madeByModel,
+                                   long tokensIn, long tokensOut, long now) {
         Memory memory = new Memory("mem-" + chatId + "-" + memories.size(), chatId,
                 fromMessageId, toMessageId, summary, madeByProvider, madeByModel, now,
                 tokensIn, tokensOut);
         memories.add(memory);
         invalidate();
+        return memory;
     }
 
     /** 用户改了某条记忆：缓存失效，下一轮按新的发。 */

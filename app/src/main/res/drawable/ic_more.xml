@@ -1,0 +1,9 @@
+<!-- 顶栏右边的 `⋮`（重命名 / 删除 / 看这条对话的记忆）。
+     三个点而不是别的图标：这一栏的动作是"这条对话整体上能做的事"，
+     和消息内容无关，三点是这类动作最不容易被误认的画法。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M12,4.5a2,2 0 1,1 0,4 2,2 0 0,1 0,-4zM12,10a2,2 0 1,1 0,4 2,2 0 0,1 0,-4zM12,15.5a2,2 0 1,1 0,4 2,2 0 0,1 0,-4z" />
+</vector>

@@ -1,0 +1,7 @@
+<!-- 出错 / 不完整 / 压过上下文那句提示的底：浅琥珀 + 圆角。
+     为什么不用红色：这三件事里有两件（不完整、压过）**不是错误**，
+     用红色会让人以为整条对话废了。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFF4E0" />
+    <corners android:radius="10dp" />
+</shape>

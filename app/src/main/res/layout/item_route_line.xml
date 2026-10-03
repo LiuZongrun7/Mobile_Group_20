@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  一条路由说明：`✳ Auto → GPT-5.5   Details`（设计稿里那一行）。
+
+  **它是这次回答的元信息，不是装饰**：用户得知道这句话是谁答的、是不是 Auto 挑的，
+  以及（点 Details）为什么挑它。大纲 §6 的 "Explainable Auto" 就落在这一行上。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="14dp"
+    android:paddingBottom="2dp">
+
+    <TextView
+        android:id="@+id/route_mark"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:background="@drawable/bg_chat_route_chip"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="✳"
+        android:textColor="#1E7BF6"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/route_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textColor="#3A4A61"
+        android:textSize="13sp"
+        tools:text="Auto → GPT-5.5" />
+
+    <!-- `Details`：点开是这次选型的原因（AutoRouter 的 reason）。
+         **手动选的时候仍然显示**，点开说的是一句"这是你自己选的"——
+         比把链接藏起来好：藏起来用户会以为 Auto 又背着他做了什么。 -->
+    <TextView
+        android:id="@+id/route_details"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:background="?attr/selectableItemBackground"
+        android:paddingStart="4dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="2dp"
+        android:text="@string/chat_route_details"
+        android:textColor="#1E7BF6"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+</LinearLayout>

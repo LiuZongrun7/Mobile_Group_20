@@ -1,0 +1,8 @@
+<!-- 返回。箭头指向左；**不要用 ic_send 转 180°**——那个箭头是"向上"的语义，
+     两者的比例也不同（发送箭头更粗短，返回箭头更细长）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M20,11 L7.8,11 L13.4,5.4 L12,4 L4,12 L12,20 L13.4,18.6 L7.8,13 L20,13 Z" />
+</vector>

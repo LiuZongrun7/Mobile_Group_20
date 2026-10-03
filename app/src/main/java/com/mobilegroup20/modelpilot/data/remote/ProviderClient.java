@@ -187,6 +187,101 @@ public final class ProviderClient {
     }
 
     /**
+     * 同步发一次**非流式**请求，把整段回答拿回来。
+     *
+     * <p><b>只给"压缩上下文"这一处用</b>（摘要生成）。它故意不是流式的：调用方要的是
+     * 一段完整的摘要，逐字吐出来没有意义；而且它跑在后台线程上、没有界面要更新。
+     *
+     * <p><b>会阻塞当前线程</b>（最长到读超时）。绝对不要在调用它时占着主线程——
+     * 这里的 `readTimeout` 是 0（跟流式那套共用客户端），主线程上卡住就是 ANR。
+     *
+     * @return 回答正文（可能为空串；空串由调用方判断成"这次压缩失败"）
+     * @throws ProviderException 上游拒绝或网络失败（分类同流式那条路）
+     */
+    public static String complete(ProviderSpec provider, ModelSpec model, String apiKey,
+                                  RenderedContext context) throws ProviderException {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IllegalArgumentException("Missing API key for " + provider.providerId);
+        }
+        if (!provider.providerId.equals(model.providerId)
+                || !provider.providerId.equals(context.providerId)) {
+            // "防串味"检查和流式那条路一样：把 A 家的渲染结果发到 B 家的地址上，
+            // 上游只会回一个看不懂的 400，而原因在我们这边。
+            throw new IllegalArgumentException("Rendered context does not belong to "
+                    + provider.providerId);
+        }
+        boolean anthropic = provider.adapter == ProviderSpec.Adapter.ANTHROPIC;
+        Request.Builder request = new Request.Builder()
+                .url(endpoint(provider))
+                .post(RequestBody.create(new Gson().toJson(
+                        requestBody(provider, model, context, false)), JSON));
+        if (anthropic) {
+            request.header("x-api-key", apiKey.trim());
+            request.header("anthropic-version", ANTHROPIC_VERSION);
+        } else {
+            request.header("Authorization", "Bearer " + apiKey.trim());
+        }
+        try (Response response = CLIENT.newCall(request.build()).execute()) {
+            if (!response.isSuccessful()) {
+                throw failureOf(response);
+            }
+            ResponseBody body = response.body();
+            if (body == null) {
+                throw ProviderException.network("Provider returned an empty response body", null);
+            }
+            String text = new String(body.bytes(), StandardCharsets.UTF_8);
+            return anthropic ? anthropicText(text) : openAiText(text);
+        } catch (IOException broken) {
+            if (broken instanceof ProviderException) {
+                throw (ProviderException) broken;
+            }
+            throw ProviderException.network("Request failed: " + broken.getMessage(), broken);
+        }
+    }
+
+    /** OpenAI 兼容：`choices[0].message.content`。 */
+    private static String openAiText(String body) throws ProviderException {
+        try {
+            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+            JsonArray choices = array(root, "choices");
+            if (choices == null || choices.size() == 0) {
+                return "";
+            }
+            return nullToEmpty(string(object(choices.get(0).getAsJsonObject(), "message"), "content"));
+        } catch (RuntimeException unreadable) {
+            throw ProviderException.http(200, "unreadable response: " + truncate(body, DETAIL_LIMIT));
+        }
+    }
+
+    /** Anthropic：`content` 里所有 `text` 块的拼接（它还有别的块类型）。 */
+    private static String anthropicText(String body) throws ProviderException {
+        try {
+            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+            JsonArray blocks = array(root, "content");
+            if (blocks == null) {
+                return "";
+            }
+            StringBuilder out = new StringBuilder();
+            for (JsonElement block : blocks) {
+                if (!block.isJsonObject()) {
+                    continue;
+                }
+                String text = string(block.getAsJsonObject(), "text");
+                if (text != null) {
+                    out.append(text);
+                }
+            }
+            return out.toString();
+        } catch (RuntimeException unreadable) {
+            throw ProviderException.http(200, "unreadable response: " + truncate(body, DETAIL_LIMIT));
+        }
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    /**
      * 发一次流式请求。**立刻返回**，结果走 {@code listener}。
      *
      * @param provider 这一家（含 base URL；用户在设置里改过就用他改的，见 {@code ProviderKeys.baseUrl}）
@@ -221,7 +316,8 @@ public final class ProviderClient {
                 .url(endpoint(provider))
                 // 有的网关按 Accept 决定要不要走 SSE；OpenAI 与 Anthropic 的流式接口都认它。
                 .header("Accept", "text/event-stream")
-                .post(RequestBody.create(new Gson().toJson(requestBody(provider, model, context)), JSON));
+                .post(RequestBody.create(new Gson().toJson(requestBody(provider, model, context, true)),
+                        JSON));
         if (anthropic) {
             // Anthropic 用 `x-api-key`，不是 `Authorization: Bearer`。
             request.header("x-api-key", apiKey.trim());
@@ -237,15 +333,18 @@ public final class ProviderClient {
     /**
      * 请求体。各家的差别只有三处（system 位置、工具格式、附件编码），前两处渲染器已经处理好了
      * （后一处也在 payload 里），所以这里只补"发送方式"这一层。
+     *
+     * @param stream true = 流式（压缩用的那次摘要调用传 false）
      */
-    private static JsonObject requestBody(ProviderSpec provider, ModelSpec model, RenderedContext context) {
+    private static JsonObject requestBody(ProviderSpec provider, ModelSpec model,
+                                          RenderedContext context, boolean stream) {
         JsonObject body = new JsonObject();
         body.addProperty("model", model.modelId);
         // messages **原样**搬过去：RenderedContext 里那份 payload 就是"已经能直接发出去"的形态
         // （`docs/CHAT_ENGINE.md` §2.1 的承诺）。在这里动任何一个字段都等于绕过上下文引擎，
         // 而且"发送时零转换"一旦破例，渲染缓存的有效性判断也就跟着不可信了。
         body.add("messages", new Gson().toJsonTree(context.payload.messages));
-        body.addProperty("stream", true);
+        body.addProperty("stream", stream);
         if (provider.adapter == ProviderSpec.Adapter.ANTHROPIC) {
             // Anthropic 的 system 是**顶层字段**（OpenAI 系那条 system 由渲染器放进 messages[0]）。
             if (context.payload.system != null) {
@@ -254,12 +353,15 @@ public final class ProviderClient {
             // `max_tokens` 在 Messages API 里**是必填**，漏了直接 400。
             // 用上下文引擎"给回答留的位置"那个数：两边不一致的话，木桶的账就不对了。
             body.addProperty("max_tokens", ContextEngine.RESERVE_FOR_OUTPUT);
-        } else {
+        } else if (stream) {
             // 不带这一行，OpenAI 在流式响应里**根本不发 usage 块**（usage 只在最后一块给，
             // 而且要你主动要），账本就只能记"未知"。
             // **按家开关**（`ProviderSpec.streamUsage`）：带了而这家不认这个字段会 400，
             // 所以只有实测支持的那几家打开；其余等验证——**不要为了"统一"给六家都塞上**，
             // 那会让某几家直接调不通，而症状是"这家挂了"，很难查回这一行。
+            //
+            // 非流式那一趟（压缩）不带它：非流式的响应**总是**带 usage，
+            // 而这个字段在有的家只被流式接口认，带上反而可能被拒。
             if (provider.streamUsage) {
                 JsonObject streamOptions = new JsonObject();
                 streamOptions.addProperty("include_usage", true);

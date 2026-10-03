@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 模型的一条回答：**不带气泡的正文**（理由见 bg_chat_user_bubble 的注释）。 -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/message_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+    android:textColor="#0B1B33"
+    android:textSize="15sp"
+    android:lineSpacingExtra="3dp"
+    tools:text="Updated the background to blue." />

@@ -28,6 +28,10 @@ public interface ChatDao {
     @Query("SELECT * FROM project WHERE id = :id")
     ProjectEntity project(String id);
 
+    /** 对话页顶上那行小字要的是名字，不是整个项目；只取一列，界面就不必处理整条记录。 */
+    @Query("SELECT name FROM project WHERE id = :id")
+    LiveData<String> projectName(String id);
+
     // ---- 对话 ----------------------------------------------------------
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -52,6 +56,10 @@ public interface ChatDao {
 
     @Query("SELECT * FROM chat WHERE id = :id")
     ChatEntity chat(String id);
+
+    /** 对话页顶部那两行（项目名 + 标题）要跟着改名走，所以这里是 LiveData。 */
+    @Query("SELECT * FROM chat WHERE id = :id")
+    LiveData<ChatEntity> chatLive(String id);
 
     @Query("UPDATE chat SET last_provider_id = :providerId, last_model_id = :modelId,"
             + " updated_at_epoch_millis = :at WHERE id = :id")

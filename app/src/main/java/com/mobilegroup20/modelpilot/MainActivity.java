@@ -305,15 +305,18 @@ public class MainActivity extends AppCompatActivity
      * 返回栈和底部导航的选中态对不上——那种 bug 的表现是"按返回回到了 Chat，
      * 但底下的标签还亮着别的"。
      *
-     * <p><b>对话页还没落地</b>（发送链路和它一起来，见 `docs/CHAT_ENGINE.md` §6 的顺序）。
-     * 在那之前这里明说"还没做"，而不是压一个只有壳的页面上去——
-     * 一个能进、能打字、发不出去的对话页比一句实话更容易让人以为坏了。
-     * 落地时这里换成 `replace(R.id.chat_page, ChatConversationFragment.open(chatId))
-     * .addToBackStack(...)`：用返回栈回到列表，系统返回键天然就对。
+     * <p>对话页用**同一个 `chat_page` 容器**、以 `addToBackStack` 的方式压上去：
+     * 这样系统返回键天然回到列表（对话页那个返回箭头也走同一条路），
+     * 不需要自己维护"现在在哪一页"。
      */
     @Override
     public void openChat(String chatId) {
-        Toast.makeText(this, R.string.chat_conversation_pending, Toast.LENGTH_SHORT).show();
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.chat_page,
+                        com.mobilegroup20.modelpilot.ui.chat.ChatConversationFragment.open(chatId),
+                        "conversation")
+                .addToBackStack("conversation")
+                .commit();
     }
 
     @Override

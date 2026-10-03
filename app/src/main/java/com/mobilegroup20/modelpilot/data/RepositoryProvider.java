@@ -54,6 +54,7 @@ public final class RepositoryProvider {
     private static AppDatabase database;
     private static PricingSource pricing;
     private static com.mobilegroup20.modelpilot.chat.ProviderRegistry providers;
+    private static com.mobilegroup20.modelpilot.chat.CallLedger ledger;
 
     private RepositoryProvider() {
     }
@@ -157,8 +158,21 @@ public final class RepositoryProvider {
         providers = null;
     }
 
-    public static synchronized UsageRepository usage() {
-        if (usage == null) {
+    /**
+     * 本机账本的写入端（每次模型调用落一行，见 `docs/CHAT_ENGINE.md` §4）。
+     *
+     * <p>**算金额用的价目表和 `usage()` 是同一份**：两处各拿一份的话，
+     * 同一次调用在账本里和 Insights 上可能按两版费率算出两个数。
+     */
+    public static synchronized com.mobilegroup20.modelpilot.chat.CallLedger ledger() {
+        if (ledger == null) {
+            ledger = new com.mobilegroup20.modelpilot.chat.CallLedger(pricing(),
+                    database().usageCallDao());
+        }
+        return ledger;
+    }
+
+    public static synchronized UsageRepository usage() {        if (usage == null) {
             usage = USE_STUBS
                     ? new StubUsageRepository()
                     : new RoomUsageRepository(database(), pricing());

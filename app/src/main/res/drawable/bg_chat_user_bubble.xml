@@ -1,0 +1,7 @@
+<!-- 用户消息的气泡（设计稿里是浅蓝底、圆角）。**只有用户消息有气泡**：
+     模型的回答经常是多段长文，套上气泡会把每一段都往里缩一层，
+     而且气泡的宽度限制会让代码块频繁折行。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#E8F1FF" />
+    <corners android:radius="14dp" />
+</shape>

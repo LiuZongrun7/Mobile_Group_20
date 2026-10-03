@@ -226,7 +226,36 @@
     <string name="chat_task_image">Image · this message</string>
     <string name="chat_task_pdf">PDF · this message</string>
     <string name="chat_task_tools">Tool call · this message</string>
-    <!-- 对话页还没落地时点进一条对话的那句提示。**说明白是"页面"没做**，
-         而不是沿用底部导航那句 "Chat is not built yet"——Chat 这一页是做了的。 -->
-    <string name="chat_conversation_pending">The conversation screen is not built yet</string>
+
+    <!-- ============ 对话页（设计稿 02-conversation.png） ============ -->
+    <string name="chat_message_hint">Message ModelPilot…</string>
+    <string name="chat_back">Back to chats</string>
+    <string name="chat_more">More options</string>
+    <!-- 顶部那行路由说明。1 模型名。**Auto 必须写出 "Auto →"**：
+         用户要知道这个模型是系统挑的、下一句可能换人；只显示模型名会被当成"我选过它"。 -->
+    <string name="chat_route_auto">Auto → %1$s</string>
+    <!-- 手动选的：写明是用户自己定的（Auto 不许悄悄替换它，见 AutoRouter 的类注释）。 -->
+    <string name="chat_route_manual">Manual → %1$s</string>
+    <string name="chat_route_details">Details</string>
+    <string name="chat_route_details_title">Why this model</string>
+    <!-- 手动选择时 Details 里显示的那句：Auto 没参与，所以没有"为什么"。 -->
+    <string name="chat_route_manual_explain">You picked this model, so Auto did not choose for this message.</string>
+    <string name="chat_stop">Stop</string>
+    <!-- 流断了的那句。**必须说出来**：用户看到的字是真的，但这句话不完整。 -->
+    <string name="chat_incomplete">This answer was cut off — the connection dropped mid-stream.</string>
+    <!-- 这一轮压过上下文。说明"更早的内容没丢，只是收进了记忆"，不然用户会以为历史被删了。 -->
+    <string name="chat_compressed">Earlier messages were summarised into memory to stay under the context limit.</string>
+    <!-- 五种失败各说各的：用户要做的事完全不同（改 key / 等一会儿 / 查网络 / 看上游给的原因）。 -->
+    <string name="chat_error_no_key">No API key for this model. Add your own key in Me → API keys.</string>
+    <string name="chat_error_unknown_model">That model is not in the registry any more. Pick another one.</string>
+    <string name="chat_error_context">This conversation no longer fits the model\'s context window.</string>
+    <string name="chat_error_send_failed">Could not send the message.</string>
+    <string name="chat_error_invalid_key">The provider rejected that API key. Check it in Me → API keys.</string>
+    <string name="chat_error_rate_limited">The provider is rate limiting. Try again in a moment.</string>
+    <string name="chat_error_rate_limited_after">The provider is rate limiting. Try again in %1$d seconds.</string>
+    <string name="chat_error_network">Network problem — the request never reached the provider.</string>
+    <!-- 1 HTTP 状态码。上游自己给的原因在日志里，这句是给用户看的。 -->
+    <string name="chat_error_http">The provider refused the request (HTTP %1$d).</string>
+    <!-- 对话页还没说过话时的空态。 -->
+    <string name="chat_conversation_empty">Ask anything — this conversation stays on this phone.</string>
 </resources>

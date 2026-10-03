@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  对话页（设计稿 `conversation.png`）。
+
+  三段：
+    1. 顶栏：返回、项目名（小字）、对话标题（大字）、右边 `⋮`；
+    2. 消息区：用户消息是浅蓝气泡，模型的回答是**不带气泡的正文**
+       （设计稿就是这样——回答往往是长文，套气泡会让每段都缩进一层）；
+       每个回答前面/后面有一行路由说明 `✳ Auto → <模型>  Details`；
+    3. 底部输入卡片，**比首页少一颗"项目"胶囊**：这条对话属于哪个项目已经定了，
+       在对话里再让人选一次只会让人以为能"搬走这条对话"。
+
+  消息区是代码拼的（`ChatConversationFragment`）：这一页的行型少（三种），
+  而且要按顺序插"路由说明"这种不来自数据库的行，手拼比写多 viewType 的适配器直白。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <!-- ===== 1. 顶栏 ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:id="@+id/conversation_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chat_back"
+            android:padding="8dp"
+            android:src="@drawable/ic_back"
+            app:tint="#0B1B33" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- 项目名。**没有项目时整块 GONE**，不留一行空白。 -->
+            <TextView
+                android:id="@+id/conversation_project"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#7A8699"
+                android:textSize="12sp"
+                tools:text="Campus event" />
+
+            <TextView
+                android:id="@+id/conversation_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#0B1B33"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="Event materials" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/conversation_more"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chat_more"
+            android:padding="8dp"
+            android:src="@drawable/ic_more"
+            app:tint="#0B1B33" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/conversation_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="12dp">
+
+            <LinearLayout
+                android:id="@+id/conversation_messages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/conversation_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/chat_conversation_empty"
+                android:textColor="#7A8699"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- 出错/不完整/压过上下文的说明。**三条可能同时成立**（比如压缩之后又断了），
+                 所以合成一段文字而不是三个控件去抢位置。 -->
+            <TextView
+                android:id="@+id/conversation_notice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_chat_notice"
+                android:paddingStart="12dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="10dp"
+                android:textColor="#7A4A12"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:text="This answer was cut off — the connection dropped mid-stream."
+                tools:visibility="visible" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- ===== 3. 输入卡片（和首页同一套，少了"项目"那颗） ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_chat_input_card"
+            android:orientation="vertical"
+            android:paddingStart="14dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="10dp">
+
+            <EditText
+                android:id="@+id/conversation_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:hint="@string/chat_message_hint"
+                android:importantForAutofill="no"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="5"
+                android:minHeight="44dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:textColor="#0B1B33"
+                android:textColorHint="#98A3B5"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/conversation_attach"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/chat_attach"
+                    android:padding="7dp"
+                    android:src="@drawable/ic_plus"
+                    app:tint="#0B1B33" />
+
+                <LinearLayout
+                    android:id="@+id/conversation_model_chip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_chat_pill_blue"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp">
+
+                    <ImageView
+                        android:layout_width="15dp"
+                        android:layout_height="15dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_sparkle"
+                        app:tint="#1E7BF6" />
+
+                    <TextView
+                        android:id="@+id/conversation_model_chip_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/chat_auto"
+                        android:textColor="#1E7BF6"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="2dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron_down"
+                        app:tint="#1E7BF6" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <!-- 发送 / 停止。**同一个位置换图标**：正在回答时按发送没有意义，
+                     而"停止"必须够大够近（用户想省钱时的第一反应就是点它）。 -->
+                <ImageView
+                    android:id="@+id/conversation_send"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_chat_send_circle"
+                    android:clickable="true"
+                    android:contentDescription="@string/chat_send"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_send"
+                    app:tint="#FFFFFF" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
