@@ -83,10 +83,11 @@ def validate_month(month):
 
 
 def bearer(authorization):
+    """从 `Authorization` 头里取出凭据。**这里只有一种凭据：账号 token。**"""
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Relay key required", headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(401, "Sign in to your account first",
+                            headers={"WWW-Authenticate": "Bearer"})
     return authorization[7:].strip()
-
 
 
 def build_router(settings, store, day_provider=None):

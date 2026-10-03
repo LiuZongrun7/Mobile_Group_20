@@ -9,9 +9,11 @@
 密码用 `hashlib.scrypt` 存（每用户独立盐，`scrypt$n$r$p$salt$hash`），
 会话 token 形如 `tt_app_<43 字符>`、有效期 30 天、库里只存 sha256。
 原因见 [`docs/CONTRACTS.md`](../docs/CONTRACTS.md) §5：**身份只能有一个**，
-而原来 relay key 自带身份，导致「换个 key 就换个人」。改动之后
-**用量、赛季余额、预算、智能体记账的归属列都是 `user_id`**，relay key 只是挂在
-账号下面的一条通道。App 现在同时提供登录和注册入口。
+而更早的时候 relay key 自带身份，导致「换个 key 就换个人」。改动之后
+**用量、赛季余额、预算、智能体记账的归属列都是 `user_id`**。
+（**2026-09-30 改**：relay key 连同中转一起删了，所以"身份只能有一个"从
+"两个里选一个"变成了**字面意义上的只有一个**——账号 token。
+App 现在同时提供登录和注册入口。）
 
 原来的团队账号服务（`FORUM_AUTH_URL` 那套）**已经彻底删掉**（2026-02 收尾）：
 `auth.py` 里的 `TeamAuth` 类、`Settings` 上那三个字段、`FORUM_AUTH_*` 三个环境变量
@@ -19,49 +21,99 @@
 而那个问题已经不存在。现在鉴权只有一条路：查本库的 `accounts` / `account_sessions`。
 要回滚得从 git 历史里取回 `TeamAuth`，**不是**打开几行注释就能回去的。
 
-## API 中转服务（2026-09-27 新增）
+## 模块清单（`tokentrail_forum/`）
 
-论坛之外，同一进程还提供 **API 中转**：用户在 App 里填自己的 `上游 URL + 上游 API key`，
-服务端给**当前登录的账号**发一个（或用户自定义一个）**relay key**；把 cc-switch 的供应商 base URL 指向
-`https://43.140.212.47/api/relay`、key 填 relay key 之后，请求原样转发到上游，
-**响应里的 usage 顺手落库**。接口契约见 [`../docs/RELAY_API.md`](../docs/RELAY_API.md)。
+| 模块 | 管什么 |
+|---|---|
+| `app.py` | FastAPI 应用、`Settings`（env 开关）、论坛路由、健康检查、新闻采集任务 |
+| `account_routes.py` | 账号四个接口 `/api/account/*`，和记账那套**分开两个 router** |
+| `accounts.py` | 账号与会话的存储（scrypt 密码、sha256 token） |
+| `api_routes.py` | **服务端对 App 的 HTTP 层**：用量、预算、价目、赛季、智能体 |
+| `usage_store.py` | **用量账本**的读写（`relay_usage` 表、按次/按天读回） |
+| `usage.py` | 把各家的 usage 字段归一成四个桶（`split_usage`） |
+| `seasons.py` / `budgets.py` / `pricing.py` / `summary.py` | 结算、预算、价目表、汇总与对比 |
+| `agent.py` / `agent_tools.py` | 应用内智能体（独立账本 `agent_usage`）与它的五个只读工具 |
+| `seed_pricing.py` | 内置价目种子（`FORUM_PRICING_SEED=1` 才装，幂等） |
+| `store.py` / `auth.py` / `test_sessions.py` / `news_job.py` / `backup.py` | 论坛存储、鉴权抽象、免账号测试区、新闻与备份 |
+
+**三个名字是 2026-09-30 改的**（中转删除带出来的）：
+`relay.py` → **`usage.py`**（只剩 `split_usage`）、
+`relay_routes.py` → **`api_routes.py`**（删掉 `/keys*` 与 `{path:path}` 兜底转发）、
+`relay_store.py` → **`usage_store.py`**（删掉 `relay_keys` / `relay_secrets` 两张表）。
+`relay.py` / `relay_routes.py` / `relay_store.py` **这三个文件已经不存在**，
+在旧文档里看到它们时按上面对应关系读。表名 `relay_usage` **保留**——
+改表名要写迁移、不改变行为，等下次真动 schema 时一起做。
+
+## 服务端 API（记账 / 预算 / 价目 / 赛季 / 智能体）
+
+> **2026-09-30：原来的「API 中转」整块删除。** 它曾经让用户把自己上游的
+> `URL + API key` 填进 App，服务端替他转发（cc-switch 指过来）并顺手记用量。
+> 新方向（ModelPilot 大纲）是「**用户在 App 里提问 → 后端用我们自己的模型连接调用
+> → 产生用量 → 记账**」，所以不再有转发，也不再有用户的 key 落在服务器上。
+> ~~`relay.py`（转发 + SSRF 防护 + 流式解析）、`relay_routes.py` 的 `/keys*` 与
+> `{path:path}` 兜底、`relay_store.py` 的 `relay_keys` / `relay_secrets` 两张表~~
+> **全部删除**，对应改名见上面「模块清单」。
+> **那条新路还没写**：现在替用户调模型的只有应用内智能体，而它记的是独立的
+> `agent_usage`（不进日汇总、预算、结算）。
+
+现在同一进程提供五组接口，契约见 [`../docs/SERVER_API.md`](../docs/SERVER_API.md)：
+
+| 前缀 | 认证 | 干什么 |
+|---|---|---|
+| `/api/relay/usage*` | 账号 token | 读用量（按次 / 按天 / 按模型 / 对比） |
+| `/api/relay/budgets/{month}` | 账号 token | 读/写预算上限（花销现算，从不存） |
+| `/api/relay/pricing*` | 账号 token | 价目表（改价要留痕，按天查） |
+| `/api/relay/season*` | 账号 token | 余额与结算（**游戏移出后暂时没有客户端消费者**，规则保留） |
+| `/api/relay/agent/*` | 账号 token | 应用内智能体（另一个 router，另一个开关） |
+
+**路径前缀里那个 `relay` 是历史字面量**：它在 App 的 `ServerApi`、部署脚本和文档里
+都写死了，改它要同时改三处、还要重新部署。`FORUM_ENABLE_RELAY` 这个开关名同理——
+它现在守的是记账那几组接口，不是转发。
 
 它带来的取舍必须写清楚，别只看好处：
 
-- **用户的真上游 key 落在服务器上。** 这推翻了 `docs/DATA_SOURCES.md` §3 原来
-  「凭据绝不上传服务端」那条决定，反转理由记在 `docs/DATA_SOURCES.md` §5。
-  **启用之前必须先堵住服务器上对公网开放的其它端口**——现在 8000（账号后端）
-  是 `0.0.0.0` 且 `ufw` 未启用，上面放全班 API key 的性质和只放论坛数据完全不同。
-- **不再需要解析账单文件。** `cacheWrite` 这个桶原来 OpenAI 和 DeepSeek 都拿不到，
-  代理路径下响应里就有；拿到的是逐次调用而不是时间桶，所以有会话信息。
-- **不做协议转换。** 请求体和响应体原样穿过，上游格式由用户在 cc-switch 里自己选对。
+- **用户的真上游 key 落在服务器上**这件事**没有发生**（中转折在启用前就删掉了）。
+  当时那段论证和风险判断留在 [`docs/DATA_SOURCES.md`](../docs/DATA_SOURCES.md) §5，
+  **原文不删**——下一个想往服务端放第三方密钥的人应该先读它。
+  现在服务端持有的是**我们自己的**模型 key（`FORUM_AGENT_KEY`），
+  所以「堵住对公网开放的其它端口」这件事**照旧要做**。
+- **不再需要解析账单文件**这一点仍然成立，而且更有意义了：后端自己调模型，
+  响应里直接带 token 数——`cacheWrite` 这个桶 OpenAI 和 DeepSeek 的导出都拿不到，
+  自己调才有。
+- **不做协议转换**这条只对转发有意义，随转发一起没有了。
 
-### 应用内智能体（`FORUM_ENABLE_AGENT`，和中转分开的开关）
+### 应用内智能体（`FORUM_ENABLE_AGENT`，和记账那组分开的开关）
 
 同一个进程还提供 `/api/relay/agent/ask|status`：用户问一句，服务端用**我们自己的**
 DeepSeek key 调模型，模型可以调 5 个只读工具（用量汇总、预算、成本对比、
-论坛亮点、我发过的帖子）。契约见 [`../docs/RELAY_API.md`](../docs/RELAY_API.md)。
+论坛亮点、我发过的帖子）。契约见 [`../docs/SERVER_API.md`](../docs/SERVER_API.md)。
 
 两条边界是结构性的，不是约定：
 
-- **凭据是账号 token，不是 relay key。** 用户可能压根没配过中转，但他一定登录过 App；
-  而 relay key 只该出现在中转那条路上。所以智能体的路由和中转共用一个进程，
-  但**鉴权是两套**。
+- **凭据是账号 token，也只可能是账号 token**（2026-09-30 改：原来还要强调"不是
+  relay key"，现在 relay key 不存在了）。
 - **账本分开**（`agent_usage` vs `relay_usage`）。智能体花的是我们的钱，
-  如果算进用户的编码用量，「我这周怎么花了这么多」的答案就被问题本身污染了。
+  如果算进用户的用量，「我这周怎么花了这么多」的答案就被问题本身污染了。
   两张表也不在一处，`agent_usage` 永远不进日汇总、预算和结算。
 
 `FORUM_AGENT_KEY` 从 `/etc/tokentrail-forum-relay.env` 读（权限 `640 root:tokentrail`），
 **不进数据库、不进日志、不进任何响应**；健康检查只报 `agentConfigured: true/false`。
 
-**默认关闭。** `FORUM_ENABLE_RELAY` 不设或为 0 时 `/api/relay/*` 返回 404，行为和以前完全一样。
+**默认关闭。** `FORUM_ENABLE_RELAY` 不设或为 0 时记账那几组 `/api/relay/*` 返回 404，
+`FORUM_ENABLE_AGENT` 不设时智能体那两组同样不注册——**两个开关分开**：
+「只想开智能体」的人不该被迫连记账一起开。
 启用需要把 `deploy/forum-relay.env.example` 装到 `/etc/tokentrail-forum-relay.env`
-（systemd 单元用 `EnvironmentFile=-` 引它，文件不存在也不影响启动），并且
-**`FORUM_RELAY_ALLOWED_HOSTS` 必须填**，否则只剩「拒绝私网地址」那一层校验。
+（systemd 单元用 `EnvironmentFile=-` 引它，文件不存在也不影响启动）。
+~~**`FORUM_RELAY_ALLOWED_HOSTS` 必须填**~~ —— **这个变量已经不起作用了（2026-09-30）**：
+它是给"转发到用户自己的上游"做 SSRF 防护的，校验代码随 `relay.py` 一起删了。
+同一批作废的还有 `FORUM_RELAY_ALLOW_PRIVATE` / `_SELF_HOSTS` / `_REQUESTS_PER_MINUTE`；
+env 文件里留着不报错，但也不生效。**别以为填了白名单就更安全。**
 
 nginx 需要一条独立的 `/api/relay/` location，配置见 `deploy/nginx-https.conf`。
-它的超时和缓冲区设置和论坛那一段**故意不同**：长上下文请求动辄几分钟，45s 会在正常
-对话中途掐断连接；而且必须 `proxy_buffering off`，否则流式的打字机效果会消失。
+它的超时和缓冲区设置和论坛那一段**故意不同**（长上下文请求动辄几分钟，45s 会在正常
+对话中途掐断连接）。~~而且必须 `proxy_buffering off`，否则流式的打字机效果会消失~~
+——**2026-09-30 改**：`proxy_buffering off` 是转发流式响应（SSE 透传）时必需的，
+现在服务端返回的都是普通 JSON，不再需要它；nginx 那一段**还没改**（改部署要重新部署）。
 
 
 ## 免账号测试区
@@ -132,22 +184,46 @@ Python 3.10+（本机是 3.14，也可）：
 python3 -m venv /tmp/tokentrail-forum-venv
 /tmp/tokentrail-forum-venv/bin/pip install -r backend/requirements-test.txt
 
-(cd backend && /tmp/tokentrail-forum-venv/bin/python -m pytest -q tests)     # 49 个
-/tmp/tokentrail-forum-venv/bin/python backend/scripts/check_relay_local.py  # 中转端到端
+(cd backend && /tmp/tokentrail-forum-venv/bin/python -m pytest -q tests)     # 192 个
 ```
 
-`check_relay_local.py` 自己起一个假上游和一个真实 uvicorn，走完
-「注册 → 转发 → 记账 → 认证边界 → SSRF」全程。它给的两个环境变量
-（`FORUM_RELAY_ALLOW_PRIVATE=1`、`FORUM_RELAY_SELF_HOSTS=`）**只为本地能跑**，
-生产是反的。脚本里显式禁用了代理：macOS 的系统代理是系统级设置，`NO_PROXY`
-对它无效，本机验收打 127.0.0.1 会被代理用 502 回掉，看起来像服务坏了。
+### `scripts/check_relay_local.py` 已删除（2026-09-30）
+
+它原来自己起一个假上游和一个真实 uvicorn，走完「注册 → 转发 → 记账 → 认证边界 →
+SSRF」全程。**它验的主链路（转发）整块删了**，所以脚本跟着删——留着的话它会在第一步
+就断，而这类"跑不起来的验收脚本"最容易被当成环境问题忽略（`check_deployment.py`
+就是这么烂了两年的，见下）。它给的两个环境变量
+（`FORUM_RELAY_ALLOW_PRIVATE=1`、`FORUM_RELAY_SELF_HOSTS=`）**也一起作废**：
+那两个校验点已经不在代码里了。
+
+**记账这条线现在只有 pytest 覆盖**（`tests/test_usage.py`、`test_summary.py`、
+`test_budgets.py`、`test_pricing.py`、`test_seasons.py`、`test_agent.py`）。
 
 
-`scripts/check_account_deployment.py` 是**账号这条线**的公网验收脚本（2026-02 新增）：
-对着真正在跑的那台服务器走完注册 → 登录 → 读用量/赛季/预算 → 注册 relay key →
-换一条 key 余额不断 → 问一句智能体，并检查**智能体只认账号 token**、
-relay key 打过去是 401、回答里没有我们的 key。临时账号在结束时自动删掉
-（删除走 SSH：账号没有删除接口，App 里也没有「注销」这个功能）。
+### 公网验收脚本（`scripts/check_account_deployment.py`）
+
+> **2026-09-30 改：脚本本身还没跟上中转删除，README 这里按现状写。**
+> 它的**模块开头注释**仍然写着「注册 → 读用量/赛季/预算 → **注册 relay key** →
+> 换一条 key 余额不断 → 问一句智能体」，但代码里那两步**已经没有对应的请求**了
+> （`/keys*` 在服务端不存在，打过去是 404）。同理，第 3 段那句
+> 「**旧格式的 relay key** 打智能体是 401」现在是**恒真**的——`tt_` 前缀的凭据
+> 一律不认，验不出"智能体挑凭据"这件事。**修脚本要动 `.py`，这次没动**，
+> 记在这里免得下次照着注释以为那条链路验过。
+
+**它实际做的事**（2026-02 新增，2026-09-30 复核）：
+
+1. 注册 → 登录 → 查我 → 退出，顺带验错误码（用户名重复 409、密码错 401、没凭据 401）；
+2. **只凭账号 token 就能读自己的账**：赛季状态、用量汇总、预算，三处的 `uid` 都等于
+   `userId`——这是「身份是账号」的最小含义；
+3. ~~注册 relay key、换一条 key 余额不断~~ **（已不存在）**；
+4. 真的问一句智能体（花我们自己的 DeepSeek key），检查回答里没有 key、
+   工具结果里没有别人的数字、它自己的用量记进了独立账本；
+5. 论坛这条链路：图文上传（并校验取回的字节**完全一致**）、两个真账号共享同一个
+   帖子池、发帖与评论的幂等、点赞两次只算一次、作者视角 `likedByMe=false`、
+   取消点赞归零、新闻只含两类。
+
+临时账号在结束时自动删掉（删除走 SSH：账号没有删除接口，App 里也没有「注销」这个功能）。
+
 `scripts/fix_legacy_tables.py` 是一次性维护脚本，处理「老形状的表」——
 `CREATE TABLE IF NOT EXISTS` 改不动已存在的表，`agent_usage` 和 `users` 这两张
 不在归属列改名那条迁移里，所以要单独修；它带两条守卫（形状不对才动、

@@ -5,7 +5,7 @@ import android.app.Application;
 import com.mobilegroup20.modelpilot.data.RepositoryProvider;
 
 /**
- * 应用入口：初始化 Repository，并恢复团队后端的加密登录会话。
+ * 应用入口：初始化 Repository，并恢复（Keystore 加密的）账号登录会话。
  *
  * <p><b>为什么需要一个 Application 子类。</b>{@code RepositoryProvider} 是个静态入口，
  * 拿不到 Context，而建 Room 数据库必须有 Context。有三条路：

@@ -80,7 +80,7 @@ GPL 要谨慎）。**没有 GPL / AGPL 混进来。**
 | [dsh-context](https://github.com/bowenliang123/dsh-context/blob/main/README.md) | §3 竞品对比表 | **对照物，不引** |
 
 > **2026-09-27 更正：** 这一节原来写的是「LiteLLM 是代理网关，**我们不代理流量**」。
-> 那句话**不再准确**——我们加了 API 中转（[`RELAY_API.md`](RELAY_API.md)）。
+> 那句话**不再准确**——我们加了 API 中转（[`SERVER_API.md`](SERVER_API.md)）。
 > 但**仍然不是同一层东西**，报告里要这么区分，别写成「我们也做了个 LiteLLM」：
 >
 > | | LiteLLM | TokenTrail 中转 |

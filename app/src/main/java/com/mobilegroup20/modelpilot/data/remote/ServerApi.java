@@ -7,7 +7,7 @@ import retrofit2.http.*;
 /**
  * 服务端用量/预算接口。<b>负责人：汪庭栋（论坛与服务端记账）。</b>
  *
- * <p>契约见 {@code docs/RELAY_API.md}。这里只读**用量和预算**，身份一律是
+ * <p>契约见 {@code docs/SERVER_API.md}（原 {@code RELAY_API.md}）。这里只读**用量和预算**，身份一律是
  * <b>账号 token</b>（{@code Authorization: Bearer tt_app_...}，见
  * {@code AccountSession}）：账挂在账号的 `userId` 上，所以在 App 里提问的用户
  * 照样读得到自己的用量，不需要别的凭据。

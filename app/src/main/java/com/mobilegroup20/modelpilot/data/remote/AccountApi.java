@@ -10,7 +10,7 @@ import com.google.gson.annotations.SerializedName;
 /**
  * APP 账号接口（后端 `/api/account/*`）。<b>负责人：刘宗润。</b>
  *
- * <p><b>为什么是这个而不是 {@link TeamAccountApi}：</b>那一个打的是团队那台机器上的
+ * <p><b>为什么是自己这一套：</b>2026-02 之前打的是团队那台机器上的
  * Java 账号服务，和本项目的后端是两套东西。这一版之后，账号由我们自己的后端发，
  * 用户是 APP 的用户，登录论坛、读用量、玩游戏的结算全都用同一个 `userId`。
  *
