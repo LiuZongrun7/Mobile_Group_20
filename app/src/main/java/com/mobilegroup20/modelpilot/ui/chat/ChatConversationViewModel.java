@@ -386,14 +386,27 @@ public final class ChatConversationViewModel extends ViewModel {
         if (segment.isEmpty()) {
             return false;
         }
-        AutoRouter.Decision decision =
-                new AutoRouter(registry).choose(enabledProviders(), TaskKind.TEXT);
-        if (!decision.available()) {
-            return false;
+        // 压缩用哪个模型：**用户在设置里选的那个**；没选过才用 Auto 挑的最便宜的。
+        // 这条选择是用户明确要求的（"我们以后压上下文就都拿那个去压"）——
+        // 压出来的是接下来每一轮都要带上的摘要，让它落到最便宜的模型上是用户的决定，不是我们的。
+        String[] chosen = ProviderKeys.compressionModel(context);
+        String compressorProvider;
+        String compressorModel;
+        if (chosen != null) {
+            compressorProvider = chosen[0];
+            compressorModel = chosen[1];
+        } else {
+            AutoRouter.Decision decision =
+                    new AutoRouter(registry).choose(enabledProviders(), TaskKind.TEXT);
+            if (!decision.available()) {
+                return false;
+            }
+            compressorProvider = decision.providerId;
+            compressorModel = decision.modelId;
         }
-        ProviderSpec provider = registry.provider(decision.providerId);
-        ModelSpec model = registry.model(decision.providerId, decision.modelId);
-        String apiKey = ProviderKeys.apiKey(context, decision.providerId);
+        ProviderSpec provider = registry.provider(compressorProvider);
+        ModelSpec model = registry.model(compressorProvider, compressorModel);
+        String apiKey = ProviderKeys.apiKey(context, compressorProvider);
         if (provider == null || model == null || apiKey == null || apiKey.trim().isEmpty()) {
             return false;
         }
@@ -409,8 +422,8 @@ public final class ChatConversationViewModel extends ViewModel {
             return false;
         }
         Memory memory = engine.applyCompression(segment.get(0).id,
-                segment.get(segment.size() - 1).id, summary, decision.providerId,
-                decision.modelId, 0, 0, at);
+                segment.get(segment.size() - 1).id, summary, compressorProvider,
+                compressorModel, 0, 0, at);
         MemoryEntity entity = new MemoryEntity();
         entity.id = memory.id;
         entity.chatId = memory.chatId;

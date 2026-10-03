@@ -239,9 +239,16 @@ public class MainActivity extends AppCompatActivity
         boolean chat = itemId == R.id.nav_chat;
         boolean dashboard = itemId == R.id.nav_insights;      // Insights（原「统计」页）
         boolean forum = itemId == R.id.nav_explore;           // Explore（原「论坛」页 = 论坛 + 新闻）
-        boolean account = itemId == R.id.nav_me && !BuildConfig.FORUM_BASE_URL.isEmpty();
+        // 「我的」这一页本身现在有两样东西：账号（要服务端才登得上）与 API keys
+        // （**完全本机，和论坛服务端在不在没关系**）。所以两者分开判：
+        // `me` 管这一页显不显示，`account` 只管那颗登录按钮显不显示——
+        // 合成一个的话，本地跑（FORUM_BASE_URL 为空）时连 key 都填不了，
+        // 而这个 App 的对话功能全靠用户自己那把 key。
+        boolean me = itemId == R.id.nav_me;
+        boolean account = me && !BuildConfig.FORUM_BASE_URL.isEmpty();
 
         binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
+        binding.apiKeysButton.setVisibility(me ? View.VISIBLE : View.GONE);
         binding.chatPage.setVisibility(chat ? View.VISIBLE : View.GONE);
         binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
         binding.emptyPage.setVisibility(chat || forum || dashboard ? View.GONE : View.VISIBLE);
@@ -279,13 +286,17 @@ public class MainActivity extends AppCompatActivity
             com.mobilegroup20.modelpilot.data.AccountSession session = com.mobilegroup20.modelpilot.data.AccountSession.get(this);
             // 「我的」页只有账号状态：登录/未登录 + 账号名 +（Debug 的）论坛测试身份。
             // 点标题开账号弹窗，和右上角那个按钮是同一个入口。
-            binding.emptyLabel.setText(account
+            binding.emptyLabel.setText(me
                     ? getString(session.signedIn()
                             ? session.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in
                             : R.string.my_page_signed_out, session.signedIn() ? session.accountName() : "")
                     : getString(R.string.nav_not_built, title));
             binding.emptyLabel.setClickable(account);
             binding.emptyLabel.setOnClickListener(account ? v -> openAccount() : null);
+            binding.apiKeysButton.setOnClickListener(me
+                    ? v -> com.mobilegroup20.modelpilot.ui.settings.ApiKeysDialog
+                            .show(getSupportFragmentManager())
+                    : null);
         }
     }
     /** 打开账号弹窗（登录/注册/退出）。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */

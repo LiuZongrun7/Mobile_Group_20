@@ -258,4 +258,24 @@
     <string name="chat_error_http">The provider refused the request (HTTP %1$d).</string>
     <!-- 对话页还没说过话时的空态。 -->
     <string name="chat_conversation_empty">Ask anything — this conversation stays on this phone.</string>
+
+    <!-- ============ 设置：API keys（Me → API keys） ============ -->
+    <!-- 这一页最需要说清楚的一件事：key 去哪了。写成一句"我们不会上传"没人信，
+         所以直接说清数据的走向（存在这台手机的 Keystore 里、请求从这台手机直发）。 -->
+    <string name="keys_title">API keys</string>
+    <string name="keys_explainer">Your keys are encrypted with this phone\'s Keystore and never leave it. ModelPilot has no server in the middle: requests go straight from this phone to the provider. You pay the provider directly.</string>
+    <string name="keys_key_hint">API key</string>
+    <string name="keys_url_hint">Request URL (leave empty for the default)</string>
+    <string name="keys_clear">Clear</string>
+    <string name="keys_save">Save</string>
+    <string name="keys_saved">Saved</string>
+    <string name="keys_save_failed">Could not save: %1$s</string>
+    <string name="keys_bad_url">The request URL must start with http:// or https://</string>
+    <string name="keys_empty_key">Enter a key first, or use Clear to remove this provider.</string>
+    <string name="keys_compression_title">Compression model</string>
+    <!-- 为什么压缩要单独选一个模型：它决定"更早的内容被压成什么"，
+         而且每次压缩都是一次真实调用（要花钱）。 -->
+    <string name="keys_compression_why">Which model summarises earlier messages when a conversation gets long. It runs once per compression, and the summary is then used by every provider.</string>
+    <string name="keys_compression_auto">Auto (cheapest available)</string>
+    <string name="keys_compression_pick">Compression model</string>
 </resources>

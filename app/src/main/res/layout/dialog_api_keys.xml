@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「API keys」设置页（`Me → API keys`）。
+
+  **为什么是一家一行、而不是一张表单**：六家里用户可能只配一两家，
+  一行一块（名字 / key / 请求地址 / 清除）能让人一眼看出"我配了哪几家"，
+  而排成一张表会让没配的那几家也占着视线。
+
+  页面上还有一项不是 key 的配置：**压缩模型**（"用哪个模型把长对话压成摘要"）。
+  它放在这里是因为用户的心智是"这一页配的是我能用的模型"。
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="10dp"
+            android:text="@string/keys_explainer"
+            android:textColor="#3A4A61"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/keys_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:background="#EDF0F5" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="16dp"
+            android:text="@string/keys_compression_title"
+            android:textColor="#0B1B33"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="16dp"
+            android:text="@string/keys_compression_why"
+            android:textColor="#7A8699"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/keys_compression_value"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:drawableEnd="@drawable/ic_chevron_down"
+            android:drawablePadding="8dp"
+            android:focusable="true"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp"
+            android:textColor="#1E7BF6"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="Auto (cheapest)" />
+    </LinearLayout>
+</ScrollView>

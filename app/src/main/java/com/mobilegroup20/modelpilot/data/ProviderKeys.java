@@ -166,6 +166,49 @@ public final class ProviderKeys {
         preferences(context).edit().remove(PREFIX + requireProviderId(providerId)).apply();
     }
 
+    // ---- 压缩模型 ------------------------------------------------------
+
+    /**
+     * 用户选的"压缩上下文用哪个模型"。
+     *
+     * <p><b>为什么和 key 存在一起</b>：它是同一个设置页上的一个选择，用户的心智是
+     * "我在这儿配了能用的模型"——分成两份配置很容易出现"填了 key 却没选压缩模型"，
+     * 而那个组合的表现是"压缩悄悄没发生"。
+     *
+     * <p>**它不是秘密**（就是一个 providerId + modelId），所以明文存：
+     * 加密要过 Keystore，解不开时还得决定"当没选过"还是"报错"，为一个非敏感值不值得。
+     * key 与 base URL 仍然加密（见类注释那四条）。
+     */
+    private static final String COMPRESSION_PROVIDER = "compression.provider";
+    private static final String COMPRESSION_MODEL = "compression.model";
+
+    /** 存压缩模型。providerId 为空 = 取消选择（回到"用 Auto 挑"）。 */
+    public static void saveCompressionModel(Context context, String providerId, String modelId) {
+        android.content.SharedPreferences.Editor editor = preferences(context).edit();
+        if (providerId == null || providerId.isEmpty() || modelId == null || modelId.isEmpty()) {
+            editor.remove(COMPRESSION_PROVIDER).remove(COMPRESSION_MODEL);
+        } else {
+            editor.putString(COMPRESSION_PROVIDER, providerId).putString(COMPRESSION_MODEL, modelId);
+        }
+        editor.apply();
+    }
+
+    /** 用户选的压缩模型；没选过（或那一家已经被删掉 key）返回 null = 用 Auto 挑。 */
+    public static String[] compressionModel(Context context) {
+        android.content.SharedPreferences prefs = preferences(context);
+        String providerId = prefs.getString(COMPRESSION_PROVIDER, null);
+        String modelId = prefs.getString(COMPRESSION_MODEL, null);
+        if (providerId == null || modelId == null) {
+            return null;
+        }
+        // **那一家已经没有 key 了就当没选过**：否则压缩会在"没有可用模型"上失败，
+        // 而用户以为自己选好了（他确实选过，只是后来把 key 删了）。
+        if (!configuredProviders(context).contains(providerId)) {
+            return null;
+        }
+        return new String[] {providerId, modelId};
+    }
+
     /** 解出来的一家：key 与 URL。**别给它加一个会打印 key 的 toString**，见类注释第 2 条。 */
     private static final class Entry {
         final String apiKey;

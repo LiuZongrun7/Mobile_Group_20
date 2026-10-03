@@ -644,6 +644,16 @@
                 android:layout_marginTop="16dp"
                 android:text="@string/account_title"
                 android:visibility="gone" />
+            <!-- API keys 的入口。**只在「我的」页出现**：填 key 是一件低频、要慎重的事，
+                 放在聊天页的常用路径上会被误点，而它没有"撤销"（删了要重填一遍）。 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/api_keys_button"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/keys_title"
+                android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
 
