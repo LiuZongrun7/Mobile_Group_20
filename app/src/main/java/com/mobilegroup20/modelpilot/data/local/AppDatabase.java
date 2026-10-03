@@ -130,6 +130,7 @@ public abstract class AppDatabase extends RoomDatabase {
             // **都可空**：导入的记录没有这些概念，NULL 的语义正好是"不知道"；
             // 加成 NOT NULL 就得给老行编一个值（编 MANUAL 会把"不知道"说成"手动选的"）。
             db.execSQL("ALTER TABLE usage_call ADD COLUMN route TEXT");
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN rate_version TEXT");
             db.execSQL("ALTER TABLE usage_call ADD COLUMN chat_id TEXT");
             db.execSQL("ALTER TABLE usage_call ADD COLUMN tool_calls TEXT");
         }

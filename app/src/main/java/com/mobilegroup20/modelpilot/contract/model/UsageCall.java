@@ -85,6 +85,21 @@ public class UsageCall {
 
     public Source source;
 
+    /**
+     * 这次调用是 **Auto 挑的**还是**用户手动指定**的（`"AUTO"` / `"MANUAL"`）。
+     * 可空：导入的记录没有这个概念（null = 不知道，**不是 MANUAL**）。
+     */
+    public String route;
+
+    /** 属于哪条对话；导入的记录是 null。 */
+    public String chatId;
+
+    /** 这次跑了哪些工具（逗号分隔）；没有是空串，导入的记录是 null。 */
+    public String toolCalls;
+
+    /** 算钱用的那一版费率；算不出价时是 null。 */
+    public String rateVersion;
+
     public UsageCall() {
     }
 

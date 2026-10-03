@@ -1,6 +1,7 @@
 package com.mobilegroup20.modelpilot.data.local;
 
 import androidx.annotation.NonNull;
+import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
@@ -78,6 +79,28 @@ public class UsageCallEntity {
     @NonNull
     public UsageCall.Source source = UsageCall.Source.IMPORTED;
 
+    /**
+     * 这次调用是 **Auto 挑的**还是**用户手动指定**的（`"AUTO"` / `"MANUAL"`）。
+     *
+     * <p>设计稿的 Insights 要显示 "Auto 77%" 这个占比，靠的就是这一列。
+     * 可空：导入的记录没有这个概念（`null` = 不知道），**不填 0 也不填 MANUAL**——
+     * 那等于把"不知道"说成"用户手动选的"。
+     */
+    @ColumnInfo(name = "route")
+    public String route;
+
+    /** 属于哪条对话。导入的记录没有对话，是 null。 */
+    @ColumnInfo(name = "chat_id")
+    public String chatId;
+
+    /** 这次调用跑了哪些工具（逗号分隔）。没有就是空串；导入的记录是 null（不知道）。 */
+    @ColumnInfo(name = "tool_calls")
+    public String toolCalls;
+
+    /** 算钱用的是哪一版费率（价目表按生效日期分版）。算不出价时是 null。 */
+    @ColumnInfo(name = "rate_version")
+    public String rateVersion;
+
     /** Room 要一个无参构造。 */
     public UsageCallEntity() {
     }
@@ -127,6 +150,10 @@ public class UsageCallEntity {
         e.costCurrency = call.costCurrency;
         e.nativeCostMicros = call.nativeCostMicros;
         e.source = call.source == null ? UsageCall.Source.IMPORTED : call.source;
+        e.route = call.route;
+        e.chatId = call.chatId;
+        e.toolCalls = call.toolCalls;
+        e.rateVersion = call.rateVersion;
         return e;
     }
 
@@ -146,6 +173,10 @@ public class UsageCallEntity {
         call.costCurrency = costCurrency;
         call.nativeCostMicros = nativeCostMicros;
         call.source = source;
+        call.route = route;
+        call.chatId = chatId;
+        call.toolCalls = toolCalls;
+        call.rateVersion = rateVersion;
         return call;
     }
 }
