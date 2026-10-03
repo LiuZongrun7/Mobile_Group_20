@@ -226,10 +226,9 @@ def describe_result(name, payload):
 
     返回 `(瘦身后的结果, 缺失说明或 None)`。
 
-    **压缩不是省事，是必须的**：`getUsageSummary` 按天分组时可能返回几十行，
-    每一行四个桶加成本——原样回给模型会让上下文翻好几倍，而它真正需要的
-    只是合计和前几行。`Coverage` 和 `pricingComplete` 这类**判断依据不能丢**，
-    丢了模型就会把不完整的数当完整的讲。
+    **压缩不是省事，是必须的**：热帖正文可能几千字，原样回给模型会让上下文翻几倍，
+    而它真正需要的只是前几条。**判断依据不能跟着压掉**——比如 `getMyThreads`
+    的「查不到」，丢了它模型就会把「我查不到」讲成「你没有」。
     """
     if not isinstance(payload, dict):
         return payload, None
@@ -243,14 +242,11 @@ def describe_result(name, payload):
             trimmed[f"{key}Truncated"] = f"showing {_ROW_LIMIT} of {total}"
 
     gap = None
-    coverage = payload.get("coverage")
-    if isinstance(coverage, dict) and coverage.get("daysMissing"):
-        gap = (f"{coverage['from']} 到 {coverage['to']} 之间有 "
-               f"{len(coverage['daysMissing'])} 天没有记录")
-    if payload.get("pricingComplete") is False or payload.get("pricingAvailable") is False:
-        models = ", ".join(payload.get("unpricedModels") or [])
-        detail = f"（{models}）" if models else ""
-        gap = (gap + "；" if gap else "") + f"有些用量没有价目{detail}，成本不完整"
+    # 2026-09-30：原来这里还有两段——`coverage.daysMissing`（哪些天没记录）与
+    # `pricingComplete` / `unpricedModels`（哪些用量算不出价）。带数字的工具
+    # （用量汇总、预算、对比）随记账一起删了，那两段永远走不到，删掉。
+    # **将来重新做 Insights 时，这两条判断要一起回来**：不完整的数当完整的讲，
+    # 是这套系统最容易犯也最难发现的错。
     if payload.get("unavailable"):
         # `getMyThreads` 那种「查不到」——**必须让模型知道这不是「没有」**。
         gap = (gap + "；" if gap else "") + "有一项数据查不到，不是空的"

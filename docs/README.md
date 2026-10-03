@@ -10,18 +10,27 @@
 | Insights 设计与统计口径 | [INSIGHTS.md](modelpilot-ui/INSIGHTS.md) |
 
 > **代码侧已经改名（2026-09-30）**：App 名、`applicationId`、Java 包
-> （`com.mobilegroup20.modelpilot`）、Room 库文件名、`ModelPilotApp` 全部换成 ModelPilot。
-> **没改的三处**：① 文档里历史叙述仍写 TokenTrail（那是当时的名字，改了就读不通）；
-> ② 归档目录 `archive-tokentrail/` 与游戏归档 `TokenTrail_Game/` 的名字（它们记录的就是那一段）；
-> ③ 服务端的 Python 包 `backend/tokentrail_forum/`、systemd 服务名与 `/opt/tokentrail` 部署路径
-> ——那套东西改了要重新部署，**还没动**。
+> （`com.mobilegroup20.modelpilot`）、Room 库文件名、`ModelPilotApp` 全部换成 ModelPilot；
+> **服务端也在同一轮改完了**：Python 包 `backend/modelpilot_forum/`、systemd 服务名
+> `modelpilot-*`、部署路径 `/opt/modelpilot` 与 `/var/lib/modelpilot-forum`、
+> 库文件 `modelpilot.sqlite3`、**env 变量前缀 `FORUM_*` → `MODELPILOT_*`**
+> （env 文件 `/etc/modelpilot-forum.env`、`/etc/modelpilot-agent.env`）。
+> 老变量名**不再读**。**没改的两处**：① 文档里历史叙述仍写 TokenTrail（那是当时的名字，
+> 改了就读不通）；② 归档目录 `archive-tokentrail/` 与游戏归档 `TokenTrail_Game/`
+> 的名字（它们记录的就是那一段）；③ 系统用户仍然叫 `tokentrail`（改名要动属主和文件权限）。
 >
-> **中转已随新方向删除（2026-09-30）。** 原来那一层是「用户填自己的上游 key、我们把
-> cc-switch 的请求替他转发上去、顺手记用量」，整块没了：服务端只剩**记账 / 预算 /
-> 价目 / 赛季 / 智能体**五组接口（`docs/SERVER_API.md`，由 `RELAY_API.md` 改名而来），
-> relay key（`tt_`）这种凭据不再签发也不再认，身份只有账号 token（`tt_app_`）一种。
-> **`relay` 前缀（`/api/relay/*`）和 env 变量名（`FORUM_ENABLE_RELAY` 等）是历史遗留
-> 字面量**，改了要同时动 App、部署脚本和文档，先留着。
+> **两刀删减（2026-09-30）。** 第一刀是「API 中转」——用户填自己的上游 key、
+> 我们把 cc-switch 的请求替他转发上去、顺手记用量，整块没了：relay key（`tt_`）
+> 不再签发也不再认，身份只有账号 token（`tt_app_`）一种。
+> **第二刀是整条记账链**——用量 `/usage*`、预算 `/budgets*`、价目 `/pricing*`、
+> 赛季 `/season*` 四组接口，连同它们的表（`relay_usage` / `season_balances` /
+> `season_settlements` / `budgets` / `pricing_rates`）、后端模块和 Android 侧客户端
+> 全部删除。**服务端现在只剩三样东西：账号、论坛与新闻、应用内智能体**
+> （见 [`SERVER_API.md`](SERVER_API.md)）。
+> 删的理由写在 `SERVER_API.md` 开头：**记账链没有生产者也没有消费者**，
+> 空转的接口比没有接口更糟——Insights 要等「后端替用户调模型」那条路写出来再重新设计。
+> **`relay` 这个字面量现在只剩 `/api/agent` 的历史（它原来是 `/api/relay/agent`）；
+> `/api/relay/*` 整个前缀不存在了。**
 
 ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静态设计稿入口；页面使用示例数据，不包含前端原型代码，也不代表 Android / 后端已实现全部新功能。
 
@@ -39,8 +48,9 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 > 以及本文档组里的 `ART.md`，都放在**与本工程同级的** `../../TokenTrail_Game/`，
 > 那份归档里有一份 `patches/` 可以从这次移出反向恢复。
 > **下面凡与游戏有关的行、表、章节，都是移出之前的记录**，不再是现状；
-> 服务端的赛季 / 预算（`/season*`、`/budgets/{month}`）**留着没动**——
-> 它们是"服务端结算余额"的通道，游戏只是它原来的消费者。
+> ~~服务端的赛季 / 预算（`/season*`、`/budgets/{month}`）留着没动~~
+> **（2026-09-30 第二刀）那两组接口也删了**——记账链整块删除之后，
+> "游戏只是它原来的消费者"这个理由也不成立了（见 [`SERVER_API.md`](SERVER_API.md) 开头）。
 
 这个文件夹放**所有文字信息**：接口契约、分工、架构说明、交接须知。
 写代码的时候要查的东西，先来这里。
@@ -49,7 +59,7 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 | --- | --- | --- |
 | [`CONTRACTS.md`](CONTRACTS.md) | 接口契约：命名口径、时间口径、存储、结算规则、三种资源、TBD 清单 | **动手前先看一遍**，改字段前再查一次 |
 | [`FORUM_API.md`](FORUM_API.md) | 论坛 UI、后端接口、账号接入与英文 RSS 采集 | 论坛联调与后端实现之前 |
-| [`SERVER_API.md`](SERVER_API.md) | **服务端 API**：账号、四桶用量、预算、价目、赛季结算、智能体；以及「中转已删」这件事 | 动服务端接口、查成本为什么算不出来之前 |
+| [`SERVER_API.md`](SERVER_API.md) | **服务端 API**：删减之后只剩账号、论坛与新闻、应用内智能体（`/api/agent/*`）；开头写了 2026-09-30 两刀各删了什么、为什么 | 动服务端接口、加服务端功能之前 |
 | [`TASKS.md`](TASKS.md) | 三个人的待办、验收标准、依赖谁 | 认领任务、判断「做完了没」 |
 | ~~`ART.md`~~ | 游戏贴图的规格。**已随游戏移出**，现在在 `../../TokenTrail_Game/docs/ART.md` | 要翻旧账时 |
 | [`OPEN_SOURCE.md`](OPEN_SOURCE.md) | 第三方库的清单：许可证、出处、谁在用、怎么加新库 | **加依赖之前先看**，写报告的开源节时照抄 |
@@ -69,13 +79,13 @@ ModelPilot 是 TokenTrail 的新产品方向。以上两处为当前大纲与静
 ```
 app/src/main/java/com/mobilegroup20/modelpilot/
 ├── contract/          接口契约。纯 Java，不 import 任何 android.* —— 三人共担，改动要打招呼
-│   ├── model/         数据类：UsageCall、DailyUsage、PricingRate、SeasonState、ForumPost …
-│   └── tool/          agent 的五个只读工具：入参和返回值
+│   ├── model/         数据类：UsageCall、DailyUsage、PricingRate、ForumPost …
+│   └── tool/          agent 的只读工具：入参和返回值（**2026-09-30 起只剩 ForumHighlights、MyThreads 两个**）
 ├── data/
-│   ├── repository/    ★ 五个接口。屏幕和逻辑只认这些，不认实现
+│   ├── repository/    ★ 接口。屏幕和逻辑只认这些，不认实现
 │   ├── stub/          桩实现（编好的假数据），真实现没写完时顶上
 │   ├── local/         张莉：Room
-│   ├── remote/        张莉（用量）、汪庭栋（论坛）：服务端 HTTP 接口
+│   ├── remote/        张莉（账号）、汪庭栋（论坛）：服务端 HTTP 接口
 │   ├── importer/      张莉：日志解析
 │   └── RepositoryProvider.java   ★ 全项目拿 Repository 的唯一入口
 ├── game/
@@ -152,10 +162,12 @@ public static final boolean USE_STUBS = true;
 
 **论坛是例外**：新论坛与 agent 论坛接口已经统一走 HttpForumRepository，不受 USE_STUBS 控制；**账号已经换成这个 App 自己的账号**（`data/AccountSession`，后端 `/api/account/*`，注册/登录/退出都在「我的」和论坛里），论坛和“我的”均有入口。未配置后端时显示准备中，不返回假帖子。
 
-> **2026-02 起身份只有一个；2026-09-30 中转删除后它成了唯一一种凭据。**`AccountSession`（APP 账号，`tt_app_` token）是「当前是谁」的唯一来源；
+> **2026-02 起身份只有一个；2026-09-30 两刀之后它是唯一一种凭据。**`AccountSession`（APP 账号，`tt_app_` token）是「当前是谁」的唯一来源；
 > 论坛测试身份（`tt_test_`，仅 Debug）也在它里面。~~`RelayCredentials` 只剩 relay key 和上游地址~~ ——
-> **那个类已随中转一起删除（2026-09-30）**：relay key 不再签发也不再认，
-> 用量、赛季、预算、智能体全部按账号的 `userId` 记账（见 [`CONTRACTS.md`](CONTRACTS.md) §5）。
+> **那个类已随中转一起删除（2026-09-30）**：relay key 不再签发也不再认。
+> ~~用量、赛季、预算、智能体全部按账号的 `userId` 记账~~ **（2026-09-30 第二刀）**
+> 用量、赛季、预算那三样连表和接口一起删了，**服务端现在只有智能体那本账**
+> （`agent_usage`）还按账号的 `userId` 记（见 [`SERVER_API.md`](SERVER_API.md)）。
 
 桩数据里 `importCalls()` 会如实报告「全部被拒」（`rejected` 等于传入条数）：
 桩没有真的存进去。这样谁误以为导入已经能用了，会立刻发现。
@@ -164,7 +176,7 @@ public static final boolean USE_STUBS = true;
 
 ```bash
 ./gradlew assembleDebug            # 编译，出 APK
-./gradlew testDebugUnitTest        # 跑单元测试（现在 309 个，全过；另有 1 个 @Ignore 的探针）
+./gradlew testDebugUnitTest        # 跑单元测试（现在 52 个，全过）
 ./gradlew connectedDebugAndroidTest # 需要连真机/模拟器，目前只有模板测试
 ```
 
@@ -181,7 +193,7 @@ public static final boolean USE_STUBS = true;
 
 | 部分 | 状态 |
 | --- | --- |
-| 接口契约（`contract/`） | **完成**，字段定稿，12 个单元测试盯着计价和结算口径 |
+| 接口契约（`contract/`） | **完成**，字段定稿；测试盯着四桶口径与计价底线（`ContractMathTest`，**2026-09-30 因 `Budget` / `Coverage` / `CompareResult` 被删而从 9 个减到 5 个**） |
 | **【已随游戏移出】** 战场几何与相机（`game/engine/`） | **完成**：`BoardGeometry` 算格子和像素的换算、占地判定（25 个测试），`Viewport` 管缩放拖动和取景（23 个测试），`Battlefield` 管占位、地形分区（通道/可放置/山区）、挪动（核心和任意建筑）和整场战斗（推进、开火、挡路、清场、胜负判定） |
 | **【已随游戏移出】** 战斗（`game/engine/Battlefield` + `PathField` + `Waves` + `EnemyType`） | **能在真机上跑**：五波敌人、三种兵、塔打子弹（`Projectile`：每发多少 + 几秒一发，追着目标飞）、敌人自己找路、敌人啃建筑、核心被打掉就结束、漏怪计数、结果卡片。挑目标：塔打**最靠前**的那只（按寻路表算，不按 x），敌人去**最近的建筑**、咬**挨着最近**的那座——**塔和核心优先级相同**，核心不是天然终点。**墙是唯一的例外**：寻路表上只有墙贵（贵过任何绕路），所以敌人绕着墙走、只有封死了才拆；塔和核心是表上的目标、不参与价钱。真机验过：发波、行走、被墙挡住、墙被拆掉、子弹在飞（真机连拍 12 帧抓到 3 帧）、血条、`Core 600/600 · N leaked`。**还没做的**：敌人之间不互相挡（汇到缺口会叠成一坨）、没有音效、**演示场面的配平**（敌人现在会主动拆塔，20 个种子里 0 个守得住、六座塔全被打光，见 [`TASKS.md`](TASKS.md) 那节） |
 | **【已随游戏移出】** 战场视图（`game/view/`） | **能在真机上跑**：80×36 的战场（一屏看得到 **23.7 列 × 全部 36 行**，所以**只有横向要拖**，一格 15.8dp），摆放、挪核心、缩放、横向拖动、发波、战斗（子弹画成白点）、建筑详情都通了。**2026-09-27 起手势按「手上有什么」分三种**：手上拎着一件时**从空地拖出去就建一排**（点一下还是建一座），拖地图改用**双指**（单指被建一排占掉了，没有别的手势能一边拿着货一边挪画面）；已经选中的那一排可以**直接拖着走**；按在没选中的建筑上仍然是拖地图——不然想平移视野时手指落在塔上，塔就被挪走了。**地面也是真贴图**：可放置区和敌人通道**共用一张** 1024×1024 的草地（`tile_grass.png`，16 格 × 16 格；周期现在是 **851px**，格子缩到 53.2px 之后**比一屏短了**，竖着一屏能看到 3.3 个周期，见 `ART.md` §2.5），靠两个颜色系数分成绿 / 土黄——绿那条用乘法，土那条得用 `ColorMatrix`（两个色相离得远，乘法会把草叶的高光染成粉的）；右边山区铺岩石贴图，和整页背景是**同一张图、同一个锚点**。**地形边界不再是一条直边**：山 ↔ 草、通道 ↔ 可建区两条交界都做了软化（起伏 + 渐隐，五层路径、缓存的），而且**三条过渡带全都铺在"不能放东西"的那一侧**——可放置区里铺的永远是纯草，一像素都不许染（真机逐像素量过，贴边界和远离边界差在 1% 以内），见 `ART.md` §5「交界不能是拿尺子切的」。**网格线平时不画**，只在**手上拿着东西**（要放新的、或在挪旧的）时出现：满屏格线会把草地变成坐标纸，而摆位是唯一需要数格子的时刻。原来可放置区那格一换的深浅棋盘格在第一版贴图上根本看不出来（真机量过，画上去了但被草自己的明暗盖住），2026-09-27 删了，`game_grid_line` 相应加深；换第二版均匀贴图之后台阶是噪声的 15 倍、**加回来就会很显眼**，而且格线藏起来之后它是唯一的常驻数格子工具，这条留给用户定，见 `ART.md` §2.5。规格见 `ART.md` §2.5。**两种塔都是真贴图**：箭塔三级 845×512（炮管朝左探出 1 格）、弩车三级 794×512（弩弓朝左探出 0.9 格）——**占地都是 2×2、贴图不一样宽**，因为探出量是从图上量出来的，不是按占地摊的；原图都朝右，抠图时统一镜像。**开火时盖一层发光**：箭塔是炮口那一小块（589×512，窗口伸到贴图左边外面），弩车是整张（794×512，光线本身横贯弩身），都亮 0.12 秒淡出、和素图分开两张图。**敌人也是真贴图**：走路 / 挥击 / 站姿三张 422×422 的方图（`EnemySprites`），**三种兵共用这三张**——区分靠体格（`bodyCells`，三种差 1.56 倍，直接乘在贴图尺寸上）和**脚下那圈颜色**（深色接地影 + 一圈种类色的边：杂兵红 / 快兵黄 / 重甲紫）。走路按"走过几格"翻帧（不是按时间，不然快兵会脚不动人平移；格子数取引擎记的路程 `Enemy.travelled`，**竖着换行那几格才算得进去**——只看 `enemy.x` 的话敌人横着平移时不迈腿），啃建筑时挥击和站姿按本机时钟交替。**城墙也是真贴图**：一张 256×384 的柱子（1×1 占地 + 上探 0.5 格，横竖都用它、三级也共用），但**内容只占 0.90 × 1.12 格**——原图的宽高比（0.81）顶不满画布，两头都顶满各有一个方向会断成一节节，所以取中间：竖着堆相邻两格**故意重叠 0.12 格**（靠 `drawSprites` 按脚踩的 y 升序排，下面那段的柱冠压在上面那段的柱基上，看着就是砌缝），横着摆只剩 0.10 格（真机 9px）的缝；规格和取舍表见 `ART.md` §2.6。**核心三级也是真贴图**：画布 768×1024（3×3 占地 + 上探 1 格），**定标量的是"内容最宽的那一行"而不是"踩地那一行"**——三张原图正中间都有一道通向大门的台阶伸到最下面，最底下一行只有 0.83~1.12 格宽，那是台阶不是底座。三级**同宽（3.00 格 = 占地宽）、不同高**（3.25 / 3.14 / 2.85 格，由各自原图的宽高比带出来），所以**越高级反而越矮**：三级画的是三种体型，摊得越开的那张按同一个宽度缩下来就越矮，"升级了"靠的是换了张图（细节和发光多得多）而不是变大一圈；宽度是硬约束（按高度定标会让一级超出画布），台阶落在贴图最下面则是对的（贴图底边 = 占地框的前边，3/4 视角里最靠下的就是离镜头最近的）。规格见 `ART.md` §2.7。**四种建筑全画完了，`drawBlock` 那条色块兜底暂时走不到**（留着做"新加一种建筑、图还没画"的中间态）。**剩下只有子弹还是色块占位**（换真贴图只动 `drawProjectiles` 一处） |
@@ -191,9 +203,9 @@ public static final boolean USE_STUBS = true;
 | **【已随游戏移出】** 底部导航与落地页（`menu/bottom_nav.xml` + `MainActivity.showTab`） | **骨架通了**：统计 / 游戏 / 论坛 / 我的。**打开 App 落在"统计"**——落地页就是菜单里的第一项，没有第二个开关，换顺序就是换主页。**游戏与论坛已有页面**，统计与我的共用一个空壳（`@id/empty_page`），上面写一句 `Xxx is not built yet`（一片空白分不清"还没做"和"崩了"）。切页时世界层一起 `INVISIBLE`（它铺满全屏，不藏会从空壳下面透出来），**顺带把战斗冻住了**——推进挂在 `onDraw` 上，看不见就不出帧，回来也不补帧。四个坑见 [`TASKS.md`](TASKS.md) |
 | 桩数据（`data/stub/`） | **完成**，可以照着做界面和玩法 |
 | 界面骨架（`ui/`） | 根包里的 `MainActivity` 已经是**真的**（战场页 + 底部导航 + 商店/详情弹窗，见上两行）；`ui/forum` 和 `ui/auth` 也有了真页面（汪庭栋，见上一行），`ui/dashboard` 已经落地（`DashboardUsage` + 测试），**`ui/game` 已随游戏移出** |
-| 数据侧真实现 | **进行中，服务端已是权威**。`data/local` 落地了三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 建表语句导出在 `app/schemas/`。**App 侧连服务端的仓储已有两个**：`HttpSeasonRepository`（余额/结算，12 个 HTTP 契约测试）和 `HttpBudgetRepository`（预算上限，12 个）。**还没有**：`data/remote` 的用量 fetcher、`data/importer` 的解析器、`UsageRepository` 的 HTTP 实现（它的读和写混在一起，要等导入路径也搬到服务端，见 [`CONTRACTS.md`](CONTRACTS.md) §5）。**价目表是空的**——没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
-| API 服务端（汪庭栋） | **记账那一组已上线，默认关闭**。~~用户先登录账号，再在「我的」页填上游地址 + 上游 key，服务端发一个 relay key，把 cc-switch 的供应商指向 `https://43.140.212.47/api/relay` 就能转发~~ ——**中转 2026-09-30 整块删除**（App 侧不用再配任何东西，`RelayCredentials` / 中转设置页都没了）。服务端现在只有五组接口：**账号**（`/api/account/*`）、**用量**（`GET /usage`、`/usage/daily`、`/usage/calls`、`/usage/summary`、`/usage/compare`）、**预算**（`/budgets/{month}`）、**价目**（`/pricing*`）、**赛季结算**（`/season*`，消费者游戏已移出）和**智能体**（`/agent/ask|status`）。契约见 [`SERVER_API.md`](SERVER_API.md)。结算是服务端算的，客户端一行判断都没有（见 [`CONTRACTS.md`](CONTRACTS.md) §7）。App 侧 `HttpSeasonRepository`、`HttpBudgetRepository` 已实现。**身份只有账号 token 一种**——relay key 不再签发也不再认（2026-09-30）。**`/api/relay/*` 这个前缀是历史字面量**，和"中转"已经没关系。**「用户提问 → 后端调模型 → 记用量」那条新路还没写**，所以用量接口现在读到的可能是一张空表 |
-| 论坛（汪庭栋） | News / Community、图文发布、点赞评论、账号注册/登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md。**账号现在是 App 自己的账号**（`/api/account/*`，不再是团队那台机器上的账号服务），和用量、结算共用同一个 `userId` |
-| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/tokentrail_forum/agent.py` + `/agent/ask`（见 [`SERVER_API.md`](SERVER_API.md)）|
+| 数据侧真实现 | **进行中，App 的用量读的是本机 Room**。`data/local` 落地了三张表 + 转换器 + DAO + 滚汇总（`DailyRollup`，17 个测试）+ `RoomUsageRepository`，Room 建表语句导出在 `app/schemas/`。**服务端的用量/预算仓储已随记账链删除（2026-09-30 第二刀）**：`ServerApi`、`HttpBudgetRepository`、`HttpSeasonRepository`、`BudgetRepository`、`StubBudgetRepository` 和 `contract/model/Budget`、`contract/tool/{BudgetStatus,Coverage,UsageSummary,CompareResult}` 全部删掉，**App 端不再有任何打服务端用量/预算的地方**。**还没有**：`data/remote` 的用量 fetcher、`data/importer` 的解析器、`UsageRepository` 的 HTTP 实现（服务端那条写路径还没写，见 [`CONTRACTS.md`](CONTRACTS.md) §5）。**本机计价表是空的**——没录价的模型成本显示成「不可计算」而不是 0。依赖：Room 2.8.5 + MPAndroidChart v3.1.0，清单见 [`OPEN_SOURCE.md`](OPEN_SOURCE.md) |
+| API 服务端（汪庭栋） | **2026-09-30 第二刀之后，服务端只剩下三样：账号、论坛与新闻、应用内智能体**（另有不需要身份的 `GET /health`）。~~用户先登录账号，再在「我的」页填上游地址 + 上游 key，服务端发一个 relay key，把 cc-switch 的供应商指向 `https://43.140.212.47/api/relay` 就能转发~~ ——**中转第一刀删除**；~~用量、预算、价目、赛季四组接口~~ ——**记账链第二刀整块删除**（连带 `relay_usage` 等五张表和 App 侧的 `ServerApi` / `HttpBudgetRepository`）。删的理由：**没有生产者也没有消费者**，空转的接口比没有接口更糟——Insights 要等「后端替用户调模型」那条路写出来再重新设计，别照抄删掉的那套。智能体现在挂在 **`/api/agent/ask|status`**，只有两个只读工具（`getForumHighlights`、`getMyThreads`），`/status` 也不报钱了（改成 `"costReporting": "unavailable"`）。契约见 [`SERVER_API.md`](SERVER_API.md)。**身份只有账号 token 一种**——relay key 不再签发也不再认。**「用户提问 → 后端调模型 → 记用量」那条新路还没写** |
+| 论坛（汪庭栋） | News / Community、图文发布、点赞评论、账号注册/登录与 HTTP 适配已实现；后端已在现有服务器运行，见 FORUM_API.md 和 backend/README.md。**账号现在是 App 自己的账号**（`/api/account/*`，不再是团队那台机器上的账号服务），和智能体那本账共用同一个 `userId` |
+| 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/modelpilot_forum/agent.py` + `/api/agent/ask`（见 [`SERVER_API.md`](SERVER_API.md)）|
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。

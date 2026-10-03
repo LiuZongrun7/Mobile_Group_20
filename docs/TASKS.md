@@ -2,16 +2,34 @@
 
 三个人各做一块。这份文档回答三个问题：**我该做什么、怎么算做完、卡住了找谁。**
 
-> 给用 AI 读代码的人：契约字段的含义以 `app/src/main/java/com/mobilegroup20/tokentrail/contract/`
+> **2026-09-30 第二刀之后，服务端只剩三样东西：账号（`/api/account/*`）、
+> 论坛与新闻（`/api/forum/*`）、应用内智能体（`/api/agent/ask|status`）。**
+> 原来的用量、预算、价目、赛季四组接口**连同它们的表、后端模块和 Android 侧客户端
+> 全部删除**（`relay_usage` / `season_balances` / `season_settlements` / `budgets` /
+> `pricing_rates`；`usage_store.py`、`budgets.py`、`pricing.py`、`seed_pricing.py`、
+> `summary.py`、`seasons.py`；`ServerApi`、`HttpBudgetRepository`、
+> `BudgetRepository`、`StubBudgetRepository`、`contract/model/Budget`、
+> `contract/tool/{BudgetStatus,Coverage,UsageSummary,CompareResult}`）。
+> **所以下面凡与记账（用量 / 预算 / 价目 / 赛季结算）有关的待办，一律作废**，
+> 不要再按它们派活；Insights 要等「用户提问 → 后端调模型 → 记账」那条新路写出来
+> **重新设计**，别照抄删掉的那套（理由见 [`SERVER_API.md`](SERVER_API.md) 开头）。
+> 服务端同时改名：Python 包 `tokentrail_forum` → **`modelpilot_forum`**，
+> 服务名 `modelpilot-*`、路径 `/opt/modelpilot` 与 `/var/lib/modelpilot-forum`、
+> 库文件 `modelpilot.sqlite3`、**env 变量前缀 `FORUM_*` → `MODELPILOT_*`**
+> （系统用户仍叫 `tokentrail`）。智能体那部分仍然有效，但它现在只有**两个**
+> 只读工具（`getForumHighlights`、`getMyThreads`），路径是 **`/api/agent/*`**。
+
+> 给用 AI 读代码的人：契约字段的含义以 `app/src/main/java/com/mobilegroup20/modelpilot/contract/`
 > 下的类注释为准，本文只讲「要做什么」。每个包还有一份 `package-info.java` 写该放什么。
-> 接口的完整方法列表见 `docs/CONTRACTS.md`，或直接看 `data/repository/` 下的五个接口。
+> 接口的完整方法列表见 `docs/CONTRACTS.md`，或直接看 `data/repository/` 下的接口。
 
 > **2026-09-30：塔防游戏整块移出本工程**，代码 / 贴图 / 美术规格都在与本工程同级的
 > `../../TokenTrail_Game/`（里面 `patches/` 可以从这次移出反向恢复）。所以下面
 > §3.1「塔防引擎」整节、以及散在各处的游戏验收条目，都是**移出之前的记录**，
-> 不要再按它派活。服务端的赛季与预算**留着没动**（`/season*`、`/budgets/{month}`），
-> 口径见 `CONTRACTS.md` §7。§3.3 的 agent 仍然有效——它现在跑在服务端
-> （`backend/tokentrail_forum/agent.py`）。
+> 不要再按它派活。~~服务端的赛季与预算留着没动（`/season*`、`/budgets/{month}`）~~
+> **（2026-09-30 第二刀）那两组接口也删了**，见本文开头那段。
+> §3.3 的 agent 仍然有效——它现在跑在服务端
+> （`backend/modelpilot_forum/agent.py` + `/api/agent/ask`）。
 
 ## 0. 所有人先看这四条
 
@@ -1215,7 +1233,8 @@ Android UI、HTTP 适配、账号登录和 RSS 工具已实现；论坛后端已
   - **升级那一问排在问价前面**：这一下不成的原因是"现在不让动"，不是"钱不够"。
     反过来的话，钱包正好不够的玩家会收到"去赚资源"，等他赚回来这波早打完了。
 
-  **这一版加了两条单测**（`BattlefieldTest`，**309 个测试 / 0 失败 / 1 跳过**）：
+  **这一版加了两条单测**（`BattlefieldTest`，**当时全项目 309 个测试 / 0 失败 / 1 跳过**；游戏与记账两刀删下来之后
+现在全项目是 52 个 Android 单测 + 76 个后端测试）：
   「打起来了就锁、一波清完就解锁」和「一波都没发过但场上有敌人也锁」。
   第二条是钉住"判的是场上有没有人，不是发过几波"——不然这条规矩会变成
   "发过波次之后才生效"。视图层挡下来那一半没有单测（`BattlefieldView`

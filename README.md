@@ -25,9 +25,9 @@
 
 ## 服务端现在提供什么
 
-服务端（`backend/`）只有五组给 App 用的接口：**账号**（`/api/account/*`）、**用量**（`/api/relay/usage*`）、**预算**（`/api/relay/budgets/{month}`）、**价目**（`/api/relay/pricing*`）、**赛季结算**（`/api/relay/season*`）和**应用内智能体**（`/api/relay/agent/*`），另有论坛与新闻。契约见 [docs/SERVER_API.md](docs/SERVER_API.md)。
+服务端（`backend/`）现在只有三样东西：**账号**（`/api/account/*`）、**论坛与新闻**（`/api/forum/*`）、**应用内智能体**（`/api/agent/ask|status`），外加一个不需要身份的 `GET /health`。契约见 [docs/SERVER_API.md](docs/SERVER_API.md)。
 
-> **原来的「API 中转」已整块删除（2026-09-30）。** 那一层是「用户把自己上游的 API key 填进来、我们把 cc-switch 的请求替他转发上去并顺手记用量」——新方向（ModelPilot 大纲）改成**用户在 App 里提问、后端用我们自己的模型连接调用**，所以转发这条路没有了：**用户不再需要交任何 key 给我们**，relay key（`tt_`）这种凭据不再签发也不再认，身份只有账号 token（`tt_app_`）一种。**「用户提问 → 后端调模型 → 记账」那条新路还没写**，所以用量接口现在读到的可能是一张空表。URL 前缀里的 `relay`（`/api/relay/*`）和 env 变量名（`FORUM_ENABLE_RELAY` 等）是**历史遗留字面量**，改它们要同时动 App、部署脚本和文档，先留着。
+> **原来的「API 中转」和整条「记账链」都已删除（2026-09-30，两刀）。** 第一刀删的是「用户把自己上游的 API key 填进来、我们把 cc-switch 的请求替他转发上去并顺手记用量」那一层——新方向（ModelPilot 大纲）改成**用户在 App 里提问、后端用我们自己的模型连接调用**，所以转发这条路没有了：**用户不再需要交任何 key 给我们**，relay key（`tt_`）不再签发也不再认，身份只有账号 token（`tt_app_`）一种。第二刀删的是**用量 / 预算 / 价目 / 赛季四组接口**（`/api/relay/usage*`、`/budgets*`、`/pricing*`、`/season*`）连同它们的表（`relay_usage`、`season_balances`、`season_settlements`、`budgets`、`pricing_rates`）、后端模块和 Android 侧客户端（`ServerApi`、`HttpBudgetRepository` 等）。**删的理由是记账链没有生产者也没有消费者**——空转的接口比没有接口更糟，会让人以为账已经在记了；Insights 要等「用户提问 → 后端调模型 → 记账」那条新路写出来之后**重新设计**。智能体现在挂在 `/api/agent/*`（原来是 `/api/relay/agent/*`），只保留两个只读工具，`/status` 也不再报金额（改成 `"costReporting": "unavailable"`）。**服务端的 Python 包、systemd 服务名、部署路径、库文件名和 env 变量前缀（`FORUM_*` → `MODELPILOT_*`）也在同一轮改成了 ModelPilot。**
 
 ## 目录结构
 
