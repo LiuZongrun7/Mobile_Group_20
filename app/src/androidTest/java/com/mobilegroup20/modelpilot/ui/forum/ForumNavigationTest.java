@@ -13,18 +13,18 @@ import static androidx.test.espresso.matcher.ViewMatchers.*;
 
 @RunWith(AndroidJUnit4.class)
 public class ForumNavigationTest {
-    @Test public void forumTabsSurviveTabNavigationAndActivityRecreation() {
+    @Test public void exploreTabsSurviveTabNavigationAndActivityRecreation() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-            onView(withId(R.id.nav_forum)).perform(click());
+            onView(withId(R.id.nav_explore)).perform(click());
             onView(withText(R.string.forum_news)).check(matches(isDisplayed()));
             onView(withId(R.id.new_post)).check(matches(isDisplayed()));
             onView(withText(R.string.forum_community)).perform(click());
             // 切走再切回来，社区那一栏的选择要还在。
             // 原来切的是"游戏"那一格——游戏已整块移出本工程（2026-09-30），
             // 改成切统计页：这一条验的是"换个标签再回来状态还在"，和切去哪一页无关。
-            onView(withId(R.id.nav_dashboard)).perform(click());
+            onView(withId(R.id.nav_insights)).perform(click());
             onView(withId(R.id.dashboard_page)).check(matches(isDisplayed()));
-            onView(withId(R.id.nav_forum)).perform(click());
+            onView(withId(R.id.nav_explore)).perform(click());
             onView(withId(R.id.forum_page)).check(matches(isDisplayed()));
             scenario.onActivity(activity -> {
                 ForumFragment fragment = (ForumFragment) activity.getSupportFragmentManager().findFragmentByTag("forum");
@@ -40,7 +40,7 @@ public class ForumNavigationTest {
         catch (Exception error) { throw new AssertionError(error); }
         com.mobilegroup20.modelpilot.data.RepositoryProvider.configureForum("", session);
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-            onView(withId(R.id.nav_forum)).perform(click());
+            onView(withId(R.id.nav_explore)).perform(click());
             onView(withId(R.id.new_post)).perform(click());
             onView(withText(R.string.forum_publish)).perform(click());
             scenario.onActivity(activity -> {

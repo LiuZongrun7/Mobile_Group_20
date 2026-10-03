@@ -160,9 +160,73 @@
          解锁条件是场上清空，文案里点出来，玩家才知道要等什么。 -->
 
     <!-- ============ 底部导航 ============ -->
-    <string name="nav_dashboard">Dashboard</string>
-    <string name="nav_forum">Forum</string>
-    <string name="nav_profile">Profile</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_insights">Insights</string>
+    <string name="nav_explore">Explore</string>
+    <string name="nav_me">Me</string>
     <!-- 底部导航还没做的三项被点到时提示。 -->
     <string name="nav_not_built">%1$s is not built yet</string>
+
+    <!-- ============ Chat 首页（设计稿 01-home.png） ============ -->
+    <string name="chat_search">Search chats</string>
+    <string name="chat_projects">Projects</string>
+    <string name="chat_new_project">New</string>
+    <string name="chat_recent">Recent chats</string>
+    <!-- 一条对话都没有时的空态。**不写 "No data"**：那分不清"还没开始"
+         和"坏了"，而这里绝大多数情况就是还没开始。 -->
+    <string name="chat_empty">Start a conversation — it stays on this phone.</string>
+    <string name="chat_attach">Attach</string>
+    <string name="chat_send">Send</string>
+    <!-- 输入条上那两个胶囊。**Auto 是默认**：用户不指定模型时每次由 AutoRouter 现挑。 -->
+    <string name="chat_auto">Auto</string>
+    <string name="chat_no_project">No project</string>
+    <!-- 每条对话下面那行徽章。1 模型名。**"Last" 后面必须有东西**：
+         大纲里这一行就是拿来一眼看出"上一条是谁答的"，空着不如不显示。 -->
+    <string name="chat_last_model">Last · %1$s</string>
+    <string name="chat_untitled">Untitled</string>
+    <string name="chat_input_hint">Ask ModelPilot…</string>
+    <string name="chat_account">Account</string>
+    <!-- 一个项目都还没有时的说法。**不说 "No projects"**：那句话像报错，
+         而这里只是用户还没建过，顺手告诉他怎么建。 -->
+    <string name="chat_projects_empty">No projects yet — tap New to group related chats.</string>
+    <!-- 两个加号长得一样、做的事不一样，所以各自的说明必须分开写：
+         这一个在项目行上，是"在这个项目里新建一条对话"。 -->
+    <string name="chat_new_chat_in_project">New chat in this project</string>
+    <string name="chat_collapse_project">Collapse project</string>
+    <string name="chat_expand_project">Expand project</string>
+    <!-- 还没说过话的对话，徽章位置上的那句话。 -->
+    <string name="chat_no_messages">No messages yet</string>
+    <!-- 相对时间。**只有今天才用 "Now" 这类词**，更早的一律给日期，
+         不然一周前的对话会显示成 "168h"，用户还得自己换算。 -->
+    <string name="chat_time_now">Now</string>
+    <string name="chat_time_minutes">%1$dm</string>
+    <string name="chat_time_hours">%1$dh</string>
+    <string name="chat_time_yesterday">Yesterday</string>
+
+    <!-- 项目名对话框。 -->
+    <string name="chat_project_name_hint">Project name</string>
+    <string name="chat_project_save">Save</string>
+    <string name="chat_pick_project">Move chat to</string>
+
+    <!-- ============ 模型弹层（设计稿 04-models.png） ============ -->
+    <string name="chat_model_title">Model</string>
+    <string name="chat_model_close">Close</string>
+    <string name="chat_model_manual">Choose manually</string>
+    <!-- 置灰那一段的标题。**照设计稿写 "for this task"**：置灰的原因是这次的任务，
+         不是这个模型不行——写成 "Unavailable models" 会让人以为它坏了。 -->
+    <string name="chat_model_unavailable">Unavailable for this task</string>
+    <!-- 这一段是给"用户还没填 key"看的，所以要告诉他去哪儿填，而不是只说"没有可选项"。 -->
+    <string name="chat_model_no_keys">No API keys yet. Add your own key in Me → API keys — calls go straight from this phone to the provider.</string>
+    <!-- 底部那句规则说明。它说的是一条**真的**规则（AutoRouter：手动选过就一直用它），
+         不是宣传语——所以别改成"我们为你智能选择"那类话。 -->
+    <string name="chat_model_note">Manual selection stays until you change it. Auto picks per message.</string>
+    <!-- 任务胶囊。**四种都要能显示**，因为置灰那一段是按任务算出来的：
+         不写清楚"这次是文本任务"，用户就没法理解为什么图片模型不能选。 -->
+    <string name="chat_task_text">Text · this message</string>
+    <string name="chat_task_image">Image · this message</string>
+    <string name="chat_task_pdf">PDF · this message</string>
+    <string name="chat_task_tools">Tool call · this message</string>
+    <!-- 对话页还没落地时点进一条对话的那句提示。**说明白是"页面"没做**，
+         而不是沿用底部导航那句 "Chat is not built yet"——Chat 这一页是做了的。 -->
+    <string name="chat_conversation_pending">The conversation screen is not built yet</string>
 </resources>

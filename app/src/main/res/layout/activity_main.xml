@@ -598,6 +598,17 @@
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
+        <!-- ===== 1.3 Chat 页 =====
+             新建主线的落地页（设计稿 `01-home.png`）：项目分组 + 最近对话 + 底部输入条。
+             内容是 Fragment（`ChatHomeFragment`），因为它要跟着 Room 的 LiveData 自己刷，
+             而这一层只负责"哪一页可见"。 -->
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/chat_page"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone" />
+
         <!-- ===== 1.4 「我的」/论坛占位与页面 =====
              共用空壳，由 MainActivity.showTab 填提示文案。论坛是下方独立容器。
              页面底色由 showTab 统一刷成浅色（游戏页搬走后不再有岩石底）。 -->

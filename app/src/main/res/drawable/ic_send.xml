@@ -1,0 +1,9 @@
+<!-- 发送。**是一个向上的箭头，不是纸飞机，也不是"↑"字**：
+     纸飞机在中文语境里常被当成"分享/转发"，而这条输入条上只有一件事可做。
+     箭头朝上沿用各家聊天 App 的肌肉记忆。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M12,4 L5,11 L6.4,12.4 L11,7.8 L11,20 L13,20 L13,7.8 L17.6,12.4 L19,11 Z" />
+</vector>

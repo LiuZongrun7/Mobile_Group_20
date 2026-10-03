@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 新建/重命名项目时那个输入框（`ProjectNameDialog`）。
+     单独一个 layout 而不是在代码里 new EditText：Material 的输入框要靠
+     TextInputLayout 包一层才有下划线、错误态和浮动标签，在代码里拼这些属性
+     比写十行 XML 更容易出错。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="24dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="0dp">
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/project_name_field"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chat_project_name_hint">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/project_name_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:imeOptions="actionDone"
+            android:inputType="textCapSentences"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+</LinearLayout>

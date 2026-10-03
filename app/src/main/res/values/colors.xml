@@ -145,4 +145,24 @@
     <color name="resource_input">#5B9BD5</color>
     <color name="resource_cache">#45B3A8</color>
     <color name="resource_output">#E08D52</color>
+
+    <!-- ============ Chat 首页：项目文件夹的颜色 ============
+         项目行左边那只文件夹按 `ProjectEntity.colorIndex` 取这里的第 N 个。
+         **一组"能分开"的颜色，不是品牌色**：同屏最多几个文件夹，只要互相分得开、
+         在浅底上够清楚就够；抄谁的 VI 都不合适（也没必要）。
+
+         放在资源里（而不是代码里的 int 数组）是为了能跟着主题走：
+         以后要加深色模式，改的是这几个值加一个 values-night，不用碰类。 -->
+    <color name="project_folder_0">#7C5CD6</color>
+    <color name="project_folder_1">#2E9E6B</color>
+    <color name="project_folder_2">#2F7BE0</color>
+    <color name="project_folder_3">#E07A2F</color>
+    <color name="project_folder_4">#C2456B</color>
+    <color name="project_folder_5">#1F9BA8</color>
+
+    <!-- 模型弹层里 `Auto` 那颗星与它那行字（浅蓝底上的蓝）。 -->
+    <color name="chat_auto_ink">#1E7BF6</color>
+    <!-- 置灰段（能力不满足的模型）的文字色。**不是灰到看不见**：
+         名字要能读出来，只是明确点不动（见 ModelSheetFragment 那段注释）。 -->
+    <color name="chat_disabled_ink">#A3ACBB</color>
 </resources>

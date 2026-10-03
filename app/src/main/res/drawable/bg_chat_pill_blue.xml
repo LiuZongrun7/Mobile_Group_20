@@ -1,0 +1,7 @@
+<!-- 输入条上 "Auto ▾" 那颗胶囊：浅蓝底 + 蓝字，**和旁边 "No project" 的灰底刻意不同**——
+     左边这颗是"这次谁来答"（模型），右边那颗是"这条对话属于谁"（项目），
+     两件事，靠颜色分开比靠位置分开更省一次辨认。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#E4F0FF" />
+    <corners android:radius="20dp" />
+</shape>

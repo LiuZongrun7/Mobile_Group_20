@@ -1,0 +1,6 @@
+<!-- `Auto` 那一行的底：浅蓝 + 圆角（设计稿里 Auto 是一张高亮卡片，
+     手动段那些行是白底）。它是默认项，**靠底色而不是靠一句"默认"**来表态。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#ECF3FF" />
+    <corners android:radius="16dp" />
+</shape>

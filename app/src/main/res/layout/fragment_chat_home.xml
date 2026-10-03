@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chat 首页（设计稿 `docs/modelpilot-outline/assets/home.png`）。
+
+  版面从上到下四段，**顺序照设计稿**：
+    1. 头部：`ModelPilot` + 搜索 + 账号首字母圆标；
+    2. `Projects`：右上 `+ New`，下面按项目分组；组内每行对话带
+       `Last · <模型>` 徽章与相对时间，组内左侧有一条竖线表示"这些属于上面那个项目"；
+    3. 分隔线 + `Recent chats`：同一个行样式，但不分组、按最近活跃；
+    4. 底部输入卡片：`Ask ModelPilot…` + 一行 `+` / `Auto ▾` / `No project ▾` / 发送。
+
+  **这一页自己不发消息**：在这里按下发送等于"开一条新对话，把这句话作为第一条"，
+  真正的发送链路在对话页（`ChatConversationFragment`）。空态、分组折叠、行点击
+  都由 `ChatHomeFragment` 处理——这里只负责"有什么、长什么样"。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F7F8FC"
+    android:orientation="vertical">
+
+    <!-- ===== 1. 头部 ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/app_name"
+            android:textColor="#0B1B33"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/chat_search"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chat_search"
+            android:padding="8dp"
+            android:src="@drawable/ic_search"
+            app:tint="#0B1B33" />
+
+        <TextView
+            android:id="@+id/chat_avatar"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_chat_avatar"
+            android:contentDescription="@string/chat_account"
+            android:gravity="center"
+            android:textColor="#123A7A"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            tools:text="A" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/chat_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="16dp">
+
+            <!-- ===== 2. Projects ===== -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/chat_projects"
+                    android:textColor="#0B1B33"
+                    android:textSize="21sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/chat_new_project"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_plus"
+                        app:tint="#1E7BF6" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="@string/chat_new_project"
+                        android:textColor="#1E7BF6"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/chat_projects_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="vertical" />
+
+            <!-- 一个项目都没有时的说法（用户还没建过项目，而首页没有任何分组会像坏了）。 -->
+            <TextView
+                android:id="@+id/chat_projects_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/chat_projects_empty"
+                android:textColor="#7A8699"
+                android:textSize="13sp" />
+
+            <!-- ===== 3. Recent chats ===== -->
+            <View
+                android:id="@+id/chat_section_divider"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="18dp"
+                android:background="#E7EBF2" />
+
+            <TextView
+                android:id="@+id/chat_recent_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/chat_recent"
+                android:textColor="#0B1B33"
+                android:textSize="21sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/chat_recent_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="vertical" />
+
+            <!-- 一条对话都没有时的空态。**不写 "No data"**：那分不清"还没开始"
+                 和"坏了"，而这里绝大多数情况就是还没开始。 -->
+            <TextView
+                android:id="@+id/chat_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/chat_empty"
+                android:textColor="#7A8699"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- ===== 4. 底部输入卡片 ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_chat_input_card"
+            android:orientation="vertical"
+            android:paddingStart="14dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="10dp">
+
+            <EditText
+                android:id="@+id/chat_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:hint="@string/chat_input_hint"
+                android:importantForAutofill="no"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="5"
+                android:minHeight="44dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:textColor="#0B1B33"
+                android:textColorHint="#98A3B5"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/chat_attach"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/chat_attach"
+                    android:padding="7dp"
+                    android:src="@drawable/ic_plus"
+                    app:tint="#0B1B33" />
+
+                <!-- Auto：模型（谁答）。**默认就是它**，见 AutoRouter。 -->
+                <LinearLayout
+                    android:id="@+id/chat_model_chip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_chat_pill_blue"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp">
+
+                    <ImageView
+                        android:layout_width="15dp"
+                        android:layout_height="15dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_sparkle"
+                        app:tint="#1E7BF6" />
+
+                    <TextView
+                        android:id="@+id/chat_model_chip_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/chat_auto"
+                        android:textColor="#1E7BF6"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        tools:text="Auto" />
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="2dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron_down"
+                        app:tint="#1E7BF6" />
+                </LinearLayout>
+
+                <!-- 项目（这条对话属于谁）。**和模型那颗分开**：换模型是常事，
+                     换项目是另一回事，合并成一颗会让人以为在选"这个项目的模型"。 -->
+                <LinearLayout
+                    android:id="@+id/chat_project_chip"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_chat_pill_grey"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_folder_closed"
+                        app:tint="#5B6B82" />
+
+                    <TextView
+                        android:id="@+id/chat_project_chip_text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/chat_no_project"
+                        android:textColor="#3A4A61"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron_down"
+                        app:tint="#5B6B82" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/chat_send"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_chat_send_circle"
+                    android:clickable="true"
+                    android:contentDescription="@string/chat_send"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_send"
+                    app:tint="#FFFFFF" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

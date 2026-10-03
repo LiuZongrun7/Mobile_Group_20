@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  模型弹层里的一行（`Auto` 那张卡 / 一个手动可选的模型 / 一个置灰的模型）。
+
+  **三段共用这一个行布局**，靠代码调三处：
+    1. `Auto` 段：整行有浅蓝底 + 圆角（它是默认项，要一眼看见），右边是勾；
+    2. 手动段：白底，右边是空心圆（未选）；
+    3. 置灰段：**文字变浅、圆点变空心灰、整行不可点**——但名字照样显示。
+
+  左边那颗圆形标记是 provider 的缩写字母（`ProviderPalette`），
+  不是各家 logo：六个手画的标志远不如一个字母好认，而且加一家就要画一个。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="68dp"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/model_mark"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:background="@drawable/bg_chat_avatar"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:textColor="#0B1B33"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        tools:text="G" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/model_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#0B1B33"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            tools:text="GPT-5.5" />
+
+        <TextView
+            android:id="@+id/model_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#7A8699"
+            android:textSize="13sp"
+            tools:text="400K context · 价格未知 · 可看图" />
+    </LinearLayout>
+
+    <!-- 选中态：一个勾；未选中：一个空心圆。**两者都要占位**，
+         否则同一列里的文字会随选中状态左右跳。 -->
+    <ImageView
+        android:id="@+id/model_check"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="10dp"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_check"
+        app:tint="#1E7BF6"
+        tools:visibility="visible" />
+
+    <View
+        android:id="@+id/model_radio"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="12dp"
+        android:background="@drawable/bg_chat_radio"
+        tools:visibility="gone" />
+</LinearLayout>

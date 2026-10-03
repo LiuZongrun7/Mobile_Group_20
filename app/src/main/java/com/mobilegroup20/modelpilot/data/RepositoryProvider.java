@@ -53,6 +53,7 @@ public final class RepositoryProvider {
     private static Context appContext;
     private static AppDatabase database;
     private static PricingSource pricing;
+    private static com.mobilegroup20.modelpilot.chat.ProviderRegistry providers;
 
     private RepositoryProvider() {
     }
@@ -115,6 +116,47 @@ public final class RepositoryProvider {
     }
 
     /** 用量数据。桩 → {@code com.mobilegroup20.modelpilot.data.local.RoomUsageRepository}。 */
+    /**
+     * 对话库（项目 / 对话 / 消息 / 记忆）。
+     *
+     * <p>**这是新主线的本地存储**：key 在手机、调用从手机发出去，所以对话与记忆
+     * 也全在本机（见 `docs/CHAT_ENGINE.md` §1）。服务端一张表都不加。
+     */
+    public static com.mobilegroup20.modelpilot.chat.local.ChatDao chats() {
+        return database().chatDao();
+    }
+
+    /**
+     * 六家 provider 的能力表（`ProviderRegistry.defaults()` + 用户在设置里改过的 base URL）。
+     *
+     * <p>**base URL 的覆盖在这里统一贴上去**，而不是让每个调用点自己去问
+     * {@link ProviderKeys}：漏一处就会出现"设置里改了地址、某条路径还往老地址发"，
+     * 而这种错很难发现（老地址一般也通，只是不生效）。
+     *
+     * <p>用户在设置里改完地址后要调 {@link #reloadProviders()}，否则拿到的还是旧的那份。
+     */
+    public static synchronized com.mobilegroup20.modelpilot.chat.ProviderRegistry providers() {
+        if (providers == null) {
+            com.mobilegroup20.modelpilot.chat.ProviderRegistry registry =
+                    com.mobilegroup20.modelpilot.chat.ProviderRegistry.defaults();
+            if (appContext != null) {
+                for (com.mobilegroup20.modelpilot.chat.ProviderSpec spec : registry.providers()) {
+                    String url = ProviderKeys.baseUrl(appContext, spec.providerId);
+                    if (url != null && !url.isEmpty()) {
+                        registry = registry.withBaseUrl(spec.providerId, url);
+                    }
+                }
+            }
+            providers = registry;
+        }
+        return providers;
+    }
+
+    /** 设置里改了 base URL、或存/删了 key 之后调它；下一次 {@link #providers()} 重新算。 */
+    public static synchronized void reloadProviders() {
+        providers = null;
+    }
+
     public static synchronized UsageRepository usage() {
         if (usage == null) {
             usage = USE_STUBS

@@ -1,0 +1,8 @@
+<!-- 项目行左边的折叠箭头。项目组默认展开（用户点一下才折起来）——
+     折起来的状态要记住，但那是 ProjectEntity 之外的界面状态，见 ChatHomeFragment。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M7.4,8.6 L12,13.2 L16.6,8.6 L18,10 L12,16 L6,10 Z" />
+</vector>

@@ -40,6 +40,16 @@ public interface ChatDao {
     @Query("SELECT * FROM chat ORDER BY updated_at_epoch_millis DESC LIMIT :limit")
     LiveData<List<ChatEntity>> recentChats(int limit);
 
+    /**
+     * 全部对话，按最近活跃。
+     *
+     * <p>首页要按项目分组显示，而"每个项目各挂一个 LiveData"会在项目数变化时
+     * 反复注册/注销观察者（列表一动就要重挂），很容易漏掉一次而显示成旧数据。
+     * 一次性拿全量、在内存里分组，是这个数据量级（本机、几十到几百条）下更稳的写法。
+     */
+    @Query("SELECT * FROM chat ORDER BY updated_at_epoch_millis DESC")
+    LiveData<List<ChatEntity>> allChats();
+
     @Query("SELECT * FROM chat WHERE id = :id")
     ChatEntity chat(String id);
 

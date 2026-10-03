@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  底部导航三项：统计 / 论坛 / 我的。（原来第一项之后还有"游戏"，2026-09-30 整块
-  移到与本工程同级的 `../ModelPilot_Game/`，那一格导航随之删掉。）
+  底部导航四项：Chat / Insights / Explore / Me（设计稿 `modelpilot-ui/DESIGN.md` 的顶层导航）。
 
-  **"统计"排第一，因为它是打开 App 的落地页**（BottomNavigationView 默认选中
-  第一项，见 MainActivity.showTab）。这是个产品判断：ModelPilot 是个用量统计工具，
-  不该一打开就糊人一脸别的板块。
-  换顺序就是换主页——这也是为什么这里只有顺序、没有"哪一项是主页"的另一个开关。
+  **顺序就是主页**：BottomNavigationView 默认选中第一项，所以打开 App 落在 Chat——
+  这一版的产品是"一个能换模型的助手"，用量与论坛都是它的补充（大纲 §5）。
+  换顺序就是换主页，这里只有顺序、没有第二个开关。
+
+  历史：2026-09-30 之前是「统计 / 游戏 / 论坛 / 我的」，游戏整块移出、统计并进 Insights、
+  论坛与新闻并进 Explore（见 `docs/CHAT_ENGINE.md` §5）。
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/nav_dashboard" android:icon="@drawable/ic_dashboard" android:title="@string/nav_dashboard"/>
-    <item android:id="@+id/nav_forum" android:icon="@drawable/ic_forum" android:title="@string/nav_forum"/>
-    <item android:id="@+id/nav_profile" android:icon="@drawable/ic_profile" android:title="@string/nav_profile"/>
+    <item android:id="@+id/nav_chat" android:icon="@drawable/ic_chat" android:title="@string/nav_chat"/>
+    <item android:id="@+id/nav_insights" android:icon="@drawable/ic_insights" android:title="@string/nav_insights"/>
+    <item android:id="@+id/nav_explore" android:icon="@drawable/ic_explore" android:title="@string/nav_explore"/>
+    <item android:id="@+id/nav_me" android:icon="@drawable/ic_profile" android:title="@string/nav_me"/>
 </menu>

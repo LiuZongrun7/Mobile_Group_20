@@ -1,0 +1,11 @@
+<!-- 对话行左边那个气泡。**空心**（描边不填充）：它在这一行里只是个"这是条对话"的
+     类别标记，实心的话会和右边那颗带色徽章抢注意力。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.7"
+        android:strokeLineJoin="round"
+        android:pathData="M12,3.8c-4.8,0 -8.7,3.2 -8.7,7.2 0,2.2 1.2,4.2 3.1,5.5L6,20.4l4.1,-2.2c0.6,0.1 1.2,0.1 1.9,0.1 4.8,0 8.7,-3.2 8.7,-7.3S16.8,3.8 12,3.8Z" />
+</vector>

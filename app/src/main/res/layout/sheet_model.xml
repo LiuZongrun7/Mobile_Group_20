@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  模型选择弹层（设计稿 `models.png`）。
+
+  三段结构**照设计稿**，而且顺序不能换：
+    1. 这次的任务（`Poster.png · Image edit` 那颗胶囊）——它解释了下面为什么有人被置灰；
+    2. `Auto` 单独一张高亮卡片（默认选中，副标题 "Chooses for each message"）；
+    3. `Choose manually` 与 `Unavailable for this task` 两段。
+
+  弹层内容是代码拼的（`ModelSheetFragment`），这里只给"壳"：
+  标题、关闭、任务胶囊、三个容器、底部说明。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#FFFFFF"
+    android:orientation="vertical"
+    android:paddingTop="8dp">
+
+    <!-- 顶部那道小横条：可拖动关闭的提示（BottomSheet 自带拖拽，没这个提示
+         用户不会知道能往下拉）。 -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="#E1E5EC" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/chat_model_title"
+            android:textColor="#0B1B33"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/model_close"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chat_model_close"
+            android:padding="9dp"
+            android:src="@drawable/ic_close"
+            app:tint="#0B1B33" />
+    </LinearLayout>
+
+    <!-- 这次要做什么（文本 / 图片 / PDF / 工具）。**没有附件时也显示**：
+         它同时是"置灰那一段为什么存在"的答案，藏起来的话用户只会看到
+         一堆不能点的模型。 -->
+    <TextView
+        android:id="@+id/model_task"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_chat_pill_grey"
+        android:drawablePadding="6dp"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="6dp"
+        android:textColor="#3A4A61"
+        android:textSize="13sp"
+        tools:text="Text · this message" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="8dp">
+
+            <LinearLayout
+                android:id="@+id/model_auto_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/model_manual_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="20dp"
+                android:text="@string/chat_model_manual"
+                android:textColor="#7A8699"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:id="@+id/model_manual_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/model_unavailable_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="20dp"
+                android:text="@string/chat_model_unavailable"
+                android:textColor="#7A8699"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:id="@+id/model_unavailable_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- 一个能选的都没有（比如六个 key 一个都没填）。**这时要说"去哪填"**，
+                 而不是只留三段空标题。 -->
+            <TextView
+                android:id="@+id/model_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="12dp"
+                android:text="@string/chat_model_no_keys"
+                android:textColor="#7A8699"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </ScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:background="#EDF0F5" />
+
+    <!-- 底部那句说明照设计稿："手动选过一次之后就一直用它，直到你自己改。"
+         它说的是一条真实规则（见 AutoRouter 的类注释），不是宣传语。 -->
+    <TextView
+        android:id="@+id/model_note"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="20dp"
+        android:text="@string/chat_model_note"
+        android:textColor="#3A4A61"
+        android:textSize="13sp" />
+</LinearLayout>

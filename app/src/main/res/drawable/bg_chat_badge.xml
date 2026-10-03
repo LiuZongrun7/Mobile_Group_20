@@ -1,0 +1,8 @@
+<!-- 对话行里那颗 `Last · <模型>` 徽章的底。
+     形状是白的，**颜色由代码 tint**（见 `ui/chat/ProviderPalette`）：
+     同一个形状按家换色，比每家做一个 drawable 少五个文件，也不会出现
+     "新加一家忘了加 drawable"导致徽章变透明。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="8dp" />
+</shape>

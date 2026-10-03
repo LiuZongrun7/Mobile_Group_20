@@ -1,0 +1,7 @@
+<!-- 未选中那个空心圆（设计稿里手动段的模型右边是个圆圈）。
+     空心而不是实心灰点：**未选中和"不可选"必须长得不一样**——
+     置灰段那一段的圆圈是更浅的灰，两者一对比就知道"这个能选，只是没选"。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#00000000" />
+    <stroke android:width="1.5dp" android:color="#C6CEDB" />
+</shape>

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  一条对话（设计稿首页里 "Event materials / Last · GPT-5.5 / Now" 那一行）。
+
+  三块信息，从左到右的优先级就是它们在版面上的宽度：
+    1. 标题 —— 用户自己认领这条对话的唯一线索；
+    2. `Last · <模型>` 徽章 —— **记住的是最后一次真的答过它的模型**
+       （`ChatEntity.lastProviderId/lastModelId`），不是"当前选中"。
+       用户切过模型之后，"这对话刚才是谁答的"才是他关心的；
+    3. 相对时间（Now / Yesterday / Mon）—— 排在最后，因为它是用来"扫"的，
+       写成 2026-10-04 18:20 反而要停下来读。
+
+  徽章的颜色按家变（`ProviderPalette`），**颜色不是装饰**：
+  一屏里十几个徽章，靠字读"DeepSeek V3.2"要一个个看，靠色块扫一眼就知道
+  这个项目的对话主要落在哪家。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
+    android:paddingTop="6dp"
+    android:paddingBottom="10dp">
+
+    <ImageView
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="12dp"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_chat_bubble"
+        app:tint="#7A8699" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/chat_row_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#0B1B33"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            tools:text="Event materials" />
+
+        <!-- 徽章。没答过（last_model_id 为空）时整块 GONE——
+             显示一颗"Last · 未知"的灰药丸等于告诉用户"这里本来有信息但丢了"。 -->
+        <LinearLayout
+            android:id="@+id/chat_row_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_chat_badge"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="5dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="3dp">
+
+            <TextView
+                android:id="@+id/chat_row_mark"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/bg_chat_avatar"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:textColor="#0B1B33"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                tools:text="D" />
+
+            <TextView
+                android:id="@+id/chat_row_badge_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:includeFontPadding="false"
+                android:textColor="#123A2A"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                tools:text="Last · GPT-5.5" />
+        </LinearLayout>
+
+        <!-- 只有还没答过、或者时间取不到时才出现的兜底行。 -->
+        <TextView
+            android:id="@+id/chat_row_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#7A8699"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="No messages yet"
+            tools:visibility="visible" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/chat_row_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textColor="#7A8699"
+        android:textSize="13sp"
+        tools:text="Now" />
+</LinearLayout>

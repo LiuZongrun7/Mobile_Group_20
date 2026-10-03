@@ -1,0 +1,4 @@
+<!-- 输入条右下那颗发送按钮的圆底（设计稿里是实心蓝圆 + 白箭头）。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#1E7BF6" />
+</shape>

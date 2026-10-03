@@ -53,7 +53,8 @@ import java.util.Random;
  * <p>2026-09-30 按新大纲（ModelPilot）收过一遍：塔防、赛季/资源余额、以及那套
  * 用量问答助手都整块删了——见提交信息。现在这一页只做统计，账号在「我的」。
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity
+        implements com.mobilegroup20.modelpilot.ui.chat.ChatHomeFragment.Host {
 
     private static final String TAG = "ModelPilot";
 
@@ -87,7 +88,7 @@ public class MainActivity extends AppCompatActivity {
             MenuItem selected = binding.bottomNav.getMenu().findItem(binding.bottomNav.getSelectedItemId());
             showTab(selected.getItemId(), selected.getTitle());
         });
-        if (savedInstanceState != null) binding.bottomNav.setSelectedItemId(savedInstanceState.getInt("selectedTab", R.id.nav_dashboard));
+        if (savedInstanceState != null) binding.bottomNav.setSelectedItemId(savedInstanceState.getInt("selectedTab", R.id.nav_chat));
         showDashboard();
         setUpDashboardActions();
     }
@@ -233,13 +234,17 @@ public class MainActivity extends AppCompatActivity {
      * 才需要 `lightPage` 这个开关）。
      */
     private void showTab(int itemId, CharSequence title) {
-        boolean dashboard = itemId == R.id.nav_dashboard;
-        boolean forum = itemId == R.id.nav_forum;
-        boolean account = itemId == R.id.nav_profile && !BuildConfig.FORUM_BASE_URL.isEmpty();
+        // 四页的 id 沿用旧的（dashboard/forum 那些名字是历史，改它们要动一堆测试与布局），
+        // 只有"标签名"跟着设计稿走：Chat / Insights / Explore / Me。
+        boolean chat = itemId == R.id.nav_chat;
+        boolean dashboard = itemId == R.id.nav_insights;      // Insights（原「统计」页）
+        boolean forum = itemId == R.id.nav_explore;           // Explore（原「论坛」页 = 论坛 + 新闻）
+        boolean account = itemId == R.id.nav_me && !BuildConfig.FORUM_BASE_URL.isEmpty();
 
         binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
+        binding.chatPage.setVisibility(chat ? View.VISIBLE : View.GONE);
         binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
-        binding.emptyPage.setVisibility(forum || dashboard ? View.GONE : View.VISIBLE);
+        binding.emptyPage.setVisibility(chat || forum || dashboard ? View.GONE : View.VISIBLE);
         binding.forumPage.setVisibility(forum ? View.VISIBLE : View.GONE);
         binding.getRoot().setBackgroundColor(0xFFFFFBFE);
         ColorStateList navColors = ContextCompat.getColorStateList(this, R.color.forum_nav_item);
@@ -250,6 +255,18 @@ public class MainActivity extends AppCompatActivity {
         WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightStatusBars(true);
         WindowCompat.getInsetsController(getWindow(), binding.getRoot()).setAppearanceLightNavigationBars(true);
         getWindow().setNavigationBarColor(android.os.Build.VERSION.SDK_INT < 27 ? Color.BLACK : Color.TRANSPARENT);
+        // Chat 页：只在第一次进入时挂上（和论坛一样的做法），保留它自己的滚动位置。
+        Fragment chatFragment = getSupportFragmentManager().findFragmentByTag("chat");
+        if (chatFragment == null && chat) {
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.chat_page, new com.mobilegroup20.modelpilot.ui.chat.ChatHomeFragment(), "chat")
+                    .commitNow();
+        } else if (chatFragment != null) {
+            androidx.fragment.app.FragmentTransaction chatTx = getSupportFragmentManager().beginTransaction();
+            if (chat) chatTx.show(chatFragment); else chatTx.hide(chatFragment);
+            chatTx.setMaxLifecycle(chatFragment, chat ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED)
+                    .commitNow();
+        }
         Fragment forumFragment = getSupportFragmentManager().findFragmentByTag("forum");
         if (forumFragment == null && forum) {
             getSupportFragmentManager().beginTransaction().add(R.id.forum_page, new ForumFragment(), "forum").commitNow();
@@ -258,7 +275,7 @@ public class MainActivity extends AppCompatActivity {
             if (forum) tx.show(forumFragment); else tx.hide(forumFragment);
             tx.setMaxLifecycle(forumFragment, forum ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED).commitNow();
         }
-        if (!forum && !dashboard) {
+        if (!chat && !forum && !dashboard) {
             com.mobilegroup20.modelpilot.data.AccountSession session = com.mobilegroup20.modelpilot.data.AccountSession.get(this);
             // 「我的」页只有账号状态：登录/未登录 + 账号名 +（Debug 的）论坛测试身份。
             // 点标题开账号弹窗，和右上角那个按钮是同一个入口。
@@ -272,10 +289,36 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     /** 打开账号弹窗（登录/注册/退出）。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
-    private void openAccount() {
+    private void showAccountDialog() {
         androidx.fragment.app.FragmentManager manager = getSupportFragmentManager();
         if (manager.findFragmentByTag("account") == null)
             new com.mobilegroup20.modelpilot.ui.auth.AccountDialog().show(manager, "account");
+    }
+
+    // ==================== Chat 首页要跳的两处 ====================
+
+    /**
+     * 从对话列表点进一条对话。
+     *
+     * <p>**换页由 Activity 做、不由 Fragment 做**（`ChatHomeFragment.Host`）：
+     * 首页是底部导航里"哪一页可见"这一层的产物，它自己 `replace` 掉自己会让
+     * 返回栈和底部导航的选中态对不上——那种 bug 的表现是"按返回回到了 Chat，
+     * 但底下的标签还亮着别的"。
+     *
+     * <p><b>对话页还没落地</b>（发送链路和它一起来，见 `docs/CHAT_ENGINE.md` §6 的顺序）。
+     * 在那之前这里明说"还没做"，而不是压一个只有壳的页面上去——
+     * 一个能进、能打字、发不出去的对话页比一句实话更容易让人以为坏了。
+     * 落地时这里换成 `replace(R.id.chat_page, ChatConversationFragment.open(chatId))
+     * .addToBackStack(...)`：用返回栈回到列表，系统返回键天然就对。
+     */
+    @Override
+    public void openChat(String chatId) {
+        Toast.makeText(this, R.string.chat_conversation_pending, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void openAccount() {
+        showAccountDialog();
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
