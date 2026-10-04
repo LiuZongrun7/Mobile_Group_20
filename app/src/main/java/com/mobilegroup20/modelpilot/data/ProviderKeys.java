@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
+import com.mobilegroup20.modelpilot.chat.ModelSpec;
 import com.mobilegroup20.modelpilot.chat.ProviderRegistry;
 import com.mobilegroup20.modelpilot.chat.ProviderSpec;
 import java.nio.charset.StandardCharsets;
@@ -89,22 +90,27 @@ public final class ProviderKeys {
             throw new IllegalArgumentException("API key must not be empty");
         }
         String url = normalizeBaseUrl(baseUrl);
-        JSONObject value = new JSONObject()
+        write(context, id, new JSONObject()
                 .put("provider", id)
                 .put("key", key)
-                .put("baseUrl", url);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, key());
-        byte[] encrypted = cipher.doFinal(value.toString().getBytes(StandardCharsets.UTF_8));
-        // GCM 的 IV 必须跟着密文一起存（它不必保密，但每次加密都得换一个）。
-        // 拼成 "iv:密文" 就够，别再引一个字段来存它——少一个能写错的地方。
-        String stored = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":"
-                + Base64.encodeToString(encrypted, Base64.NO_WRAP);
-        if (!preferences(context).edit().putString(PREFIX + id, stored).commit()) {
-            // commit 返回 false = 没写进磁盘。用 commit 而不是 apply 就是因为要这个答案：
-            // 用户以为存好了、下次打开却还要重填，是最让人不信任设置页的一种错。
-            throw new IllegalStateException("Could not save provider key");
+                .put("baseUrl", url));
+    }
+
+    /**
+     * 只改某一家的**请求地址**，不动它的 key。
+     *
+     * <p>为什么需要：一条记录里 key 和地址是同一个加密块的，`save()` 又要求 key 非空
+     * （"配了这一家"的判据就是有一条非空 key）。没有这个方法的话，用户想把地址
+     * 从官方端点换到自建反代，就得**把 key 重新输一遍**——而我们本来就有那把 key，
+     * 让他再抄一遍只是多一次泄露机会和一次抄错的机会。
+     */
+    public static void updateBaseUrl(Context context, String providerId, String baseUrl)
+            throws Exception {
+        Entry entry = read(context, providerId);
+        if (entry == null) {
+            throw new IllegalStateException("This provider has no key yet");
         }
+        save(context, providerId, entry.apiKey, baseUrl);
     }
 
     /**
@@ -209,14 +215,126 @@ public final class ProviderKeys {
         return new String[] {providerId, modelId};
     }
 
-    /** 解出来的一家：key 与 URL。**别给它加一个会打印 key 的 toString**，见类注释第 2 条。 */
+    /**
+     * 存一家**自定义端点**（用户自己填的 OpenAI 兼容 / Anthropic Messages 服务）。
+     *
+     * <p>为什么定义也存在这里、而不是另开一个明文 prefs：这家记录里的
+     * `baseUrl` 本来就已经放在加密块里了（它不是秘密，但"一家一条记录"这种存法更省事），
+     * 自定义端点多出来的那几个字段（显示名、格式、模型清单、上下文上限）跟着它一起走，
+     * **删 key 就等于删这家**——分成两个存储的话，"删了 key 但定义还在"会留下
+     * 一个永远配不上的幽灵提供商。
+     *
+     * <p>`contextLimit` **必填**：木桶效应（压缩阈值）就是按所有已配置模型里最小的
+     * 那个上限算的。这里是 0 或负数直接拒绝保存——让它进去的话，阈值会算成 0
+     * （= 从不压缩），而那种表现是"聊到一半上游报超长"，完全看不出跟设置有关。
+     */
+    public static void saveCustom(Context context, String providerId, String displayName,
+                                  String baseUrl, String apiKey, ProviderSpec.Adapter adapter,
+                                  List<String> modelIds, int contextLimit, boolean streamUsage)
+            throws Exception {
+        String id = requireProviderId(providerId);
+        String key = apiKey == null ? "" : apiKey.trim();
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("API key must not be empty");
+        }
+        if (modelIds == null || modelIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one model id is required");
+        }
+        if (contextLimit <= 0) {
+            throw new IllegalArgumentException("Context limit must be a positive number");
+        }
+        String url = normalizeBaseUrl(baseUrl);
+        if (url.isEmpty()) {
+            throw new IllegalArgumentException("Base URL must start with http:// or https://");
+        }
+        JSONObject value = new JSONObject()
+                .put("provider", id)
+                .put("key", key)
+                .put("baseUrl", url)
+                .put("displayName", displayName == null ? "" : displayName.trim())
+                .put("adapter", adapter.name())
+                .put("models", joinModels(modelIds))
+                .put("contextLimit", contextLimit)
+                .put("streamUsage", streamUsage);
+        write(context, id, value);
+    }
+
+    /** 一行存储：加密 + `commit`（要那个"到底写进去没有"的答案），两个保存方法共用。 */
+    private static void write(Context context, String id, JSONObject value) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key());
+        byte[] encrypted = cipher.doFinal(value.toString().getBytes(StandardCharsets.UTF_8));
+        // GCM 的 IV 必须跟着密文一起存（它不必保密，但每次加密都得换一个）。
+        // 拼成 "iv:密文" 就够，别再引一个字段来存它——少一个能写错的地方。
+        String stored = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":"
+                + Base64.encodeToString(encrypted, Base64.NO_WRAP);
+        if (!preferences(context).edit().putString(PREFIX + id, stored).commit()) {
+            // commit 返回 false = 没写进磁盘。用 commit 而不是 apply 就是因为要这个答案：
+            // 用户以为存好了、下次打开却还要重填，是最让人不信任设置页的一种错。
+            throw new IllegalStateException("Could not save provider key");
+        }
+    }
+
+    /** 模型清单的存储形状：逗号分隔，去掉空白项。 */
+    private static String joinModels(List<String> modelIds) {
+        StringBuilder out = new StringBuilder();
+        for (String modelId : modelIds) {
+            String clean = modelId == null ? "" : modelId.trim();
+            if (clean.isEmpty()) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append(',');
+            }
+            out.append(clean);
+        }
+        return out.toString();
+    }
+
+    /** 配了 key 的**自定义**端点（内置那六家不在里面），按 id 排序。 */
+    public static List<ProviderSpec> customProviders(Context context) {
+        List<ProviderSpec> specs = new ArrayList<>();
+        for (String id : configuredProviders(context)) {
+            if (!com.mobilegroup20.modelpilot.chat.CallLedger.isCustom(id)) {
+                continue;
+            }
+            Entry entry = read(context, id);
+            if (entry == null || entry.models.isEmpty() || entry.contextLimit <= 0) {
+                continue;
+            }
+            ProviderSpec spec = new ProviderSpec(id,
+                    entry.displayName.isEmpty() ? "Custom endpoint" : entry.displayName,
+                    entry.baseUrl, entry.adapter, entry.models, entry.streamUsage);
+            specs.add(spec);
+        }
+        return Collections.unmodifiableList(specs);
+    }
+
+    /** 解出来的一家：key 与 URL（自定义端点还有它自己的定义）。**别加会打印 key 的 toString**。 */
     private static final class Entry {
         final String apiKey;
         final String baseUrl;
+        /** 只有自定义端点有：显示名 / 格式 / 模型清单 / 上下文上限 / 是否带 stream_options。 */
+        final String displayName;
+        final ProviderSpec.Adapter adapter;
+        final List<ModelSpec> models;
+        final int contextLimit;
+        final boolean streamUsage;
 
         Entry(String apiKey, String baseUrl) {
+            this(apiKey, baseUrl, "", ProviderSpec.Adapter.OPENAI_COMPATIBLE,
+                    Collections.<ModelSpec>emptyList(), 0, false);
+        }
+
+        Entry(String apiKey, String baseUrl, String displayName, ProviderSpec.Adapter adapter,
+              List<ModelSpec> models, int contextLimit, boolean streamUsage) {
             this.apiKey = apiKey;
             this.baseUrl = baseUrl;
+            this.displayName = displayName;
+            this.adapter = adapter;
+            this.models = models;
+            this.contextLimit = contextLimit;
+            this.streamUsage = streamUsage;
         }
 
         @Override public String toString() {
@@ -250,7 +368,34 @@ public final class ProviderKeys {
             if (key.isEmpty()) {
                 throw new IllegalStateException("Empty provider key");
             }
-            return new Entry(key, value.optString("baseUrl", ""));
+            String baseUrl = value.optString("baseUrl", "");
+            // 自定义端点：把定义也解出来。**能力一律按"文本"处理**——
+            // 用户自己填的端点我们没法验证它吃不吃图/PDF/工具，而
+            // `ModelSpec.supports()` 是 Auto 的唯一判据，猜"它能看图"
+            // 会让 Auto 在图片任务上挑一个根本发不出去的家。
+            if (com.mobilegroup20.modelpilot.chat.CallLedger.isCustom(id)) {
+                int contextLimit = value.optInt("contextLimit", 0);
+                List<ModelSpec> models = new ArrayList<>();
+                for (String modelId : value.optString("models", "").split(",")) {
+                    String clean = modelId.trim();
+                    if (clean.isEmpty()) {
+                        continue;
+                    }
+                    models.add(new ModelSpec(id, clean, clean, contextLimit,
+                            /* text= */ true, /* vision= */ false, /* pdf= */ false,
+                            /* tools= */ false, null, null, null, null, null));
+                }
+                ProviderSpec.Adapter adapter;
+                try {
+                    adapter = ProviderSpec.Adapter.valueOf(
+                            value.optString("adapter", ProviderSpec.Adapter.OPENAI_COMPATIBLE.name()));
+                } catch (IllegalArgumentException unknown) {
+                    adapter = ProviderSpec.Adapter.OPENAI_COMPATIBLE;
+                }
+                return new Entry(key, baseUrl, value.optString("displayName", ""), adapter, models,
+                        contextLimit, value.optBoolean("streamUsage", false));
+            }
+            return new Entry(key, baseUrl);
         } catch (Exception ignored) {
             // 注意：这里**不能**把异常往上抛、也不能把 stored/异常内容写进日志——
             // 密文本身虽然解不出明文，但"哪一家没配成"和堆栈都可能被用户截图带走。

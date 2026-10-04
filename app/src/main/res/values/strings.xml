@@ -284,4 +284,30 @@
     <string name="keys_compression_why">Which model summarises earlier messages when a conversation gets long. It runs once per compression, and the summary is then used by every provider.</string>
     <string name="keys_compression_auto">Auto (cheapest available)</string>
     <string name="keys_compression_pick">Compression model</string>
+    <!-- 添加 / 编辑一家（一次只出现这一家）。 -->
+    <string name="keys_add_provider">Add provider</string>
+    <!-- 一家都没配时的说法。**它要紧挨着那颗按钮**：空白 + 一颗按钮，
+         用户至少知道下一步该点哪里。 -->
+    <string name="keys_none_yet">No providers yet. Add the ones you have a key for.</string>
+    <string name="keys_configured">Configured</string>
+    <string name="keys_edit">Edit</string>
+    <string name="keys_pick_provider">Add provider</string>
+    <string name="keys_custom_openai">Custom · OpenAI-compatible</string>
+    <string name="keys_custom_anthropic">Custom · Anthropic Messages</string>
+    <string name="keys_name_hint">Name</string>
+    <string name="keys_models_hint">Model ids (comma separated)</string>
+    <string name="keys_context_hint">Context window in tokens</string>
+    <!-- 这家认不认 `stream_options.include_usage`：认了才有 usage 可记账；
+         带了而它不认会 400。所以是开关，默认关。 -->
+    <string name="keys_stream_usage">This endpoint supports stream_options.include_usage</string>
+    <string name="keys_add_title">Add %1$s</string>
+    <string name="keys_edit_title">Edit %1$s</string>
+    <!-- 校验失败的那几句：**说清楚是哪个框、该怎么填**，别只说"保存失败"。 -->
+    <string name="keys_need_key">Enter the API key for this provider.</string>
+    <string name="keys_need_models">Enter at least one model id.</string>
+    <string name="keys_need_context">Enter the context window (tokens). It decides when a conversation gets compacted.</string>
+    <string name="keys_need_url">Enter the request URL (http:// or https://).</string>
+    <string name="keys_need_name">Give this endpoint a name.</string>
+    <string name="keys_custom_note">Custom endpoints are treated as text-only until verified, and their calls are reported as "Custom endpoint" with an unknown price.</string>
+    <string name="keys_builtin_note">Requests go straight from this phone to the provider. The URL is where its API lives (up to, but not including, /chat/completions).</string>
 </resources>

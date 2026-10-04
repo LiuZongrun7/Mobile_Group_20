@@ -27,7 +27,25 @@ public enum Provider {
 
     OPENAI("OpenAI"),
     MIMO("Xiaomi MiMo"),
-    DEEPSEEK("DeepSeek");
+    DEEPSEEK("DeepSeek"),
+    // **2026-10-04 补齐**：注册表里其实有六家，而这里只有三家——于是 GLM / Kimi /
+    // Seed / Anthropic 的调用在 `UsageRecorder.providerOf()` 那里一律"认不出来"，
+    // **整行不记**（那条规则的初衷是"绝不编一个枚举值"，但结果是这些家的花费
+    // 在账本里凭空消失，而且没有任何提示）。加值不改变老行的读法（存的是 name()），
+    // 所以是安全的；**改名字仍然要配一次迁移**（见类注释最后一段）。
+    GLM("GLM"),
+    KIMI("Kimi"),
+    SEED("Seed"),
+    ANTHROPIC("Anthropic"),
+    /**
+     * 用户自己填的端点（OpenAI 兼容或 Anthropic Messages）。
+     *
+     * <p>为什么要它：用户在设置里加的自定义端点不是六家里的任何一家，
+     * 没有这个值它的调用就记不下来（同上，整行不记）。记成 `CUSTOM` + 他自己的模型名，
+     * 金额一律"算不出来"——我们没有它的官方价目，这正是 {@code CONTRACTS.md} §4
+     * 说的"不知道就是不知道"。
+     */
+    CUSTOM("Custom endpoint");
 
     /** 界面上展示的名字。别在布局或代码里另写字符串，改这里一处就够。 */
     public final String displayName;

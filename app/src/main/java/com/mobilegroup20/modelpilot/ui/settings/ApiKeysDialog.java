@@ -4,8 +4,6 @@ import android.app.Dialog;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -14,37 +12,39 @@ import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.mobilegroup20.modelpilot.R;
+import com.mobilegroup20.modelpilot.chat.CallLedger;
 import com.mobilegroup20.modelpilot.chat.ModelSpec;
 import com.mobilegroup20.modelpilot.chat.ProviderRegistry;
 import com.mobilegroup20.modelpilot.chat.ProviderSpec;
 import com.mobilegroup20.modelpilot.data.ProviderKeys;
 import com.mobilegroup20.modelpilot.data.RepositoryProvider;
 import com.mobilegroup20.modelpilot.databinding.DialogApiKeysBinding;
-import com.mobilegroup20.modelpilot.databinding.ItemProviderKeyBinding;
+import com.mobilegroup20.modelpilot.databinding.ItemConfiguredProviderBinding;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 「API keys」设置页：**用户自己填 key 与请求地址**（`docs/CHAT_ENGINE.md` §4）。
+ * 「API keys」设置页：**已配置的列出来，加新的走一步一屏**（2026-10-04 改版）。
  *
- * <p>三条这一页必须做到的事：
+ * <p>改版原因：原来一打开就把六家全列出来、每家两个输入框，一共十二个框，
+ * 再往下还有压缩模型。而绝大多数人只会配一两家——剩下四家纯占地方，
+ * 而且"加一家"这件事被做成了"填六个表单"，用户不知道自己进行到哪一步。
  *
+ * <p>现在这一页只有两件事：
  * <ol>
- *   <li><b>不显示已存的 key。</b>key 只写不读——输入框永远空白，配过的那几家
- *       用"Clear"按钮的存在来表示"这里已经有一把 key"。把 key 显示回屏幕上
- *       （哪怕打码）多一次泄露的机会，而它的用处仅仅是满足好奇心。</li>
- *   <li><b>留空 = 不改，删要用 Clear。</b>因为不预填，所以"空着"必须是"不动它"；
- *       想把某一家去掉是一个显式动作。</li>
- *   <li><b>地址填错当场拦住。</b>{@link ProviderKeys#save} 会校验 http(s)，
- *       这里的错误提示用的是它抛出来的原因，而不是等用户在聊天页里收到一句网络错误。</li>
+ *   <li><b>已配置</b>的列表（名字 + 请求地址 + 编辑 / 清除）；</li>
+ *   <li>一颗 {@code Add provider} → 选一家（{@link ProviderPickerDialog}）→
+ *       只填那一家的表单（{@link ProviderEditorDialog}）。</li>
  * </ol>
  *
- * <p>顺带放了**压缩模型**的选择：它是同一页上的同一个心智（"我在这儿配我能用的模型"），
- * 而它决定"更早的内容被压成什么"。没选过就是 Auto 挑最便宜的（见
- * `ChatConversationViewModel.compressIfNeeded`）。
+ * <p>四条一直没变的规矩：key 只写不读（不预填、不显示）；留空 key = 不改 key
+ * （但地址照样能改）；地址填错当场拦住；顺带放着的**压缩模型**选择
+ * （没选过就是 Auto 挑最便宜的）。
  */
 public final class ApiKeysDialog extends DialogFragment {
+
+    private DialogApiKeysBinding binding;
 
     public static void show(FragmentManager fm) {
         if (fm.findFragmentByTag("api_keys") == null) {
@@ -52,109 +52,69 @@ public final class ApiKeysDialog extends DialogFragment {
         }
     }
 
-    /** 每一行对应的 providerId，按注册表顺序；保存时按同一顺序取回。 */
-    private final List<String> rowProviders = new ArrayList<>();
-    /** 对话框自己的 binding。**留着它只为一件事**：选完压缩模型后刷新那一行文字
-     *  （`setItems` 的回调发生在对话框还开着的时候）。 */
-    private DialogApiKeysBinding binding;
-
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle saved) {
         binding = DialogApiKeysBinding.inflate(LayoutInflater.from(requireContext()));
-        ProviderRegistry registry = RepositoryProvider.providers();
-        List<String> configured = ProviderKeys.configuredProviders(requireContext());
+        binding.keysAdd.setOnClickListener(v -> ProviderPickerDialog.show(getChildFragmentManager()));
+        binding.keysCompressionValue.setOnClickListener(v -> pickCompression());
 
-        rowProviders.clear();
-        binding.keysContainer.removeAllViews();
-        for (ProviderSpec spec : registry.providers()) {
-            rowProviders.add(spec.providerId);
-            binding.keysContainer.addView(row(binding.keysContainer, spec,
-                    configured.contains(spec.providerId)));
-        }
-        renderCompression(binding);
+        // 两个子对话框都只发结果，落库/刷新在这里。监听只注册一次
+        // （注册在点击里的那份，转屏之后就没了）。
+        getChildFragmentManager().setFragmentResultListener(ProviderPickerDialog.RESULT_KEY,
+                getViewLifecycleOwner(), (key, result) -> {
+                    String providerId = result.getString(ProviderPickerDialog.BUNDLE_PROVIDER);
+                    if (providerId != null) {
+                        ProviderEditorDialog.open(getChildFragmentManager(), providerId);
+                    }
+                });
+        getChildFragmentManager().setFragmentResultListener(ProviderEditorDialog.RESULT_KEY,
+                getViewLifecycleOwner(), (key, result) -> renderConfigured());
+
+        renderConfigured();
         return new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.keys_title)
                 .setView(binding.getRoot())
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.keys_save, (d, which) -> saveAll(binding))
+                .setPositiveButton(android.R.string.ok, null)
                 .create();
     }
 
-    private View row(LinearLayout parent, ProviderSpec spec, boolean configured) {
-        ItemProviderKeyBinding row = ItemProviderKeyBinding.inflate(getLayoutInflater(), parent,
-                false);
-        row.providerName.setText(spec.displayName);
-        // **地址预填默认值**（那不是秘密，而且用户要改的通常只是域名那一段）；
-        // key 永远不预填（见类注释第 1 条）。
-        row.providerUrl.setText(configured
-                ? ProviderKeys.baseUrl(requireContext(), spec.providerId) : spec.baseUrl);
-        row.providerClear.setVisibility(configured ? View.VISIBLE : View.GONE);
-        row.providerClear.setOnClickListener(v -> {
-            ProviderKeys.clear(requireContext(), spec.providerId);
-            // 删完立刻见效（下一次 providers() 重新算），并把这一行收起来。
-            RepositoryProvider.reloadProviders();
-            row.providerClear.setVisibility(View.GONE);
-            row.providerKey.setText("");
-            Toast.makeText(requireContext(), R.string.keys_saved, Toast.LENGTH_SHORT).show();
-        });
-        return row.getRoot();
-    }
-
-    /**
-     * 保存所有行。
-     *
-     * <p>**一行出错不影响其它行**：六家里配错一家的地址不该让另外五家也白填一遍。
-     * 出错的那句提示带上原因（`keys_save_failed`），成功的不单独提示——
-     * 对话框关掉本身就是"存好了"的信号，逐行弹六个 toast 只会盖住后面的内容。
-     */
-    private void saveAll(DialogApiKeysBinding binding) {
-        StringBuilder problems = new StringBuilder();
-        for (int i = 0; i < binding.keysContainer.getChildCount() && i < rowProviders.size(); i++) {
-            String providerId = rowProviders.get(i);
-            ItemProviderKeyBinding row =
-                    ItemProviderKeyBinding.bind(binding.keysContainer.getChildAt(i));
-            String key = row.providerKey.getText() == null ? ""
-                    : row.providerKey.getText().toString().trim();
-            if (key.isEmpty()) {
-                continue;                   // 留空 = 不改这一家（见类注释第 2 条）
-            }
-            String url = row.providerUrl.getText() == null ? ""
-                    : row.providerUrl.getText().toString().trim();
-            try {
-                ProviderKeys.save(requireContext(), providerId, key, url);
-            } catch (Exception failed) {
-                if (problems.length() > 0) {
-                    problems.append('\n');
-                }
-                problems.append(providerId).append(": ").append(reason(failed));
-            }
-        }
-        RepositoryProvider.reloadProviders();
-        if (problems.length() > 0) {
-            // 出错时**不关对话框**：关掉的话用户填的东西全没了，还得重填一遍。
-            Toast.makeText(requireContext(),
-                    getString(R.string.keys_save_failed, problems), Toast.LENGTH_LONG).show();
+    /** 已配置的列表。**自定义端点显示用户给的名字**，内置家显示注册表里的显示名。 */
+    private void renderConfigured() {
+        if (binding == null) {
             return;
         }
-        Toast.makeText(requireContext(), R.string.keys_saved, Toast.LENGTH_SHORT).show();
-        dismiss();
-    }
-
-    /** 把异常翻成一句人话：地址不合法是我们自己抛的，其它一律照它自己的说法。 */
-    private String reason(Exception failed) {
-        String message = failed.getMessage();
-        if (message != null && message.contains("http")) {
-            return getString(R.string.keys_bad_url);
+        ProviderRegistry registry = RepositoryProvider.providers();
+        List<String> configured = ProviderKeys.configuredProviders(requireContext());
+        binding.keysContainer.removeAllViews();
+        binding.keysEmpty.setVisibility(configured.isEmpty() ? View.VISIBLE : View.GONE);
+        for (String providerId : configured) {
+            ProviderSpec spec = registry.provider(providerId);
+            ItemConfiguredProviderBinding row = ItemConfiguredProviderBinding.inflate(
+                    getLayoutInflater(), binding.keysContainer, false);
+            row.configuredName.setText(spec == null ? providerId : spec.displayName);
+            row.configuredUrl.setText(ProviderKeys.baseUrl(requireContext(), providerId));
+            row.configuredEdit.setOnClickListener(v ->
+                    ProviderEditorDialog.open(getChildFragmentManager(), providerId));
+            row.configuredClear.setOnClickListener(v -> {
+                ProviderKeys.clear(requireContext(), providerId);
+                // 删掉之后**下一次 providers() 必须重新算**：不重算的话这一家还在候选里，
+                // 用户会看到"删了但 Auto 还在挑它"。
+                RepositoryProvider.reloadProviders();
+                renderConfigured();
+            });
+            binding.keysContainer.addView(row.getRoot());
         }
-        return message == null ? failed.getClass().getSimpleName() : message;
+        renderCompressionLabel();
     }
 
     // ---- 压缩模型 ------------------------------------------------------
 
-    private void renderCompression(DialogApiKeysBinding binding) {
+    private void renderCompressionLabel() {
+        if (binding == null) {
+            return;
+        }
         binding.keysCompressionValue.setText(compressionLabel());
-        binding.keysCompressionValue.setOnClickListener(v -> pickCompression());
     }
 
     private String compressionLabel() {
@@ -169,9 +129,8 @@ public final class ApiKeysDialog extends DialogFragment {
     /**
      * 选压缩模型。
      *
-     * <p>候选 = **配了 key 的**那几家的**全部**模型（不限能力）：
-     * 压缩是纯文本任务，但用户可能就想用某个只支持文本的便宜模型，
-     * 这里替他筛掉反而是多管闲事。
+     * <p>候选 = **配了 key 的**那几家的**全部**模型（不限能力）：压缩是纯文本任务，
+     * 但用户可能就想用某个只支持文本的便宜模型，这里替他筛掉反而是多管闲事。
      */
     private void pickCompression() {
         ProviderRegistry registry = RepositoryProvider.providers();
@@ -180,13 +139,14 @@ public final class ApiKeysDialog extends DialogFragment {
         final List<String> labels = new ArrayList<>();
         labels.add(getString(R.string.keys_compression_auto));
         choices.add(null);
-        for (ProviderSpec spec : registry.providers()) {
-            if (!configured.contains(spec.providerId)) {
+        for (String providerId : configured) {
+            ProviderSpec spec = registry.provider(providerId);
+            if (spec == null) {
                 continue;
             }
             for (ModelSpec model : spec.models) {
                 labels.add(spec.displayName + " · " + model.displayName);
-                choices.add(new String[] {spec.providerId, model.modelId});
+                choices.add(new String[] {providerId, model.modelId});
             }
         }
         new MaterialAlertDialogBuilder(requireContext())
@@ -195,9 +155,7 @@ public final class ApiKeysDialog extends DialogFragment {
                     String[] pick = choices.get(which);
                     ProviderKeys.saveCompressionModel(requireContext(),
                             pick == null ? null : pick[0], pick == null ? null : pick[1]);
-                    if (binding != null) {
-                        renderCompression(binding);
-                    }
+                    renderCompressionLabel();
                 })
                 .show();
     }
@@ -205,7 +163,7 @@ public final class ApiKeysDialog extends DialogFragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        // DialoagFragment 的视图会随对话框销毁；留着这个引用就是泄漏一个已经没用的视图树。
+        // DialogFragment 的视图随对话框销毁；留着它就是把一整棵没用的视图树钉在内存里。
         binding = null;
     }
 }

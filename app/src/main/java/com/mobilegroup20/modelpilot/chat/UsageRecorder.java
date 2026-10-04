@@ -124,6 +124,10 @@ public final class UsageRecorder {
         if (providerId == null) {
             return null;
         }
+        // 用户自己加的端点统一记成 CUSTOM（理由见 CallLedger.isCustom 的注释）。
+        if (CallLedger.isCustom(providerId)) {
+            return Provider.CUSTOM;
+        }
         for (Provider candidate : Provider.values()) {
             if (candidate.name().equals(providerId)) {
                 return candidate;

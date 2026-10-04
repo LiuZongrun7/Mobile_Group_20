@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「已配置」列表里的一家：名字 + 请求地址 + 编辑 / 清除。
+
+  **key 不在这里显示**，所以这一行能提供的信息就是"我配了哪几家、各发到哪儿去"——
+  地址才是用户最常需要核对的东西（自建反代换域名、走哪条线路）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/configured_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#0B1B33"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            tools:text="DeepSeek" />
+
+        <TextView
+            android:id="@+id/configured_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textColor="#7A8699"
+            android:textSize="12sp"
+            tools:text="https://api.deepseek.com" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/configured_edit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:paddingStart="10dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="8dp"
+        android:text="@string/keys_edit"
+        android:textColor="#1E7BF6"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/configured_clear"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:paddingStart="10dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:text="@string/keys_clear"
+        android:textColor="#B3261E"
+        android:textSize="13sp" />
+</LinearLayout>

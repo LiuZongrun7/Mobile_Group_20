@@ -56,7 +56,13 @@ public final class CallLedger {
             return null;
         }
         String day = com.mobilegroup20.modelpilot.util.TimeUtils.dayOf(startedAtEpochMillis);
-        UsageCall call = recorder.record(callId(providerId, startedAtEpochMillis), providerId,
+        // **自定义端点记成 CUSTOM**：账本的 provider 列是有取值约束的枚举，
+        // 而 `UsageRecorder` 对认不出的 provider 是"整行不记"——自定义端点的调用
+        // 会因此凭空消失（六家里的 GLM/Kimi/Seed/Anthropic 也踩过同一个坑，
+        // 见 `Provider` 枚举里那段注释）。
+        String ledgerProviderId = isCustom(providerId)
+                ? com.mobilegroup20.modelpilot.contract.model.Provider.CUSTOM.name() : providerId;
+        UsageCall call = recorder.record(callId(providerId, startedAtEpochMillis), ledgerProviderId,
                 modelId, route, chatId, taskId, kind, null, tokens, startedAtEpochMillis, day);
         if (call == null) {
             return null;
@@ -67,6 +73,19 @@ public final class CallLedger {
         }
         dao.insertAll(Collections.singletonList(entity));
         return call;
+    }
+
+    /**
+     * 自定义端点的 id 前缀（和 `ProviderKeys.saveCustom` 用的是同一个约定）。
+     *
+     * <p>为什么要靠前缀认：账本那一列是枚举，而枚举里只能有一个 `CUSTOM`；
+     * 用户加了三个自定义端点时，只有前缀能告诉我们"这三个都不是内置那六家"。
+     */
+    public static final String CUSTOM_PREFIX = "custom-";
+
+    /** 这个 providerId 是不是用户自己加的端点。 */
+    public static boolean isCustom(String providerId) {
+        return providerId != null && providerId.startsWith(CUSTOM_PREFIX);
     }
 
     /**

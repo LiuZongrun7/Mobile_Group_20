@@ -135,6 +135,31 @@ public final class ProviderRegistry {
     }
 
     /**
+     * 把用户自定义的端点并进来（2026-10-04 加）。
+     *
+     * <p>并进来之后它就是"普通的第六+家"：模型弹层会列它、Auto 会考虑它、
+     * 木桶效应会把它的上下文上限算进最小的那块板。**它们必须走同一条路**——
+     * 自定义端点如果只在"发送"那一处被特殊处理，就会出现"能选它，但压缩阈值
+     * 没把它算进去"，而那正是切过去就超长的经典成因。
+     *
+     * <p>同 id 覆盖：用户改了某一家的地址后重新加载，不该出现两条同 id 的记录。
+     */
+    public ProviderRegistry withCustom(List<ProviderSpec> custom) {
+        if (custom == null || custom.isEmpty()) {
+            return this;
+        }
+        List<ProviderSpec> copy = new ArrayList<>(providers);
+        for (ProviderSpec spec : custom) {
+            if (spec == null) {
+                continue;
+            }
+            copy.removeIf(existing -> existing.providerId.equals(spec.providerId));
+            copy.add(spec);
+        }
+        return new ProviderRegistry(copy);
+    }
+
+    /**
      * 木桶效应里那块**最短的板**：所有已启用模型里最小的上下文上限。
      *
      * <p>`enabled` 是"用户配了 key 的 provider"——没配 key 的模型就算上限再小也与我们

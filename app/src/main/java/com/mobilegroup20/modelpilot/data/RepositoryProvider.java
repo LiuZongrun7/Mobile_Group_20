@@ -147,6 +147,10 @@ public final class RepositoryProvider {
                         registry = registry.withBaseUrl(spec.providerId, url);
                     }
                 }
+                // **用户自己加的端点也进同一个注册表**：它一旦进来，
+                // 模型弹层、Auto 的候选、木桶效应（最小的那块板）全都自动把它算上，
+                // 不需要在那些地方各写一句"还要记得算自定义的"。
+                registry = registry.withCustom(ProviderKeys.customProviders(appContext));
             }
             providers = registry;
         }

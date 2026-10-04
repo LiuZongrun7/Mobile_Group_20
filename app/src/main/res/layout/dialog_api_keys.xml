@@ -34,11 +34,47 @@
             android:textColor="#3A4A61"
             android:textSize="13sp" />
 
+        <!-- **已配置的才列出来**（2026-10-04 改）：原来是六家全列、一屏十二个输入框，
+             于是"加一家"被做成了"填六个表单"。现在这一栏只显示配过的，
+             加新的走下面那颗按钮，一次只出现一家。 -->
+        <TextView
+            android:id="@+id/keys_configured_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:text="@string/keys_configured"
+            android:textColor="#0B1B33"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
         <LinearLayout
             android:id="@+id/keys_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/keys_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="16dp"
+            android:text="@string/keys_none_yet"
+            android:textColor="#7A8699"
+            android:textSize="13sp"
+            tools:visibility="visible" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/keys_add"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="10dp"
+            android:text="@string/keys_add_provider" />
 
         <View
             android:layout_width="match_parent"
