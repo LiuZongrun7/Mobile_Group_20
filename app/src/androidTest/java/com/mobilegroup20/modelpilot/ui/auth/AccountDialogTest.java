@@ -23,7 +23,9 @@ public class AccountDialogTest {
         AccountSession session = AccountSession.get(ApplicationProvider.getApplicationContext());
         session.clear(); RepositoryProvider.configureForum(BuildConfig.FORUM_BASE_URL, session);
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-            onView(withId(R.id.nav_profile)).perform(click());
+            // 底部导航改名过（profile → me），这个 id 跟着改：漏掉的话 androidTest
+            // 整个源集编译不过，于是**所有**仪器测试都跑不起来（2026-10-04 才发现）。
+            onView(withId(R.id.nav_me)).perform(click());
             onView(withId(R.id.account_button)).perform(click());
             onView(withText(R.string.account_sign_in)).perform(click());
             onView(withText(R.string.account_empty)).check(matches(isDisplayed()));

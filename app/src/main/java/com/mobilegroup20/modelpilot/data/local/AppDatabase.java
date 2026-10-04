@@ -37,7 +37,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
                 MessageEntity.class,
                 MemoryEntity.class
         },
-        version = 4,
+        version = 5,
         exportSchema = true)
 @TypeConverters(LocalConverters.class)
 public abstract class AppDatabase extends RoomDatabase {
@@ -95,14 +95,25 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_3_4 = new Migration(3, 4) {
         @Override
         public void migrate(@NonNull SupportSQLiteDatabase db) {
+            // **下面四条 CREATE 是照 `app/schemas/.../4.json` 里的 `createSql` 抄的**，
+            // 一个 NOT NULL 都不能多、也不能少：Room 的迁移校验拿"实体生成的建表语句"
+            // 和"迁移之后实际建出来的表"逐列比，差一处就抛
+            // "Migration didn't properly handle: …"。
+            //
+            // 2026-10-04 真机上跑这一组测试才发现：原来我给 `name` / `instructions` /
+            // `chat_id` / `role` / `text` 这些都写了 NOT NULL，而实体里它们没有 `@NonNull`
+            // （Room 按可空处理）。**这个错一直没暴露，是因为 androidTest 源集里有个
+            // 引用旧导航 id 的文件让整个源集编译不过**——仪器测试几周没跑起来，
+            // 于是这段迁移等于没验过。迁移建出来的表和老设备上的表因此和"全新安装"
+            // 不一致：全新安装是可空列，迁移出来的非空，往那两列写 NULL 时行为不同。
             db.execSQL("CREATE TABLE IF NOT EXISTS `project` ("
-                    + "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `instructions` TEXT NOT NULL,"
+                    + "`id` TEXT NOT NULL, `name` TEXT, `instructions` TEXT,"
                     + "`color_index` INTEGER NOT NULL, `created_at_epoch_millis` INTEGER NOT NULL,"
                     + "`updated_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_project_created_at_epoch_millis`"
                     + " ON `project` (`created_at_epoch_millis`)");
             db.execSQL("CREATE TABLE IF NOT EXISTS `chat` ("
-                    + "`id` TEXT NOT NULL, `project_id` TEXT NOT NULL, `title` TEXT NOT NULL,"
+                    + "`id` TEXT NOT NULL, `project_id` TEXT, `title` TEXT,"
                     + "`last_provider_id` TEXT, `last_model_id` TEXT,"
                     + "`created_at_epoch_millis` INTEGER NOT NULL,"
                     + "`updated_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
@@ -110,18 +121,17 @@ public abstract class AppDatabase extends RoomDatabase {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_updated_at_epoch_millis`"
                     + " ON `chat` (`updated_at_epoch_millis`)");
             db.execSQL("CREATE TABLE IF NOT EXISTS `message` ("
-                    + "`id` TEXT NOT NULL, `chat_id` TEXT NOT NULL, `role` TEXT NOT NULL,"
-                    + "`text` TEXT NOT NULL, `attachments_json` TEXT, `tool_calls_json` TEXT,"
-                    + "`tool_call_id` TEXT, `tokens_in` INTEGER NOT NULL,"
-                    + "`tokens_out` INTEGER NOT NULL, `provider_id` TEXT, `model_id` TEXT,"
-                    + "`route` TEXT, `created_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+                    + "`id` TEXT NOT NULL, `chat_id` TEXT, `role` TEXT, `text` TEXT,"
+                    + "`attachments_json` TEXT, `tool_calls_json` TEXT, `tool_call_id` TEXT,"
+                    + "`tokens_in` INTEGER NOT NULL, `tokens_out` INTEGER NOT NULL,"
+                    + "`provider_id` TEXT, `model_id` TEXT, `route` TEXT,"
+                    + "`created_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_message_chat_id_created_at_epoch_millis`"
                     + " ON `message` (`chat_id`, `created_at_epoch_millis`)");
             db.execSQL("CREATE TABLE IF NOT EXISTS `memory` ("
-                    + "`id` TEXT NOT NULL, `chat_id` TEXT NOT NULL,"
-                    + "`from_message_id` TEXT NOT NULL, `to_message_id` TEXT NOT NULL,"
-                    + "`summary` TEXT NOT NULL, `made_by_provider` TEXT NOT NULL,"
-                    + "`made_by_model` TEXT NOT NULL, `tokens_in` INTEGER NOT NULL,"
+                    + "`id` TEXT NOT NULL, `chat_id` TEXT, `from_message_id` TEXT,"
+                    + "`to_message_id` TEXT, `summary` TEXT, `made_by_provider` TEXT,"
+                    + "`made_by_model` TEXT, `tokens_in` INTEGER NOT NULL,"
                     + "`tokens_out` INTEGER NOT NULL, `edited_by_user` INTEGER NOT NULL,"
                     + "`created_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))");
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_chat_id_created_at_epoch_millis`"
@@ -133,6 +143,23 @@ public abstract class AppDatabase extends RoomDatabase {
             db.execSQL("ALTER TABLE usage_call ADD COLUMN rate_version TEXT");
             db.execSQL("ALTER TABLE usage_call ADD COLUMN chat_id TEXT");
             db.execSQL("ALTER TABLE usage_call ADD COLUMN tool_calls TEXT");
+        }
+    };
+
+    /**
+     * v4 → v5：账本多两列——**任务号**与**调用角色**（回答 / 压缩 / 工具）。
+     *
+     * <p>起因是真机上跑通压缩之后发现：一轮提问其实花了**两笔**（一次摘要 + 一次回答），
+     * 而账本里只看得见一笔，两笔之间也没有任何东西把它们串起来。
+     *
+     * <p>两列都可空、都是纯新增：老行保持 NULL（= 不知道），**不给默认值**——
+     * 给 `kind` 编一个 `ANSWER` 会把"不知道这是什么调用"说成"这是回答"。
+     */
+    public static final Migration MIGRATION_4_5 = new Migration(4, 5) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase db) {
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN task_id TEXT");
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN kind TEXT");
         }
     };
 

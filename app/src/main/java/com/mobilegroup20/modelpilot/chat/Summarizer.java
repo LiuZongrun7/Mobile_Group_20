@@ -51,15 +51,17 @@ public final class Summarizer {
      * <p><b>会阻塞当前线程</b>（走的是 {@link ProviderClient#complete}，非流式那一趟）。
      * 只能在后台线程上调。
      *
-     * @return 摘要正文。**空串 = 这次压缩没成功**（上游给了空回答），调用方不要拿它
-     *         建记忆——一条空记忆会让模型以为"前面什么都没发生过"。
+     * @return 摘要正文 + 这次调用的用量。**空串 = 这次压缩没成功**（上游给了空回答），
+     *         调用方不要拿它建记忆——一条空记忆会让模型以为"前面什么都没发生过"。
+     *         {@code tokens} 可能是 null（上游没报用量），那时调用方**不记账**。
      * @throws ProviderClient.ProviderException 上游拒绝或网络失败
      */
-    public static String summarize(ProviderSpec provider, ModelSpec model, String apiKey,
-                                   List<CanonicalMessage> segment)
+    public static ProviderClient.Completion summarize(ProviderSpec provider, ModelSpec model,
+                                                      String apiKey,
+                                                      List<CanonicalMessage> segment)
             throws ProviderClient.ProviderException {
         if (segment.isEmpty()) {
-            return "";
+            return new ProviderClient.Completion("", null);
         }
         // 走**同一套渲染器**：压缩请求和正常请求的形状差异（system 位置、附件的编码）
         // 就不必在这里再实现一遍。多写一套"压缩专用的请求体"，等于给六家各加一处会走偏的地方。
@@ -81,7 +83,11 @@ public final class Summarizer {
         RenderedContext context = new RenderedContext(provider.providerId, model.modelId, payload,
                 ContextEngine.estimate(payload), model.contextLimit, "compress-ask", null,
                 /* memoryCount= */ 0, /* messageCount= */ request.size());
-        String text = ProviderClient.complete(provider, model, apiKey, context);
-        return text == null ? "" : text.trim();
+        ProviderClient.Completion completion =
+                ProviderClient.complete(provider, model, apiKey, context);
+        // 正文去掉首尾空白（模型常爱在开头空一行），**用量原样带出去**——
+        // 摘要这次调用是要记账的（2026-10-04：真机上跑通压缩才发现它原来完全没进账本）。
+        String text = completion.text == null ? "" : completion.text.trim();
+        return new ProviderClient.Completion(text, completion.tokens);
     }
 }

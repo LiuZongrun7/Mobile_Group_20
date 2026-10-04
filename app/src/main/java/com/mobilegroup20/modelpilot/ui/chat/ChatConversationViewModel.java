@@ -225,6 +225,10 @@ public final class ChatConversationViewModel extends ViewModel {
 
     private void run(String body, @Nullable String manualProviderId, @Nullable String manualModelId) {
         long startedAt = System.currentTimeMillis();
+        // **这一轮提问的任务号**：回答、压缩（将来还有工具）都挂在它下面。
+        // 大纲要的"任务级成本"就是这个 id 的聚合——没有它，账本只能回答
+        // "这个月花了多少"，回答不了"把这份 PDF 总结完花了多少"。
+        String taskId = "task:" + UUID.randomUUID().toString().substring(0, 12);
         try {
             // 1) 先落库。
             MessageEntity userMessage = new MessageEntity();
@@ -238,8 +242,8 @@ public final class ChatConversationViewModel extends ViewModel {
             // 2) 整条对话进引擎。
             ContextEngine engine = loadEngine();
 
-            // 3) 木桶效应。
-            boolean compressed = compressIfNeeded(engine);
+            // 3) 木桶效应。压一次（如果压成了）会**单独记一行账**，和回答共用 taskId。
+            boolean compressed = compressIfNeeded(engine, taskId);
 
             // 4) 选模型。
             String providerId;
@@ -302,7 +306,7 @@ public final class ChatConversationViewModel extends ViewModel {
                             // 记账要写库，所以在 io 线程上做。金额算不出来时那一行留 null
                             // （界面显示"价格未知"），**不填 0**。
                             io.execute(() -> ledger.record(providerId, modelId, route, chatId,
-                                    tokens, startedAt));
+                                    taskId, UsageRecorder.Kind.ANSWER, tokens, startedAt));
                         }
 
                         @Override public void onDone() {
@@ -402,7 +406,7 @@ public final class ChatConversationViewModel extends ViewModel {
      * 完整上下文——上游如果因此报"超长"，用户看到的是一句真实的错误，
      * 而不是"摘要成功了"＋悄悄少了十几轮（那是这个项目最不能留的那种失败）。
      */
-    private boolean compressIfNeeded(ContextEngine engine) {
+    private boolean compressIfNeeded(ContextEngine engine, String taskId) {
         if (!engine.needsCompression()) {
             return false;
         }
@@ -435,16 +439,27 @@ public final class ChatConversationViewModel extends ViewModel {
             return false;
         }
         long at = System.currentTimeMillis();
-        String summary;
+        ProviderClient.Completion done;
         try {
-            summary = Summarizer.summarize(provider, model, apiKey, segment);
+            done = Summarizer.summarize(provider, model, apiKey, segment);
         } catch (ProviderClient.ProviderException failed) {
             // 压缩失败不该让这次发送也失败：照常发（可能因超长被上游拒，那时报的就是真原因）。
             return false;
         }
+        String summary = done.text;
         if (summary.isEmpty()) {
             return false;
         }
+        // **压缩这一笔也要记账**，而且和回答共用 taskId。
+        // 2026-10-04 真机上跑通压缩时才发现的：假上游收到 2 次压缩 + 2 次回答，
+        // 而账本只有 2 行——压缩花的钱在账本里根本不存在。
+        // 上游没报用量时 `done.tokens` 是 null，`record` 会**不写这一行**
+        // （少一行是可见的缺失，写一行 0 是把"不知道"说成"没花钱"）。
+        // kind = COMPRESS：Insights 要能把"摘要的钱"和"回答的钱"分开显示，
+        // 否则用户会以为回答花了那么多。
+        io.execute(() -> ledger.record(compressorProvider, compressorModel,
+                UsageRecorder.Route.AUTO, chatId, taskId, UsageRecorder.Kind.COMPRESS,
+                done.tokens, at));
         Memory memory = engine.applyCompression(segment.get(0).id,
                 segment.get(segment.size() - 1).id, summary, compressorProvider,
                 compressorModel, 0, 0, at);

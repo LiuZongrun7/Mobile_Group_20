@@ -195,11 +195,11 @@ public final class ProviderClient {
      * <p><b>会阻塞当前线程</b>（最长到读超时）。绝对不要在调用它时占着主线程——
      * 这里的 `readTimeout` 是 0（跟流式那套共用客户端），主线程上卡住就是 ANR。
      *
-     * @return 回答正文（可能为空串；空串由调用方判断成"这次压缩失败"）
+     * @return 正文 + 上游报的用量（用量可能是 null = 上游没给）
      * @throws ProviderException 上游拒绝或网络失败（分类同流式那条路）
      */
-    public static String complete(ProviderSpec provider, ModelSpec model, String apiKey,
-                                  RenderedContext context) throws ProviderException {
+    public static Completion complete(ProviderSpec provider, ModelSpec model, String apiKey,
+                                      RenderedContext context) throws ProviderException {
         if (apiKey == null || apiKey.trim().isEmpty()) {
             throw new IllegalArgumentException("Missing API key for " + provider.providerId);
         }
@@ -230,7 +230,18 @@ public final class ProviderClient {
                 throw ProviderException.network("Provider returned an empty response body", null);
             }
             String text = new String(body.bytes(), StandardCharsets.UTF_8);
-            return anthropic ? anthropicText(text) : openAiText(text);
+            JsonObject root;
+            try {
+                root = JsonParser.parseString(text).getAsJsonObject();
+            } catch (RuntimeException unreadable) {
+                throw ProviderException.http(200,
+                        "unreadable response: " + truncate(text, DETAIL_LIMIT));
+            }
+            // usage 拿出来给账本用：**压缩那次调用也是真花钱的**（见 Completion 的注释）。
+            com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens =
+                    splitUsage(object(root, "usage"));
+            String content = anthropic ? anthropicText(root, text) : openAiText(root, text);
+            return new Completion(content, tokens);
         } catch (IOException broken) {
             if (broken instanceof ProviderException) {
                 throw (ProviderException) broken;
@@ -240,23 +251,21 @@ public final class ProviderClient {
     }
 
     /** OpenAI 兼容：`choices[0].message.content`。 */
-    private static String openAiText(String body) throws ProviderException {
+    private static String openAiText(JsonObject root, String raw) throws ProviderException {
         try {
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
             JsonArray choices = array(root, "choices");
             if (choices == null || choices.size() == 0) {
                 return "";
             }
             return nullToEmpty(string(object(choices.get(0).getAsJsonObject(), "message"), "content"));
         } catch (RuntimeException unreadable) {
-            throw ProviderException.http(200, "unreadable response: " + truncate(body, DETAIL_LIMIT));
+            throw ProviderException.http(200, "unreadable response: " + truncate(raw, DETAIL_LIMIT));
         }
     }
 
     /** Anthropic：`content` 里所有 `text` 块的拼接（它还有别的块类型）。 */
-    private static String anthropicText(String body) throws ProviderException {
+    private static String anthropicText(JsonObject root, String raw) throws ProviderException {
         try {
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
             JsonArray blocks = array(root, "content");
             if (blocks == null) {
                 return "";
@@ -273,7 +282,7 @@ public final class ProviderClient {
             }
             return out.toString();
         } catch (RuntimeException unreadable) {
-            throw ProviderException.http(200, "unreadable response: " + truncate(body, DETAIL_LIMIT));
+            throw ProviderException.http(200, "unreadable response: " + truncate(raw, DETAIL_LIMIT));
         }
     }
 
@@ -616,28 +625,56 @@ public final class ProviderClient {
          * "未知"被洗成"花了 0"是账本上最难发现的一类错（`CONTRACTS.md` §4）。
          */
         private void readUsage(JsonObject usage) {
-            if (usage == null) {
-                return;
-            }
-            TOKEN_SPLIT: {
-                com.mobilegroup20.modelpilot.contract.model.TokenBundle split =
-                        com.mobilegroup20.modelpilot.chat.UsageSplitter.split(
-                                new com.mobilegroup20.modelpilot.chat.UsageSplitter.UsageFields() {
-                                    @Override public Long number(String field) {
-                                        return ProviderClient.number(usage, field);
-                                    }
-                                    @Override public Long nested(String object, String field) {
-                                        JsonObject inner = ProviderClient.object(usage, object);
-                                        return inner == null ? null
-                                                : ProviderClient.number(inner, field);
-                                    }
-                                });
-                if (split == null) {
-                    break TOKEN_SPLIT;
-                }
+            com.mobilegroup20.modelpilot.contract.model.TokenBundle split = splitUsage(usage);
+            if (split != null) {
                 tokens = split;
                 sawUsage = true;
             }
+        }
+    }
+
+    /**
+     * 把上游给的 usage 归一成四个桶（流式与非流式共用同一份判断）。
+     *
+     * <p>两种字段形状（OpenAI 的 `prompt_tokens` 是输入总量、Anthropic 的
+     * `input_tokens` 已经是未命中部分）由 {@code UsageSplitter} 分辨，这里只负责
+     * 把 Gson 对象递过去。**认不出来就返回 null**，不造一个全 0 的 bundle：
+     * "未知"被洗成"花了 0"是账本上最难发现的一类错（`CONTRACTS.md` §4）。
+     */
+    static com.mobilegroup20.modelpilot.contract.model.TokenBundle splitUsage(JsonObject usage) {
+        if (usage == null) {
+            return null;
+        }
+        return com.mobilegroup20.modelpilot.chat.UsageSplitter.split(
+                new com.mobilegroup20.modelpilot.chat.UsageSplitter.UsageFields() {
+                    @Override public Long number(String field) {
+                        return ProviderClient.number(usage, field);
+                    }
+                    @Override public Long nested(String object, String field) {
+                        JsonObject inner = ProviderClient.object(usage, object);
+                        return inner == null ? null : ProviderClient.number(inner, field);
+                    }
+                });
+    }
+
+    /**
+     * 非流式那一趟的结果：正文 + **上游报的用量**。
+     *
+     * <p>为什么要带 usage 出来：压缩上下文也是一次真花钱的调用。原来
+     * {@link #complete} 只返回一段文字，于是那一笔钱**在账本里根本不存在**——
+     * 真机上跑通压缩时才看出来（假上游收到 2 次压缩 + 2 次回答，账本只有 2 行）。
+     *
+     * <p>{@code tokens} 可能是 null：上游没给 usage 就是"不知道"，
+     * 调用方据此**不记账**（少一行是可见的缺失，记一行 0 是把不知道说成没花钱）。
+     */
+    public static final class Completion {
+        public final String text;
+        public final com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens;
+
+        public Completion(String text,
+                          com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens) {
+            this.text = text;
+            this.tokens = tokens;
         }
     }
 

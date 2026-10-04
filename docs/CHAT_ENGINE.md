@@ -114,7 +114,7 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 |---|---|
 | `projects` / `chats` / `messages`（Room） | 规范化对话：项目分组、显式指令、历史 |
 | `memories`（Room） | 压缩产物（provider 无关），用户可看可改可删 |
-| `usage_call` 的 **APP 来源**（复用已有的那张表） | **账本**：每次模型调用一行 —— provider / model / route(AUTO\|MANUAL) / chatId / toolCalls / 四桶 token / 来源(APP\|IMPORTED) / `call_id` |
+| `usage_call` 的 **APP 来源**（复用已有的那张表） | **账本**：每次模型调用一行 —— provider / model / route(AUTO\|MANUAL) / chatId / toolCalls / 四桶 token / 来源(APP\|IMPORTED) / `call_id` / **`taskId`（一轮提问一个）** / **`kind`（ANSWER\|COMPRESS\|TOOL）** |
 | `pricing_rates`（Room，由 `BundledPricingSource` 供种子） | 价目：按**生效日期**的四桶费率，改价要留痕 |
 
 - 金额**在本机按生效日期的费率算**，算不出价就是 `null`（界面上是"价格未知"，
@@ -156,7 +156,7 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 | --- | --- | --- |
 | 1. 上下文引擎 | 完成 | `chat/ContextEngine` `ContextRenderer` `OpenAiCompatibleRenderer` `AnthropicRenderer`（`ContextEngineTest` 等单测钉住） |
 | 2. 注册表 + key + 流式对话 | 完成（只有 DeepSeek 实测过） | `chat/ProviderRegistry`、`data/ProviderKeys`（Keystore）、`data/remote/ProviderClient` |
-| 3. 本机账本 | 完成 | `chat/UsageRecorder` + `chat/CallLedger`（每次调用一行，`uid` 固定为 `local`，见 `CallLedger` 的类注释） |
+| 3. 本机账本 | 完成 | `chat/UsageRecorder` + `chat/CallLedger`（每次调用一行，`uid` 固定为 `local`，见 `CallLedger` 的类注释）。**2026-10-04 补上任务级成本**：一轮提问生成一个 `taskId`，回答与压缩共用它；`kind` 区分 ANSWER / COMPRESS。真机上验过：假上游收到 6 次回答 + 2 次压缩，账本 8 行，触发压缩的那两轮各自能看到 `COMPRESS,ANSWER` 两行同一个 task |
 | 4. 四屏 UI | **3/4** | 首页 `ui/chat/ChatHomeFragment`、对话页 `ChatConversationFragment`、模型弹层 `ModelSheetFragment`；**Insights 还没做**（现在点 Insights 看到的是旧的统计页，它读 `daily_usage` 那张表，而那张表目前只滚导入的记录——所以它不会显示 App 自己发出去的调用） |
 | 5. 其余五家 | 未开始 | 注册表里已有六家的 base URL 与模型清单，但只有 DeepSeek 真跑过；其余四家的 `streamUsage` 开关保持 false 等实测 |
 | 6. 导出/导入 | 未开始 | |
@@ -175,6 +175,15 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 - 对话页的 `⋮`（重命名/删除/看记忆）与搜索还没做，点了会说"还没做"。
 - Insights 需要的聚合查询还没写：`daily_usage` 的滚动只收 `IMPORTED`，
   App 自己那些调用要另走一条（`usage_call` 里 `source = APP` 且 `uid = local`）。
+  任务级那一条现在可以直接查：`GROUP BY task_id`（回答与压缩已经挂在同一个任务号下）。
+- **`BundledPricingSource` 还是空表**，所以账本里每一行的 `costMicros` 都是 NULL
+  （"价格未知"，这是对的，但不该一直这样）。DeepSeek 那四个价已经在
+  `ProviderRegistry` 里连官方定价页链接一起记着，抄进价目表就能算钱了。
+- `MIGRATION_3_4` 里的四张表原来把若干列写成了 NOT NULL，而实体里那些字段没有
+  `@NonNull`（Room 按可空生成）——**迁移建出来的表与全新安装不一致**。
+  2026-10-04 修好了，同时发现真正的原因是 **androidTest 源集里有个引用旧导航 id
+  的文件让整个源集编译不过**，于是所有仪器测试（包括这套迁移测试）几周都没跑过。
+  这类"测试悄悄不跑了"比测试失败更危险，改完 id 之后 5 个迁移用例全过。
 
 ## 7. 明确不做（这一版）
 

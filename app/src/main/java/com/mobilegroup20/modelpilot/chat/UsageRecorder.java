@@ -25,6 +25,22 @@ import java.util.List;
  */
 public final class UsageRecorder {
 
+    /**
+     * 这次调用在任务里扮演什么角色。
+     *
+     * <p>拆开记是因为**一轮提问可能花好几笔钱**：把长对话压一次（摘要）、
+     * 再答一次。合并成一行的话，"这次回答花了多少"和"这次提问一共花了多少"
+     * 就再也分不开了。
+     */
+    public enum Kind {
+        /** 真正回答用户的那次调用。 */
+        ANSWER,
+        /** 压缩上下文（把更早的对话变成一段记忆）的那次调用。 */
+        COMPRESS,
+        /** 工具调用（服务端只读助手的两个论坛工具）。 */
+        TOOL
+    }
+
     /** 这次调用是怎么定的模型。 */
     public enum Route {
         /** Auto 挑的。 */
@@ -53,6 +69,20 @@ public final class UsageRecorder {
     public UsageCall record(String callId, String providerId, String modelId, Route route,
                             String chatId, List<String> toolCalls, TokenBundle tokens,
                             long startedAtEpochMillis, String day) {
+        // 老签名：不给任务号与角色 = "不知道"（导入的那条路就是这么用的）。
+        return record(callId, providerId, modelId, route, chatId, null, null, toolCalls, tokens,
+                startedAtEpochMillis, day);
+    }
+
+    /**
+     * 记一行（带任务号与角色）。
+     *
+     * @param taskId 这一轮提问的任务号；同一轮里的回答与压缩共用一个
+     * @param kind   这次调用是干什么的；不知道就传 null（**不要猜**）
+     */
+    public UsageCall record(String callId, String providerId, String modelId, Route route,
+                            String chatId, String taskId, Kind kind, List<String> toolCalls,
+                            TokenBundle tokens, long startedAtEpochMillis, String day) {
         Provider provider = providerOf(providerId);
         if (provider == null) {
             return null;                        // 认不出的 provider：不猜、不记
@@ -73,6 +103,8 @@ public final class UsageRecorder {
         call.route = route == null ? null : route.name();
         call.chatId = chatId;
         call.toolCalls = toolCalls == null ? null : join(toolCalls);
+        call.taskId = taskId;
+        call.kind = kind == null ? null : kind.name();
 
         PricingRate rate = pricing.rateFor(provider, modelId, day);
         if (rate == null) {

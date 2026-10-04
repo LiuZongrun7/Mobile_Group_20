@@ -148,9 +148,13 @@ public class AppDatabaseMigrationTest {
     @Test
     public void v3ToV4AddsChatTablesAndKeepsOldUsageRows() throws IOException {
         SupportSQLiteDatabase db = helper.createDatabase(TEST_DB, 3);
-        db.execSQL("INSERT INTO usage_call(id, uid, provider, model, started_at_epoch_millis, day,"
-                + " input, cache_read, cache_write, output, calls, source)"
-                + " VALUES('call:old', 'u_1', 'OPENAI', 'gpt-5', 1, '2026-09-27', 10, 0, 0, 5, 1,"
+        // **列名照 `app/schemas/.../3.json` 抄**：`startedAtEpochMillis` / `cacheRead` /
+        // `cacheWrite` 在实体里没写 `@ColumnInfo`，Room 用的就是字段名本身（不是下划线式）。
+        // 写成下划线式的后果是这一条 INSERT 自己抛 "no column named …"，
+        // 于是**测试根本没验到迁移**——2026-10-04 在真机上跑这一组才发现的。
+        db.execSQL("INSERT INTO usage_call(id, uid, provider, model, startedAtEpochMillis, day,"
+                + " input, cacheRead, cacheWrite, output, source)"
+                + " VALUES('call:old', 'u_1', 'OPENAI', 'gpt-5', 1, '2026-09-27', 10, 0, 0, 5,"
                 + " 'IMPORTED')");
         db.close();
 
@@ -171,6 +175,36 @@ public class AppDatabaseMigrationTest {
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?", new String[]{table})) {
                 assertTrue(table + " 没建出来", cursor.moveToFirst());
             }
+        }
+    }
+
+    /**
+     * v4 → v5：账本多两列（任务号 + 调用角色），**老用量一条不动**。
+     *
+     * <p>起因是真机上跑通压缩之后看出来的：一轮提问其实花了两笔（一次摘要 + 一次回答），
+     * 而账本里只有一笔、两笔之间也没有东西串起来。
+     *
+     * <p>和上一版一样是纯新增的两列可空列，所以老行必须原样还在、且这两列是 NULL——
+     * 给 `kind` 编一个 `ANSWER` 等于把"不知道这是什么调用"说成"这是回答"。
+     */
+    @Test
+    public void v4ToV5AddsTaskAndKindAndKeepsOldUsageRows() throws IOException {
+        SupportSQLiteDatabase db = helper.createDatabase(TEST_DB, 4);
+        db.execSQL("INSERT INTO usage_call(id, uid, provider, model, startedAtEpochMillis, day,"
+                + " input, cacheRead, cacheWrite, output, source, route, chat_id)"
+                + " VALUES('call:v4', 'local', 'DEEPSEEK', 'deepseek-chat', 1, '2026-10-04',"
+                + " 100, 0, 0, 20, 'APP', 'AUTO', 'chat-1')");
+        db.close();
+
+        db = helper.runMigrationsAndValidate(TEST_DB, 5, true, AppDatabase.MIGRATION_4_5);
+
+        try (android.database.Cursor cursor = db.query(
+                "SELECT task_id, kind, input, route FROM usage_call WHERE id='call:v4'")) {
+            assertTrue(cursor.moveToFirst());
+            assertTrue("task_id 必须是 NULL，不能编一个任务号", cursor.isNull(0));
+            assertTrue("kind 必须是 NULL，不能编成 ANSWER", cursor.isNull(1));
+            assertEquals("老行的用量不能被迁移改动", 100, cursor.getInt(2));
+            assertEquals("AUTO", cursor.getString(3));
         }
     }
 }

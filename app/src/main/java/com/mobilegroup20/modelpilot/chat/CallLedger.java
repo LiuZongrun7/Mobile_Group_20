@@ -44,17 +44,20 @@ public final class CallLedger {
      * Insights 上会少一次调用——那是**可见的**缺失，比一个错数字好。
      *
      * @param route Auto 挑的还是用户手动指定的（Insights 要按它算 Auto 占比）
+     * @param taskId 这一轮提问的任务号：回答与压缩共用一个，用来算"一次提问的总成本"
+     * @param kind 这次调用是干什么的（回答 / 压缩 / 工具）
      * @return 真写进去的那一行；去重命中或 provider 认不出来时返回 null
      */
     public UsageCall record(String providerId, String modelId, UsageRecorder.Route route,
-                            String chatId, com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens,
+                            String chatId, String taskId, UsageRecorder.Kind kind,
+                            com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens,
                             long startedAtEpochMillis) {
         if (tokens == null) {
             return null;
         }
         String day = com.mobilegroup20.modelpilot.util.TimeUtils.dayOf(startedAtEpochMillis);
         UsageCall call = recorder.record(callId(providerId, startedAtEpochMillis), providerId,
-                modelId, route, chatId, null, tokens, startedAtEpochMillis, day);
+                modelId, route, chatId, taskId, kind, null, tokens, startedAtEpochMillis, day);
         if (call == null) {
             return null;
         }

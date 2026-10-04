@@ -101,6 +101,20 @@ public class UsageCallEntity {
     @ColumnInfo(name = "rate_version")
     public String rateVersion;
 
+    /**
+     * 这一轮提问的任务号：回答、压缩（将来还有工具）共用一个。
+     *
+     * <p>可空，导入的记录是 null。**加这一列就是为了"任务级成本"**——
+     * 没有它，Insights 只能回答"这个月花了多少"，回答不了
+     * "把这份 PDF 总结完花了多少"（那可能包含一次摘要 + 一次回答）。
+     */
+    @ColumnInfo(name = "task_id")
+    public String taskId;
+
+    /** `"ANSWER"` / `"COMPRESS"` / `"TOOL"`；导入的记录是 null（不知道）。 */
+    @ColumnInfo(name = "kind")
+    public String kind;
+
     /** Room 要一个无参构造。 */
     public UsageCallEntity() {
     }
@@ -154,6 +168,8 @@ public class UsageCallEntity {
         e.chatId = call.chatId;
         e.toolCalls = call.toolCalls;
         e.rateVersion = call.rateVersion;
+        e.taskId = call.taskId;
+        e.kind = call.kind;
         return e;
     }
 
@@ -177,6 +193,8 @@ public class UsageCallEntity {
         call.chatId = chatId;
         call.toolCalls = toolCalls;
         call.rateVersion = rateVersion;
+        call.taskId = taskId;
+        call.kind = kind;
         return call;
     }
 }

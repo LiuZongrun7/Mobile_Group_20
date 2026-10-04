@@ -110,6 +110,29 @@ public class UsageRecorderTest {
         assertEquals("getForumHighlights,getMyThreads", call.toolCalls);
     }
 
+    @Test public void a_task_id_and_role_are_recorded_so_one_round_can_be_totalled() {
+        UsageCall answer = new UsageRecorder(RATES).record("call:a", "DEEPSEEK", "deepseek-chat",
+                UsageRecorder.Route.AUTO, "chat-1", "task:abc", UsageRecorder.Kind.ANSWER,
+                null, tokens(1000, 500), 1L, DAY);
+        UsageCall compress = new UsageRecorder(RATES).record("call:b", "DEEPSEEK", "deepseek-chat",
+                UsageRecorder.Route.AUTO, "chat-1", "task:abc", UsageRecorder.Kind.COMPRESS,
+                null, tokens(2000, 100), 1L, DAY);
+
+        // 一轮提问里的两笔挂同一个任务号：这是"任务级成本"唯一能算出来的前提。
+        assertEquals("task:abc", answer.taskId);
+        assertEquals("task:abc", compress.taskId);
+        assertEquals("ANSWER", answer.kind);
+        assertEquals("COMPRESS", compress.kind);
+    }
+
+    @Test public void imported_rows_leave_task_and_kind_unknown() {
+        UsageCall imported = new UsageRecorder(RATES).record("call:c", "DEEPSEEK", "deepseek-chat",
+                null, null, null, tokens(1, 1), 1L, DAY);
+        // **不填 ANSWER**：导入的记录分不出角色，把"不知道"说成"这是回答"比空着更糟。
+        assertNull(imported.taskId);
+        assertNull(imported.kind);
+    }
+
     @Test public void the_enum_lookup_is_exact_and_never_guesses() {
         assertEquals(Provider.DEEPSEEK, UsageRecorder.providerOf("DEEPSEEK"));
         assertNull("大小写不对就是认不出来，别自作聪明", UsageRecorder.providerOf("deepseek"));
