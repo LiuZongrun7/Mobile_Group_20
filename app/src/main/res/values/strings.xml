@@ -194,8 +194,11 @@
     <string name="chat_new_chat_in_project">New chat in this project</string>
     <string name="chat_collapse_project">Collapse project</string>
     <string name="chat_expand_project">Expand project</string>
-    <!-- 还没说过话的对话，徽章位置上的那句话。 -->
-    <string name="chat_no_messages">No messages yet</string>
+    <!-- 还没有**回答**时，徽章位置上的那句话。
+         2026-10-04 真机改：原来写的是 "No messages yet"，但这条对话里用户的消息是有的
+         （新建对话时就把第一条存进去了），缺的只是模型的回答——写成 "No messages"
+         会让人以为消息丢了。 -->
+    <string name="chat_no_messages">No reply yet</string>
     <!-- 相对时间。**只有今天才用 "Now" 这类词**，更早的一律给日期，
          不然一周前的对话会显示成 "168h"，用户还得自己换算。 -->
     <string name="chat_time_now">Now</string>
@@ -265,7 +268,10 @@
     <string name="keys_title">API keys</string>
     <string name="keys_explainer">Your keys are encrypted with this phone\'s Keystore and never leave it. ModelPilot has no server in the middle: requests go straight from this phone to the provider. You pay the provider directly.</string>
     <string name="keys_key_hint">API key</string>
-    <string name="keys_url_hint">Request URL (leave empty for the default)</string>
+    <!-- 2026-10-04 真机改：原来那句太长，在 Dialog 里被省略号截成
+         "Request URL (leave empty for the de…"，而"留空 = 用默认"这层意思
+         已经由输入框里预填的默认地址表达了，所以缩短。 -->
+    <string name="keys_url_hint">Request URL (optional)</string>
     <string name="keys_clear">Clear</string>
     <string name="keys_save">Save</string>
     <string name="keys_saved">Saved</string>

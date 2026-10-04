@@ -84,7 +84,11 @@ public final class ChatHomeViewModel extends ViewModel {
         final ProjectEntity project = new ProjectEntity();
         project.id = UUID.randomUUID().toString();
         project.name = name == null ? "" : name.trim();
-        project.colorIndex = 0;
+        // 颜色下标**跟着已有的项目数往下排**（`ProjectColors` 按它取色，超了循环）。
+        // 2026-10-04 真机上发现：原来固定写 0，于是新建的几个项目全是同一个紫色，
+        // 设计稿里"每个项目一种颜色"就没了——而靠颜色区分项目正是那一列图标的作用。
+        List<ProjectEntity> existing = projects.getValue();
+        project.colorIndex = existing == null ? 0 : existing.size();
         project.createdAtEpochMillis = System.currentTimeMillis();
         project.updatedAtEpochMillis = project.createdAtEpochMillis;
         io.execute(() -> {

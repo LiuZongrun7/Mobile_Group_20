@@ -73,8 +73,16 @@ public final class ProjectNameDialog extends DialogFragment {
                         publish(binding.projectNameInput.getText().toString()));
         // 键盘上那个"完成"和按保存是同一件事。少了它，用户敲完会去找按钮，
         // 而软键盘正好挡着按钮。
+        //
+        // **2026-10-04 真机改**：只认 `IME_ACTION_DONE` 不够。华为输入法在这个框里
+        // 送的是普通的 ENTER 键（`actionId == IME_NULL` + 一个 KEYCODE_ENTER 事件），
+        // 于是敲回车什么都不发生——用户以为存上了，其实对话框还开着。
+        // 现在两种都认：认 actionId，也认 ENTER 的按下事件。
         binding.projectNameInput.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId != EditorInfo.IME_ACTION_DONE) {
+            boolean done = actionId == EditorInfo.IME_ACTION_DONE
+                    || (event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER
+                            && event.getAction() == android.view.KeyEvent.ACTION_DOWN);
+            if (!done) {
                 return false;
             }
             publish(v.getText().toString());
