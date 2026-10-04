@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 包专用的清单覆盖：把上面那份"只放行回环明文"的网络策略挂上。
+     release 包不含这个文件，所以线上仍然是"任何明文都不许"。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

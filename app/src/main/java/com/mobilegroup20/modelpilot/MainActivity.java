@@ -26,6 +26,8 @@ import com.mobilegroup20.modelpilot.data.Money;
 import com.mobilegroup20.modelpilot.data.RepositoryProvider;
 import com.mobilegroup20.modelpilot.databinding.ActivityMainBinding;
 import com.mobilegroup20.modelpilot.ui.dashboard.DashboardUsage;
+import com.mobilegroup20.modelpilot.chat.ContextEngine;
+import com.mobilegroup20.modelpilot.chat.EngineTuning;
 import com.mobilegroup20.modelpilot.util.TimeUtils;
 
 import java.util.ArrayList;
@@ -249,6 +251,14 @@ public class MainActivity extends AppCompatActivity
 
         binding.accountButton.setVisibility(account ? View.VISIBLE : View.GONE);
         binding.apiKeysButton.setVisibility(me ? View.VISIBLE : View.GONE);
+        // 压缩阈值旋钮：**只有 debug 包 + 「我的」页**。它不是用户设置，
+        // 是给我们自己在真机上把压缩跑起来用的（见 chat/EngineTuning 的类注释）。
+        boolean tuning = me && BuildConfig.DEBUG;
+        binding.debugTuningButton.setVisibility(tuning ? View.VISIBLE : View.GONE);
+        if (tuning) {
+            binding.debugTuningButton.setText(
+                    com.mobilegroup20.modelpilot.chat.EngineTuning.describe(this));
+        }
         binding.chatPage.setVisibility(chat ? View.VISIBLE : View.GONE);
         binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
         binding.emptyPage.setVisibility(chat || forum || dashboard ? View.GONE : View.VISIBLE);
@@ -297,8 +307,47 @@ public class MainActivity extends AppCompatActivity
                     ? v -> com.mobilegroup20.modelpilot.ui.settings.ApiKeysDialog
                             .show(getSupportFragmentManager())
                     : null);
+            binding.debugTuningButton.setOnClickListener(tuning ? v -> pickCompressionKnobs() : null);
         }
     }
+    /**
+     * 压缩阈值的调试预设（只有 debug 包能进来）。
+     *
+     * <p>给的是**成对的预设**而不是两个自由输入框：要调的其实是"什么时候该压"这一件事，
+     * 让提前量和预留各填一个数字，很容易调出一个"预留比模型上限还大"的组合，
+     * 而那种组合的表现是"每句话都触发压缩"——看起来像功能坏了，其实是旋钮拧过头了。
+     */
+    private void pickCompressionKnobs() {
+        // **真正决定"压缩什么时候发生"的是 `reserve`，不是提前量。**
+        // 阈值 = 上限 × 0.8 − 预留 − 提前量：提前量只是"离天花板多远开始压"，
+        // 而预留是把天花板本身压低。第一版预设只调提前量，结果阈值纹丝不动
+        // （DeepSeek 128K 永远在 88K 上下），真机上照样触发不了——所以这里
+        // 从"能触发"往回排：把预留拉到 100K 以上，上限就只剩两三千 token。
+        final int[][] presets = {
+                {ContextEngine.RESERVE_FOR_OUTPUT, ContextEngine.COMPRESS_HEADROOM},
+                {ContextEngine.RESERVE_FOR_OUTPUT, 40_000},
+                {100_000, 500},
+                {101_500, 500},
+        };
+        final String[] labels = {
+                "真实值（预留 4K / 提前 10K）",
+                "提前 40K（预留 4K，等真有长对话再用）",
+                "能触发了：预留 100K → 上限只剩约 2.4K token",
+                "极端：预留 101.5K → 上限只剩约 900 token（两三句就压）",
+        };
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("压缩阈值（debug）")
+                .setItems(labels, (dialog, which) -> {
+                    EngineTuning.set(this, presets[which][0], presets[which][1]);
+                    binding.debugTuningButton.setText(EngineTuning.describe(this));
+                })
+                .setNeutralButton("重置", (dialog, which) -> {
+                    EngineTuning.reset(this);
+                    binding.debugTuningButton.setText(EngineTuning.describe(this));
+                })
+                .show();
+    }
+
     /** 打开账号弹窗（登录/注册/退出）。同一个 tag 只留一个实例，避免连点叠出多个对话框。 */
     private void showAccountDialog() {
         androidx.fragment.app.FragmentManager manager = getSupportFragmentManager();

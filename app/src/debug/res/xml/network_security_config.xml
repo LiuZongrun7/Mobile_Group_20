@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  **只存在于 debug 包**的明文放行：只放开回环地址（127.0.0.1 / localhost）。
+
+  为什么需要它：Android 9（API 28）起默认禁止明文 HTTP，而"把请求指向本机的假上游"
+  是验证这条链路最省事的办法——`adb reverse tcp:8080 tcp:8080` + 把某家的请求地址
+  改成 `http://127.0.0.1:8080/v1`，就能在真机上看到**发出去的到底是什么**
+  （压缩前后各是什么、记忆有没有进 system……），既不花钱也不碰任何人的 key。
+
+  没有它的时候，表现是 OkHttp 直接抛 `CLEARTEXT communication to 127.0.0.1 not permitted`，
+  而我们把它归到 NETWORK 那一类，界面上写着"网络问题——请求没有到达服务商"——
+  一句话都不假，只是完全指不到真凶。
+
+  为什么只放开回环、且只在 debug：真实的 provider 端点全是 https，
+  release 包不该有任何明文出口；局域网 IP 也不放（那等于给同一个 Wi-Fi 下的
+  任何人一个中间人机会）。要连自建反代就让它上 https。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

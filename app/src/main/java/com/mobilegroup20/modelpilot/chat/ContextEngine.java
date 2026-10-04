@@ -45,11 +45,28 @@ public final class ContextEngine {
     private final Map<String, RenderedContext> cache = new LinkedHashMap<>();
     /** 用户配了 key 的 provider。木桶只看这些。 */
     private final List<String> enabledProviders = new ArrayList<>();
+    /** 给回答留的位置 / 压缩提前量。默认就是那两个常量，调试时可调（见第二个构造）。 */
+    private final int reserveForOutput;
+    private final int compressHeadroom;
 
     public ContextEngine(ProviderRegistry registry, String chatId, List<String> enabledProviders) {
+        this(registry, chatId, enabledProviders, RESERVE_FOR_OUTPUT, COMPRESS_HEADROOM);
+    }
+
+    /**
+     * 带上两个旋钮的构造（**只给调试与测试用**，见 `chat/EngineTuning`）。
+     *
+     * <p>为什么要能调：真机上试不出压缩——默认阈值约 88K tokens，正常对话到不了。
+     * 不把自己变成"可注入"的，这条路径就只能靠单测，永远没有一次真实运行。
+     * 默认构造仍然用那两个常量，所以生产行为一个字都没变。
+     */
+    public ContextEngine(ProviderRegistry registry, String chatId, List<String> enabledProviders,
+                         int reserveForOutput, int compressHeadroom) {
         this.registry = registry;
         this.chatId = chatId;
         this.enabledProviders.addAll(enabledProviders);
+        this.reserveForOutput = reserveForOutput;
+        this.compressHeadroom = compressHeadroom;
     }
 
     public String chatId() {
@@ -251,7 +268,7 @@ public final class ContextEngine {
 
     /** 一个模型真正能装多少：上限 × 安全系数 − 留给回答的位置。 */
     public int usableTokens(int contextLimit) {
-        return (int) (contextLimit * SAFETY) - RESERVE_FOR_OUTPUT;
+        return (int) (contextLimit * SAFETY) - reserveForOutput;
     }
 
     /**
@@ -274,7 +291,10 @@ public final class ContextEngine {
                 }
             }
         }
-        return smallest == 0 ? 0 : Math.max(1_000, smallest - COMPRESS_HEADROOM);
+        // **下限跟着提前量走**：调试时把提前量调到 500 而这里还卡着 1000 的话，
+        // 阈值会永远停在 1000，调小提前量根本不起作用（第一次调就是这么被骗了一次）。
+        return smallest == 0 ? 0 : Math.max(Math.min(1_000, compressHeadroom),
+                smallest - compressHeadroom);
     }
 
     /** 现在该不该压缩。没有启用任何 provider 时返回 false（还没到能发消息的地步）。 */

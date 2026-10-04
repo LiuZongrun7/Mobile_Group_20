@@ -14,6 +14,7 @@ import com.mobilegroup20.modelpilot.chat.AutoRouter;
 import com.mobilegroup20.modelpilot.chat.CallLedger;
 import com.mobilegroup20.modelpilot.chat.CanonicalMessage;
 import com.mobilegroup20.modelpilot.chat.ContextEngine;
+import com.mobilegroup20.modelpilot.chat.EngineTuning;
 import com.mobilegroup20.modelpilot.chat.Memory;
 import com.mobilegroup20.modelpilot.chat.ModelSpec;
 import com.mobilegroup20.modelpilot.chat.ProviderRegistry;
@@ -108,6 +109,19 @@ public final class ChatConversationViewModel extends ViewModel {
 
         SendState streaming(String text) {
             return new SendState(true, text, providerId, modelId, routeReason, route, error,
+                    incomplete, compressed);
+        }
+
+        /**
+         * 这一轮结束了（成功），**但把"这轮发生过什么"留着**：压过上下文、
+         * 这次是谁答的、Auto 为什么挑它。
+         *
+         * <p>2026-10-04 真机上发现的：原来收尾时直接换成 {@link #idle()}，
+         * 于是"更早的内容已收进记忆"那句提示在回答到达的同一瞬间消失——
+         * 用户根本读不到，而这件事（历史被压缩了）恰恰是他最该知道的。
+         */
+        SendState settled() {
+            return new SendState(false, "", providerId, modelId, routeReason, route, error,
                     incomplete, compressed);
         }
 
@@ -295,7 +309,10 @@ public final class ChatConversationViewModel extends ViewModel {
                             io.execute(() -> saveAnswer(assistantId, answer.toString(), providerId,
                                     modelId, route));
                             main.post(() -> {
-                                send.setValue(SendState.idle());
+                                SendState value = send.getValue();
+                                // settled() 而不是 idle()：留住 compressed / 路由信息，
+                                // 否则压缩提示在回答到达的瞬间就没了（见 settled 的注释）。
+                                send.setValue(value == null ? SendState.idle() : value.settled());
                                 // 这一轮到此结束，下一句可以发了。放在这里而不是 finally：
                                 // finally 在"请求刚发出去"时就会走到（stream 是异步的）。
                                 busy.set(false);
@@ -318,6 +335,10 @@ public final class ChatConversationViewModel extends ViewModel {
         } catch (RuntimeException unexpected) {
             // 同步步骤（渲染、参数校验）出的意外也要变成一句人话，
             // 否则界面会永远停在"正在输入"，而那看起来像网络卡住了。
+            // **同时必须落日志**：上面那句人话是给用户的，而"到底哪一行炸了"只有日志能回答。
+            // 这是真机上用血换的：没有这行日志时，一个后台线程 setValue 的
+            // IllegalStateException 表现成"发送失败"，查了半小时。
+            android.util.Log.e("ModelPilot", "send failed before the request went out", unexpected);
             fail(R.string.chat_error_send_failed);
         } finally {
             if (inflight.get() == null) {
@@ -354,7 +375,10 @@ public final class ChatConversationViewModel extends ViewModel {
 
     /** 读整条对话（记忆 + 消息）并重建引擎。 */
     private ContextEngine loadEngine() {
-        ContextEngine engine = new ContextEngine(registry, chatId, enabledProviders());
+        // 两个旋钮来自 EngineTuning：release 包恒为默认值，debug 包里可以在
+        // 「我的」页临时调小，好让压缩在真机上真的发生一次（见那个类的注释）。
+        ContextEngine engine = new ContextEngine(registry, chatId, enabledProviders(),
+                EngineTuning.reserveForOutput(context), EngineTuning.compressHeadroom(context));
         for (MemoryEntity memory : dao.memories(chatId)) {
             engine.applyCompression(memory.fromMessageId, memory.toMessageId, memory.summary,
                     memory.madeByProvider, memory.madeByModel, memory.tokensIn, memory.tokensOut,
@@ -458,8 +482,22 @@ public final class ChatConversationViewModel extends ViewModel {
 
     // ---- 状态发布 ------------------------------------------------------
 
+    /**
+     * 发状态。
+     *
+     * <p><b>必须自己判断线程。</b>`LiveData.setValue` 只能在主线程调，而这条链路里
+     * 有不少状态是在 {@link #io} 线程上产生的（发请求前那一拍、以及 onError 里那几处）。
+     * 2026-10-04 真机上就是这么踩的：`setValue` 在后台线程抛
+     * `IllegalStateException: Cannot invoke setValue on a background thread`，
+     * 而它被 {@link #run} 的 catch 兜住，用户看到的是"发送失败"——
+     * 一个 HTTP 都还没发的"发送失败"，排查时完全指不到真凶。
+     */
     private void publish(SendState state) {
-        send.setValue(state);
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            send.setValue(state);
+        } else {
+            send.postValue(state);
+        }
     }
 
     /** 在"当前这一轮"的基础上改一处。保留 providerId / route / compressed，避免每处都重传。 */

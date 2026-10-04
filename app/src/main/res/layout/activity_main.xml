@@ -654,6 +654,20 @@
                 android:layout_marginTop="8dp"
                 android:text="@string/keys_title"
                 android:visibility="gone" />
+
+            <!-- **只在 debug 包里出现**的压缩阈值旋钮（`chat/EngineTuning`）。
+                 默认阈值约 88K tokens，正常对话触发不到压缩，于是那条路径在真机上
+                 从来没跑过一次；答辩前想演示它就得能临时调小。release 包里这个按钮
+                 不显示，`EngineTuning` 也一律返回默认值。 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/debug_tuning_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="12sp"
+                tools:text="压缩阈值：默认（提前 10K，预留 4K）"
+                android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
 
