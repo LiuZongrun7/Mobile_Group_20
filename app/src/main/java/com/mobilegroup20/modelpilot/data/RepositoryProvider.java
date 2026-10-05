@@ -33,10 +33,12 @@ public final class RepositoryProvider {
     /**
      * 是否使用桩数据。
      *
-     * <p>开发期开着，让游戏和 agent 有数据可算；<b>提交之前必须关掉</b>，
-     * 否则演示时看到的是编出来的数字。
+     * <p><b>2026-10-05 关掉。</b>原来开发期开着，让早期的统计页有数据可看；
+     * 现在 Insights 读的是**本机真账本**（`ui/insights/`），旧统计页也从导航上摘了——
+     * 再让 {@link #usage()} 返回编出来的数字，只会在排查时把人带偏
+     * （"这个月怎么花了 ¥32" 而账本里其实一笔都没有）。
      */
-    public static final boolean USE_STUBS = true;
+    public static final boolean USE_STUBS = false;
 
     private static UsageRepository usage;
     private static ForumRepository forum;

@@ -61,15 +61,22 @@ public final class ApiKeysDialog extends DialogFragment {
 
         // 两个子对话框都只发结果，落库/刷新在这里。监听只注册一次
         // （注册在点击里的那份，转屏之后就没了）。
+        //
+        // **LifecycleOwner 必须是 `this`（这个 DialogFragment），不能用
+        // `getViewLifecycleOwner()`**：注册发生在 `onCreateDialog` 里，那一刻
+        // 对话框的视图还没建，`getViewLifecycleOwner()` 直接抛
+        // `IllegalStateException: Can't access the Fragment View's LifecycleOwner…`
+        // —— 2026-10-05 真机上就是这么崩的（点开 API keys 就闪退）。
+        // 用 `this` 的生命周期也对：这两个监听要活到对话框自己被销毁为止。
         getChildFragmentManager().setFragmentResultListener(ProviderPickerDialog.RESULT_KEY,
-                getViewLifecycleOwner(), (key, result) -> {
+                this, (key, result) -> {
                     String providerId = result.getString(ProviderPickerDialog.BUNDLE_PROVIDER);
                     if (providerId != null) {
                         ProviderEditorDialog.open(getChildFragmentManager(), providerId);
                     }
                 });
         getChildFragmentManager().setFragmentResultListener(ProviderEditorDialog.RESULT_KEY,
-                getViewLifecycleOwner(), (key, result) -> renderConfigured());
+                this, (key, result) -> renderConfigured());
 
         renderConfigured();
         return new MaterialAlertDialogBuilder(requireContext())

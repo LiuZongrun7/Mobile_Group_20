@@ -98,10 +98,18 @@ public class StubUsageRepository implements UsageRepository {
         return Math.abs(h % 1_000L);
     }
 
-    /** 一天编出三家各一行，token 量在真实量级附近（十 k 到百 k）。 */
+    /**
+     * 一天编出三家各一行，token 量在真实量级附近（十 k 到百 k）。
+     *
+     * <p><b>这里必须是固定三家，不能写成 `Provider.values()`。</b>2026-10-05 踩过：
+     * 给枚举补上 GLM / Kimi / Seed / Anthropic / CUSTOM（账本那边原来漏记这几家）
+     * 之后，这个循环会去问 {@link #modelOf} 要它们的示例模型名，而那个 switch 里没有，
+     * 于是抛 `未知提供方` —— **App 一启动就崩**（MainActivity 启动时就要读用量）。
+     * 样例数据本来就是"演示三家"，跟着枚举长个儿是没有道理的。
+     */
     static List<DailyUsage> sampleDay(String uid, String day) {
         List<DailyUsage> rows = new ArrayList<>();
-        Provider[] providers = Provider.values();
+        Provider[] providers = {Provider.OPENAI, Provider.MIMO, Provider.DEEPSEEK};
         for (int i = 0; i < providers.length; i++) {
             Provider provider = providers[i];
             DailyUsage d = new DailyUsage();

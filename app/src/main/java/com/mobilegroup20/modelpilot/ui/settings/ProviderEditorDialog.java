@@ -55,6 +55,17 @@ public final class ProviderEditorDialog extends DialogFragment {
     private static final String ARG_CUSTOM = "custom";
 
     /**
+     * 表单的 binding。
+     *
+     * <p><b>必须自己存起来，不能在 `save()` 里用 `getView()` 去拿</b>：
+     * 这个对话框只实现了 `onCreateDialog`（布局是用 `setView()` 塞进 AlertDialog 的），
+     * 那种情况下 `DialogFragment.getView()` **返回 null** —— 于是 `save()` 第一行
+     * `if (root == null) return;` 就静默返回：按钮有反应、什么都不发生、连提示都没有。
+     * 2026-10-05 真机上就是这么卡住的（点了十几次 Save 都没保存）。
+     */
+    private DialogProviderEditorBinding binding;
+
+    /**
      * 打开表单。
      *
      * @param providerId 内置家用它的 id；新增自定义端点时传 `custom-openai` /
@@ -71,8 +82,7 @@ public final class ProviderEditorDialog extends DialogFragment {
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle saved) {
-        DialogProviderEditorBinding binding =
-                DialogProviderEditorBinding.inflate(LayoutInflater.from(requireContext()));
+        binding = DialogProviderEditorBinding.inflate(LayoutInflater.from(requireContext()));
         String requested = requireArguments().getString(ARG_PROVIDER, "");
         ProviderSpec existing = RepositoryProvider.providers().provider(requested);
         boolean customNew = ProviderPickerDialog.CUSTOM_OPENAI.equals(requested)
@@ -101,33 +111,72 @@ public final class ProviderEditorDialog extends DialogFragment {
             binding.editorUrl.setText(existing.baseUrl);
         }
 
-        return new MaterialAlertDialogBuilder(requireContext())
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(custom ? R.string.keys_pick_provider : R.string.keys_title)
                 .setView(binding.getRoot())
                 .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.keys_save, null)   // 下面自己接，校验失败不关框
+                // **真的传监听，不去替换 AlertDialog 的按钮监听**。2026-10-05 真机上踩过：
+                // 用"传 null + onStart 里 setOnClickListener 覆盖"那个常见写法时，
+                // 点击走的是默认行为——**框关了、什么都没存、连提示都没有**。
+                // 现在改成：真的传监听，并且**必填项没填满时按钮是灰的**，
+                // 于是"点下去却不该保存"这种情况根本不会发生（用户也不会白填一遍）。
+                .setPositiveButton(R.string.keys_save, (d, w) -> save())
                 .create();
+        dialog.setOnShowListener(shown -> {
+            android.widget.Button save = dialog.getButton(
+                    androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE);
+            save.setEnabled(isComplete());
+            android.text.TextWatcher watcher = new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    save.setEnabled(isComplete());
+                }
+            };
+            for (android.widget.EditText field : new android.widget.EditText[] {
+                    binding.editorKey, binding.editorUrl, binding.editorName,
+                    binding.editorModels, binding.editorContext}) {
+                field.addTextChangedListener(watcher);
+            }
+        });
+        return dialog;
     }
 
-    @Override
-    public void onStart() {
-        super.onStart();
-        // 自己接保存：校验不过时**不能关对话框**（关掉用户填的就全没了），
-        // 而 MaterialAlertDialogBuilder 的默认行为是先关再回调。
-        Dialog dialog = getDialog();
-        if (dialog instanceof androidx.appcompat.app.AlertDialog) {
-            ((androidx.appcompat.app.AlertDialog) dialog)
-                    .getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
-                    .setOnClickListener(v -> save());
+    /**
+     * 必填项填满了没有（决定保存键灰不灰）。
+     *
+     * <p>编辑**内置**那六家时 key 允许留空 = "不改 key"（但地址照样能改），
+     * 所以那一路只要求地址非空；自定义端点则是"填了才让存"。
+     */
+    private boolean isComplete() {
+        if (binding == null) {
+            return false;
         }
+        String requested = requireArguments().getString(ARG_PROVIDER, "");
+        boolean customNew = ProviderPickerDialog.CUSTOM_OPENAI.equals(requested)
+                || ProviderPickerDialog.CUSTOM_ANTHROPIC.equals(requested);
+        boolean custom = customNew || CallLedger.isCustom(requested);
+        if (text(binding.editorUrl).isEmpty()) {
+            return false;
+        }
+        if (!custom) {
+            // 没配过的那一家必须填 key；配过的留空就是"不改 key"。
+            return !text(binding.editorKey).isEmpty()
+                    || ProviderKeys.apiKey(requireContext(), requested) != null;
+        }
+        return !text(binding.editorKey).isEmpty()
+                && !text(binding.editorName).isEmpty()
+                && !splitModels(text(binding.editorModels)).isEmpty()
+                && parsePositive(text(binding.editorContext)) != null;
     }
 
     private void save() {
-        View root = getView();
-        if (root == null) {
+        if (binding == null) {
+            // 对话框已经销毁（理论上点不到）。**留一行日志**：这种"点了没反应"的
+            // 毛病靠猜最费时间（今天就猜了半小时）。
+            android.util.Log.w("ModelPilot", "provider editor: save() with no binding");
             return;
         }
-        DialogProviderEditorBinding binding = DialogProviderEditorBinding.bind(root);
         String requested = requireArguments().getString(ARG_PROVIDER, "");
         boolean customNew = ProviderPickerDialog.CUSTOM_OPENAI.equals(requested)
                 || ProviderPickerDialog.CUSTOM_ANTHROPIC.equals(requested);
