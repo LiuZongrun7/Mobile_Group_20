@@ -89,8 +89,11 @@ public final class ChatConversationFragment extends Fragment {
      *  它是一次界面上的临时选择，ViewModel 只关心"发的时候用哪个"。 */
     private String manualProviderId;
     private String manualModelId;
-    /** 正在流式回来的那一行。**只改它的文字**，不重建整条对话（见 renderMessages）。 */
+    /** 正在流式回来的那一行。**只重渲染它**，不重建整条对话（见 renderMessages）。 */
     private ItemMessageAssistantBinding streamingRow;
+    /** 流式重渲染的节流（毫秒）：Markdown + 公式排版不便宜，见 renderSendState。 */
+    private static final long STREAM_RENDER_INTERVAL_MS = 120;
+    private long lastStreamRenderAt;
 
     @Nullable
     @Override
@@ -224,7 +227,8 @@ public final class ChatConversationFragment extends Fragment {
             // 那就是每个字都重新 inflate 上百个 View，界面会卡成幻灯片。
             streamingRow = ItemMessageAssistantBinding.inflate(inflater,
                     binding.conversationMessages, false);
-            streamingRow.messageText.setText(streaming == null ? "" : streaming);
+            Markdown.render(streamingRow.messageText, streaming == null ? "" : streaming);
+            lastStreamRenderAt = android.os.SystemClock.uptimeMillis();
             binding.conversationMessages.addView(streamingRow.getRoot());
         }
         int count = binding.conversationMessages.getChildCount();
@@ -256,7 +260,8 @@ public final class ChatConversationFragment extends Fragment {
     private void addAssistantText(LayoutInflater inflater, String text) {
         ItemMessageAssistantBinding row = ItemMessageAssistantBinding.inflate(inflater,
                 binding.conversationMessages, false);
-        row.messageText.setText(text);
+        // **模型的回答渲染 Markdown + 公式**（用户自己打的那句不渲染，理由见 Markdown 的注释）。
+        Markdown.render(row.messageText, text);
         binding.conversationMessages.addView(row.getRoot());
     }
 
@@ -327,9 +332,15 @@ public final class ChatConversationFragment extends Fragment {
                 getString(sending ? R.string.chat_stop : R.string.chat_send));
 
         if (sending && streamingRow != null) {
-            // 高频路径：只改那一行的文字（见 renderMessages 里的注释）。
-            streamingRow.messageText.setText(state.streaming);
-            scrollToTail();
+            // 高频路径：只重渲染那一行（见 renderMessages 里的注释）。
+            // **但要节流**：Markdown 解析 + 公式排版是实打实的开销，每来一个字就重排一次
+            // 会让长回答的流式肉眼可见地卡；120ms 一次在人眼里仍然是"逐字出来"。
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - lastStreamRenderAt >= STREAM_RENDER_INTERVAL_MS) {
+                lastStreamRenderAt = now;
+                Markdown.render(streamingRow.messageText, state.streaming);
+                scrollToTail();
+            }
         } else {
             List<MessageEntity> messages = model.messages().getValue();
             renderMessages(messages == null ? Collections.<MessageEntity>emptyList() : messages,

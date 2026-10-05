@@ -79,6 +79,18 @@ dependencies {
     implementation(libs.retrofit.gson)
     implementation(libs.glide)
 
+    // 回答的渲染：Markdown（标题/列表/表格/代码块）+ LaTeX 公式。
+    // 模型答数学题时输出的是 Markdown + `$$...$$`，不渲染的话屏幕上就是一堆
+    // `**`、`\frac{a}{b}`、`$$` 原文——内容对、但没法看。
+    // ext-latex 底下是 jlatexmath-android（公式画成位图，所以包体会大几 MB）；
+    // 希腊字母（alpha/beta/theta）在数学里太常见，字体单独加一份。
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.tables)
+    implementation(libs.markwon.strikethrough)
+    implementation(libs.markwon.latex)
+    implementation(libs.jlatexmath)
+    implementation(libs.jlatexmath.greek)
+
     // Room：数据侧（张莉那块）的本地库。注解处理器必须挂在 annotationProcessor 上，
     // 它在编译期生成建表语句和查询实现，所以列名写错是编译报错而不是运行时崩。
     // 生成物不进 APK，只影响编译时间。

@@ -16,6 +16,9 @@ espressoCore = "3.7.0"
 retrofit = "3.0.0"
 # 5.0.9 requires compileSdk 37; retain compatibility with this project's SDK 36.1.
 glide = "4.16.0"
+# 回答渲染：Markdown + LaTeX（公式）。ext-latex 底下用的是 jlatexmath-android。
+markwon = "4.6.2"
+jlatexmath = "0.2.0"
 recyclerview = "1.4.0"
 swiperefresh = "1.2.0"
 archTesting = "2.2.0"
@@ -48,6 +51,13 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
 glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
+markwon-tables = { module = "io.noties.markwon:ext-tables", version.ref = "markwon" }
+markwon-strikethrough = { module = "io.noties.markwon:ext-strikethrough", version.ref = "markwon" }
+markwon-latex = { module = "io.noties.markwon:ext-latex", version.ref = "markwon" }
+# 公式渲染后端（ext-latex 依赖它画位图）。希腊字母在数学里太常见，单独加一份字体。
+jlatexmath = { module = "ru.noties:jlatexmath-android", version.ref = "jlatexmath" }
+jlatexmath-greek = { module = "ru.noties:jlatexmath-android-font-greek", version.ref = "jlatexmath" }
 androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "recyclerview" }
 androidx-swiperefresh = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefresh" }
 androidx-arch-testing = { module = "androidx.arch.core:core-testing", version.ref = "archTesting" }
