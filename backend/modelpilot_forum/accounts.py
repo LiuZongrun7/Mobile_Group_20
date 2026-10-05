@@ -429,6 +429,24 @@ class Accounts:
             return problem(400, "CODE_INVALID", "That code is not correct"), None
         return None, account
 
+    def _deliver_code(self, address, purpose):
+        """有账号才真发信；没有也照样记一行限流，**响应一模一样**。
+
+        <p>"重发验证码"和"忘记密码"两条路都要这条判据，所以写在一个地方：
+        两处各写一遍的话，迟早有一处忘了 `deliver=False`，那处就变成
+        替人给陌生地址发邮件的通道，而且从响应上看不出来。
+        """
+        with self.store.connect() as db:
+            row = db.execute("SELECT user_id FROM accounts WHERE email=?", (address,)).fetchone()
+        known = row is not None
+        code = self.send_verification(address, purpose=purpose,
+                                      user_id=None if row is None else row["user_id"],
+                                      deliver=known)
+        body = {"sent": True}
+        if code is not None:
+            body["devCode"] = code
+        return body
+
     def resend_verification(self, email):
         """重发**注册**验证码。
 
@@ -437,17 +455,7 @@ class Accounts:
         （2026-10-05 改：原来是不管有没有账号都发。改成不发之后，
         响应形状和限流一点没变，探测不出来。）
         """
-        address = normalize_email(email)
-        with self.store.connect() as db:
-            row = db.execute("SELECT user_id FROM accounts WHERE email=?", (address,)).fetchone()
-        if row is None:
-            self.send_verification(address, purpose=PURPOSE_REGISTER, deliver=False)
-            return {"sent": True}
-        code = self.send_verification(address, purpose=PURPOSE_REGISTER, user_id=row["user_id"])
-        body = {"sent": True}
-        if code is not None:
-            body["devCode"] = code
-        return body
+        return self._deliver_code(normalize_email(email), PURPOSE_REGISTER)
 
     def verify_email(self, email, code):
         """核销一条验证码，把账号标成已验证。
@@ -501,17 +509,7 @@ class Accounts:
         if not self.mailer.configured and not self.mailer.dev_echo:
             raise problem(503, "MAIL_NOT_CONFIGURED",
                           "This server cannot send email right now")
-        with self.store.connect() as db:
-            row = db.execute("SELECT user_id FROM accounts WHERE email=?", (address,)).fetchone()
-        if row is None:
-            self.send_verification(address, purpose=PURPOSE_RESET, deliver=False)
-            return {"sent": True}
-        code = self.send_verification(address, purpose=PURPOSE_RESET,
-                                      user_id=row["user_id"])
-        body = {"sent": True}
-        if code is not None:
-            body["devCode"] = code
-        return body
+        return self._deliver_code(address, PURPOSE_RESET)
 
     def reset_password(self, email, code, password):
         """用重置码改密码。**成功之后所有会话都失效**（包括当前这个）。
