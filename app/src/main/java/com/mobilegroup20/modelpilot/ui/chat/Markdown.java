@@ -24,12 +24,16 @@ import io.noties.markwon.ext.tables.TablePlugin;
  *   <li><b>`Markwon` 只建一次</b>（静态单例）：它内部有解析器、缓存和线程池，
  *       每条消息新建一个是浪费；但它持有 Context，所以**只存 Application 的**，
  *       存 Activity 就是把它钉住不放。</li>
- *   <li><b>公式（`$$...$$`）目前还没渲染出来</b>（2026-10-05 的状态）：
- *       Markwon 认 Markdown（标题/加粗/表格/代码块/列表），但 `JLatexMathPlugin`
- *       注册之后 `$$...$$` 仍然以原文显示。段落边界已经规范化过（见 {@link #normalize}），
- *       所以不是"三行并成一个段落"那个问题；下一步要查的是 jlatexmath 的字体资源
- *       与插件用法（Markwon 的 latex 解析异常是**静默回退成文本**的，
- *       所以日志里什么都看不到——这一点本身要改：包一层 try/catch 打日志）。</li>
+ *   <li><b>块公式 `$$...$$` 能渲染了</b>（真机验过）：关键是 `blocksLegacy(true)`——
+ *       ext-latex 默认只认"`$$` 单独一行 + 公式 + `$$` 单独一行"那种写法，
+ *       而模型十次有九次写成一行 `$$公式$$`；只开默认的话屏幕上就是原文
+ *       （2026-10-05 真机上踩的，查错方向先歪到了"段落边界"上）。</li>
+ *   <li><b>行内 `$x^2$` 暂时关着</b>（`inlinesEnabled(false)`）：打开它之后
+ *       **App 一渲染就崩**（"屡次停止运行"）。所以现在行内公式仍是原文——
+ *       这是一个已知缺口，不是设计选择；下次要单独查它（大概率与内联解析器
+ *       对普通文本的扫描有关）。**块公式不受影响。**</li>
+ *   <li><b>挂了 errorHandler 打日志</b>：Markwon 的 latex 出错是**静默回退成文本**的，
+ *       不挂的话只有原文、日志里什么都没有。</li>
  * </ol>
  */
 public final class Markdown {
@@ -82,10 +86,27 @@ public final class Markdown {
     private static Markwon build(Context context) {
         float mathSizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, MATH_TEXT_SP,
                 context.getResources().getDisplayMetrics());
+        // **三种公式写法都要打开**（2026-10-05 真机排查的结论）：
+        //   · blocksLegacy：`$$公式$$` **写在一行里**——模型十次有九次是这么写的，
+        //     而 ext-latex 的默认块语法是"$$ 单独一行 + 公式 + $$ 单独一行"那种。
+        //     只开默认那种的话，屏幕上就是 `$$c=\sqrt{a^2+b^2}$$` 的原文——
+        //     这正是我第一版看到的现象，查了半天段落边界（不是那个原因）。
+        //   · blocksEnabled：那种"$$ / 公式 / $$"分行的写法也留着。
+        //   · inlinesEnabled：行内 `$x^2$`（数学回答里到处都是）。
+        JLatexMathPlugin latex = JLatexMathPlugin.create(mathSizePx, builder -> builder
+                .blocksEnabled(true)
+                .blocksLegacy(true)
+                .inlinesEnabled(false)
+                // **Markwon 的 latex 出错是静默回退成文本的**：不挂这个 handler 的话，
+                // 屏幕上只有原文、日志里什么都没有，只能靠猜（今天就猜了两轮）。
+                .errorHandler((source, error) -> {
+                    android.util.Log.e("ModelPilot", "公式渲染失败: " + source, error);
+                    return null;        // null = 回退成文本，别让整条回答消失
+                }));
         return Markwon.builder(context)
                 .usePlugin(StrikethroughPlugin.create())
                 .usePlugin(TablePlugin.create(context))
-                .usePlugin(JLatexMathPlugin.create(mathSizePx))
+                .usePlugin(latex)
                 .build();
     }
 }
