@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  填 / 改汇率的小对话框（Insights → Currency → Set rate）。
+
+  两个输入框：汇率本身、以及**来源**（选填）。来源不是装饰：设计稿
+  （`docs/modelpilot-ui/INSIGHTS.md` §2）要求跨币种记录"汇率来源与日期"，
+  日期由我们自己记（改的时候自动带上），来源只有用户知道，所以要问。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="22dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="22dp"
+    android:paddingBottom="4dp">
+
+    <!-- 先说清"这个数要你自己负责"，再让人填。 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/insights_fx_dialog_why"
+        android:textColor="#7A8699"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/fx_rate_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="@string/insights_fx_input_hint"
+        android:importantForAutofill="no"
+        android:inputType="numberDecimal"
+        android:maxLines="1"
+        android:textSize="16sp"
+        tools:ignore="LabelFor" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/insights_fx_source_label"
+        android:textColor="#7A8699"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/fx_source_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/insights_fx_source_hint"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:maxLines="1"
+        android:textSize="14sp"
+        tools:ignore="LabelFor" />
+
+    <!-- 改动历史：**换过汇率以后，之前那个数按哪版汇率算的还能查到**。 -->
+    <TextView
+        android:id="@+id/fx_history"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="#7A8699"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:text="Earlier rates&#10;7.10 · 2026-05-01 · bank"
+        tools:visibility="visible" />
+</LinearLayout>

@@ -22,7 +22,7 @@ import com.mobilegroup20.modelpilot.ui.forum.ForumFragment;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.mobilegroup20.modelpilot.contract.model.Provider;
 import com.mobilegroup20.modelpilot.contract.model.TokenBundle;
-import com.mobilegroup20.modelpilot.data.Money;
+import com.mobilegroup20.modelpilot.data.Currency;
 import com.mobilegroup20.modelpilot.data.RepositoryProvider;
 import com.mobilegroup20.modelpilot.databinding.ActivityMainBinding;
 import com.mobilegroup20.modelpilot.ui.dashboard.DashboardUsage;
@@ -117,14 +117,17 @@ public class MainActivity extends AppCompatActivity
                 ? "Sample usage (preview)" : "From recorded usage");
         if (summary.month.tokens == 0 || summary.month.rowsWithoutPrice > 0
                 && summary.month.knownCostMicros == 0) {
-            binding.dashboardCnySpend.setText(summary.month.tokens == 0 ? "¥0.00" : "—");
+            binding.dashboardCnySpend.setText(summary.month.tokens == 0
+                    ? Currency.format(this, 0L) : "—");
         } else {
-            binding.dashboardCnySpend.setText(Money.formatCny(summary.month.knownCostMicros));
+            // 金额一律走 Currency（唯一出口）：美元是账本原值，人民币要用户填过汇率才折。
+            binding.dashboardCnySpend.setText(Currency.format(this, summary.month.knownCostMicros));
         }
         binding.dashboardSpendDelta.setText(summary.month.rowsWithoutPrice > 0
                 ? summary.month.rowsWithoutPrice + " records lack pricing"
                 : RepositoryProvider.USE_STUBS ? "Sample costs (preview)"
-                : "CNY estimate · exchange rate unverified");
+                : Currency.CNY.equals(Currency.shownCode(this))
+                        ? "Converted at your rate" : "Ledger unit: USD");
         binding.dashboardBudgetPercent.setText("—");
         binding.dashboardBudgetText.setText("Budget not configured");
         binding.dashboardRunway.setText("Available after wallet setup");
@@ -157,7 +160,7 @@ public class MainActivity extends AppCompatActivity
             int percent = summary.month.tokens == 0 ? 0
                     : (int) Math.round(tokens * 100.0 / summary.month.tokens);
             String cost = totals == null || totals.tokens == 0 ? "" : totals.rowsWithoutPrice > 0
-                    ? " · price incomplete" : " · " + Money.formatCny(totals.knownCostMicros);
+                    ? " · price incomplete" : " · " + Currency.format(this, totals.knownCostMicros);
             rows[i].setText(providers[i].displayName + "  " + percent + "%\n"
                     + tokenFormat.format(tokens) + " tokens" + cost);
         }

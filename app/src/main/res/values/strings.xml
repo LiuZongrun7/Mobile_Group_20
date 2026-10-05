@@ -322,10 +322,55 @@
     <string name="insights_budget_set">Set</string>
     <string name="insights_budget_none">Not set</string>
     <string name="insights_budget_value">%1$s of %2$s</string>
+    <!-- 有算不出价的调用时，**已花只能写下界**：写成一个确定值等于把"不知道"说成"知道"。 -->
+    <string name="insights_budget_at_least">at least %1$s</string>
+    <string name="insights_budget_left_at_most">%1$s left this month at most — %2$d calls still have no price.</string>
     <string name="insights_budget_under">%1$s left this month.</string>
     <string name="insights_budget_over">Over the limit you set. Nothing is charged by ModelPilot — this number only warns you.</string>
     <!-- 说清楚这个数字是什么：**不是我们的额度、也不是充值**。 -->
     <string name="insights_budget_why">A number you set for yourself. ModelPilot does not sell credit: you pay each provider directly with your own key.</string>
+    <!-- 币种与汇率（2026-10-05 加）。设计口径见 docs/modelpilot-ui/INSIGHTS.md §2：
+         「跨币种要记录原币、汇率来源与日期；没有汇率时不能直接合计」。
+         **我们一个内置汇率都不带**——汇率由用户填，填的时候连来源和日期一起记。 -->
+    <string name="insights_currency">Currency</string>
+    <string name="insights_currency_change">Change</string>
+    <string name="insights_currency_usd">US dollar ($)</string>
+    <string name="insights_currency_cny">Chinese yuan (¥)</string>
+    <string name="insights_currency_pick">Show amounts in</string>
+    <!-- 美元显示 = 账本原值，不需要任何解释，所以这句话只说"没有换算"。 -->
+    <string name="insights_currency_note_usd">No conversion: the ledger keeps USD, and prices you enter come from each provider\'s USD pricing page.</string>
+    <string name="insights_currency_note_cny">Converted for display only, at the rate you entered. The ledger still keeps USD and ModelPilot never charges you.</string>
+    <!-- **选了人民币但没填汇率时必须说出来**：不说的话用户会以为屏幕上的人民币是真的。
+         这跟"算不出价显示未知而不是 0"是同一条底线。 -->
+    <string name="insights_currency_note_no_rate">CNY is selected but no rate is set yet, so amounts stay in USD. ModelPilot ships no built-in rate — enter yours to convert.</string>
+    <string name="insights_fx_set">Set rate</string>
+    <string name="insights_fx_change">Change rate</string>
+    <string name="insights_fx_none">Not set</string>
+    <string name="insights_fx_dialog_title">USD → CNY rate</string>
+    <string name="insights_fx_dialog_why">How many CNY one US dollar is worth. You type it, so you can check it: ModelPilot ships no built-in rate, because a wrong one would silently change every amount on this page.</string>
+    <string name="insights_fx_input_hint">e.g. 7.15</string>
+    <string name="insights_fx_source_label">Where it comes from (optional)</string>
+    <string name="insights_fx_source_hint">e.g. bank rate on 2026-10-05</string>
+    <!-- 汇率是时点值，界面上必须带着日期和来源一起出现。 -->
+    <string name="insights_fx_history">Earlier rates</string>
+    <string name="insights_fx_history_row">%1$s · %2$s</string>
+    <string name="insights_fx_bad">Enter a number like 7.15 — how many CNY one USD is worth.</string>
+    <string name="insights_fx_inverted_title">That looks inverted</string>
+    <string name="insights_fx_inverted">%1$s looks like "1 CNY = %1$s USD". Use 1 USD = %2$s CNY instead?</string>
+    <string name="insights_fx_unusual_title">Unusual rate</string>
+    <string name="insights_fx_unusual">1 USD = %1$s CNY is far from any recent market rate. Convert with it anyway?</string>
+    <string name="insights_fx_clear">Clear</string>
+    <string name="insights_budget_title_usd">Monthly limit (USD)</string>
+    <string name="insights_budget_title_cny">Monthly limit (CNY)</string>
+    <string name="insights_budget_help_usd">Stored in USD. Leave blank to remove the limit.</string>
+    <string name="insights_budget_help_cny">Typed in CNY, stored in USD at your rate. Leave blank to remove the limit.</string>
+    <!-- 选了人民币但还没汇率：这一页的金额其实还是美元，所以这句必须把"口径不一致"说出来，
+         不然用户会在一个写着 CNY 的框里按屏幕上的美元数填。 -->
+    <string name="insights_budget_help_cny_no_rate">Amounts above are still in USD because no rate is set yet. Reading this as CNY needs a rate first.</string>
+    <!-- 人民币上限换算不了的时候**不存**：存进去的那个数谁也没填过。 -->
+    <string name="insights_budget_need_rate">Set the USD → CNY rate first. Your limit is stored in USD, and without a rate this number cannot be converted — nothing was saved.</string>
+    <!-- 折过的金额下面再写一遍依据：**光有金额没有来源的数字，等于没有来源**。 -->
+    <string name="insights_cost_converted">Converted at %1$s — your rate, not a market feed.</string>
     <string name="insights_routing">Model choice</string>
     <string name="insights_routing_value">Auto chose %1$d of %2$d answers (%3$d%%) · %4$d compressions</string>
     <string name="insights_routing_none">No answers recorded this month yet.</string>

@@ -13,6 +13,14 @@ import android.content.SharedPreferences;
  *
  * <p>存的是**微美元**（和账本同口径，见 `Money`），避免来回换算产生分位误差。
  * 0 = 没设（**不是"上限为零"**：界面上要显示成"未设置"，而不是"已经超了"）。
+ *
+ * <p><b>（2026-10-05 改）用户按哪种币种输入，由 `Currency` 负责折算。</b>
+ * 这个类只认微美元，不再自己解析输入的文字——原来那个
+ * {@code setLimitUsd(context, raw)} 把"解析"和"这是个美元数"两件事混在一起，
+ * 一旦界面上能选人民币，它就会把用户填的 ¥140 当成 $140 存进去，
+ * 而屏幕上（按汇率折回来）显示的是 ¥1001——一个谁都没填过的数字。
+ * 现在的分工是：界面拿到用户输入 → {@link Currency#enteredToUsdMicros} 折成微美元
+ * （汇率没填时返回 null，那就**不许存**）→ 调这里的 {@link #setLimitMicros}。
  */
 public final class Budget {
 
@@ -32,21 +40,10 @@ public final class Budget {
     }
 
     /**
-     * 设置上限。传进来的是一段用户输入的文字（元/美元），解析不出来就当成"没设"。
-     * 负数与 0 一律存 0——"上限 -5 元"没有意义，存进去只会让进度条算出负数。
+     * 设置上限（微美元）。传 0 或负数 = 清掉上限（"上限 -5 元"没有意义，
+     * 存进去只会让进度条算出负数）。
      */
-    public static void setLimitUsd(Context context, String raw) {
-        long micros = 0L;
-        if (raw != null && !raw.trim().isEmpty()) {
-            try {
-                double value = Double.parseDouble(raw.trim());
-                if (value > 0) {
-                    micros = Math.round(value * 1_000_000L);
-                }
-            } catch (NumberFormatException notANumber) {
-                micros = 0L;
-            }
-        }
-        prefs(context).edit().putLong(KEY_LIMIT, micros).apply();
+    public static void setLimitMicros(Context context, long usdMicros) {
+        prefs(context).edit().putLong(KEY_LIMIT, Math.max(0L, usdMicros)).apply();
     }
 }

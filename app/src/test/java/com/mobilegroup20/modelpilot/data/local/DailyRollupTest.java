@@ -31,6 +31,16 @@ public class DailyRollupTest {
 
     private static final String UID = "uid-1";
 
+    /**
+     * 测试用的汇率：1 美元 = 7.10 元（微人民币）。
+     *
+     * <p><b>（2026-10-05 改）</b>这里原来调的是 {@code Money.toUsdMicros(native, currency)}，
+     * 汇率藏在 {@code Money} 的一个常量里。现在汇率是<b>用户填的一项数据</b>
+     * （{@code FxRate} / {@code Currency}），必须由调用方显式给出来——
+     * 测试里也一样，给的就是这么个数。
+     */
+    private static final long TEST_CNY_PER_USD_MICROS = 7_100_000L;
+
     /** 北京时间 2026-09-26 10:00 的一次调用。 */
     private static long at(String iso) {
         return Instant.parse(iso).toEpochMilli();
@@ -261,7 +271,7 @@ public class DailyRollupTest {
         c.nativeCostMicros = nativeMicros;
         c.costCurrency = currency;
         // 导入时已经折成微美元了，滚汇总这一步拿到的就是微美元。
-        c.costMicros = Money.toUsdMicros(nativeMicros, currency);
+        c.costMicros = Money.toUsdMicros(nativeMicros, currency, TEST_CNY_PER_USD_MICROS);
         return c;
     }
 
@@ -281,7 +291,7 @@ public class DailyRollupTest {
         DailyUsage row = DailyRollup.rollup(UID, Collections.singletonList(c), flatRate()).get(0);
 
         // flatRate() 按 $3/1M 会算出 3_000_000，那是错的答案。
-        assertEquals(Money.toUsdMicros(14_080_000L, "CNY"), row.costMicros);
+        assertEquals(Money.toUsdMicros(14_080_000L, "CNY", TEST_CNY_PER_USD_MICROS), row.costMicros);
         assertFalse("不能是价目表算出来的那个数", row.costMicros == 3_000_000L);
         assertEquals(DailyUsage.RATE_VERSION_FROM_SOURCE, row.rateVersion);
     }
@@ -305,7 +315,8 @@ public class DailyRollupTest {
         DailyUsage row = DailyRollup.rollup(UID, calls, flatRate()).get(0);
 
         assertEquals("1.00 元 + 2.50 元，各折一次再相加",
-                Money.toUsdMicros(1_000_000L, "CNY") + Money.toUsdMicros(2_500_000L, "CNY"),
+                Money.toUsdMicros(1_000_000L, "CNY", TEST_CNY_PER_USD_MICROS)
+                        + Money.toUsdMicros(2_500_000L, "CNY", TEST_CNY_PER_USD_MICROS),
                 row.costMicros);
         assertEquals(DailyUsage.RATE_VERSION_FROM_SOURCE, row.rateVersion);
     }
@@ -327,7 +338,7 @@ public class DailyRollupTest {
 
         assertNotNull("来源给了金额，就不该留成「不可计算」", row.rateVersion);
         assertEquals(DailyUsage.RATE_VERSION_FROM_SOURCE, row.rateVersion);
-        assertEquals(Money.toUsdMicros(14_080_000L, "CNY"), row.costMicros);
+        assertEquals(Money.toUsdMicros(14_080_000L, "CNY", TEST_CNY_PER_USD_MICROS), row.costMicros);
     }
 
     /**

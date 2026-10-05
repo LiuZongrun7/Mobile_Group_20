@@ -122,6 +122,95 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!--
+          币种与汇率（2026-10-05 加）。
+
+          **App 不带任何内置汇率**：选了人民币就必须用户自己填，填的时候连来源和日期
+          一起记（留痕），没填就退回美元显示并在下面说明。这样屏幕上每个金额都能回答
+          "这是账本原值，还是按谁的汇率折的"。
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_dashboard_card"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/insights_currency"
+                    android:textColor="#0B1B33"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/insights_currency_change"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="@string/insights_currency_change"
+                    android:textColor="#1E7BF6"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/insights_currency_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#0B1B33"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                tools:text="Chinese yuan (¥)" />
+
+            <!-- 汇率带着**来源和日期**一起显示：汇率是时点值，光有一个数字没法核对。 -->
+            <TextView
+                android:id="@+id/insights_fx_line"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#7A8699"
+                android:textSize="12sp"
+                tools:text="1 USD = 7.15 CNY · 2026-10-05 · bank rate" />
+
+            <TextView
+                android:id="@+id/insights_fx_set"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingTop="4dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="4dp"
+                android:text="@string/insights_fx_set"
+                android:textColor="#1E7BF6"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/insights_currency_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#7A8699"
+                android:textSize="11sp"
+                tools:text="CNY is selected but no rate is set yet, so amounts stay in USD." />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
