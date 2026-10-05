@@ -45,9 +45,12 @@ DEFAULT_PORT = 994
 DEFAULT_HOST = "smtp.163.com"
 SENDER_NAME = "ModelPilot"
 
-SUBJECT = "【ModelPilot】邮箱验证码"
-
-BODY = """你的 ModelPilot 验证码是：
+# 两种用途的邮件内容**必须分开写**，不能共用一句"你的验证码是"：
+# 收到一封"重设密码"的邮件的人，第一反应应该是"是不是有人在动我的号"，
+# 而邮件里必须能回答这个问题（"不是你就忽略，密码不会被改"）。
+# 一封不说自己在干什么的验证码邮件，看起来更像钓鱼。
+TEMPLATES = {
+    "register": ("【ModelPilot】注册验证码", """你的 ModelPilot 注册验证码是：
 
     {code}
 
@@ -57,7 +60,19 @@ BODY = """你的 ModelPilot 验证码是：
 那个邮箱不会被注册，也不会有任何人能用它登录。
 
 （本邮件由系统自动发出，请勿回复。）
-"""
+"""),
+    "reset": ("【ModelPilot】重设密码验证码", """有人在 ModelPilot 上用这个邮箱申请重设密码。验证码是：
+
+    {code}
+
+{minutes} 分钟内有效，用一次就作废。
+
+**如果这不是你本人的操作，忽略这封邮件就行**：没有这个验证码，你的密码不会变，
+账号也不会被任何人拿走。收到不止一封这种邮件时，建议顺手改一下密码。
+
+（本邮件由系统自动发出，请勿回复。）
+"""),
+}
 
 
 class MailNotConfigured(RuntimeError):
@@ -97,22 +112,27 @@ class Mailer:
     def from_address(self):
         return self.sender or self.user
 
-    def send_code(self, email, code, minutes):
-        """把验证码发到 `email`。**发不出去要抛，不许静默返回成功。**"""
+    def send_code(self, email, code, minutes, purpose="register"):
+        """把验证码发到 `email`。**发不出去要抛，不许静默返回成功。**
+
+        `purpose` 决定邮件正文（注册 / 重设密码），见 {@link TEMPLATES}：
+        认不出来的用途退回注册那份，**不编一封内容不明的邮件**。
+        """
         if self.dev_echo:
             # 测试区：不真发，但要说清楚"这条码是怎么来的"，排障时一眼能看懂。
             log.warning("[mail] DEV_ECHO 开启，未真实发送：%s（验证码不回显进日志）", mask(email))
             return
         if not self.configured:
             raise MailNotConfigured("Mail service is not configured on this server")
+        subject, body = TEMPLATES.get(purpose, TEMPLATES["register"])
         message = EmailMessage()
         message["From"] = formataddr((SENDER_NAME, self.from_address))
         message["To"] = email
-        message["Subject"] = SUBJECT
+        message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
         # 纯文本，不放假 HTML 版：一封"点这里"的富文本邮件看起来更像钓鱼，
         # 而我们只需要用户抄 6 个数字。
-        message.set_content(BODY.format(code=code, minutes=minutes))
+        message.set_content(body.format(code=code, minutes=minutes))
         context = ssl.create_default_context()
         try:
             with smtplib.SMTP_SSL(self.host, self.port, timeout=25, context=context) as server:

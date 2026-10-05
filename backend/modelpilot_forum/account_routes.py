@@ -60,6 +60,21 @@ class EmailRequest(BaseModel):
     email: str = Field(default="", max_length=1000)
 
 
+class ResetRequest(BaseModel):
+    """用重置码改密码。**不需要旧密码**——忘了密码的人拿不出它。"""
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(default="", max_length=1000)
+    code: str = Field(default="", max_length=32)
+    password: str = Field(default="", max_length=1000)
+
+
+class ChangeRequest(BaseModel):
+    """已登录用户改密码：要旧密码（确认是本人），当前会话保留。"""
+    model_config = ConfigDict(extra="forbid")
+    currentPassword: str = Field(default="", max_length=1000)
+    newPassword: str = Field(default="", max_length=1000)
+
+
 def build_account_router(settings, store, mailer=None):
     # 测试可以塞一个"把验证码记下来"的假发信口；生产永远是 `settings.mailer`
     # （配置来自 env，`dev_echo` 的闸门也在那一层）。
@@ -107,13 +122,34 @@ def build_account_router(settings, store, mailer=None):
         **无论这个邮箱有没有注册过都返回成功**（不泄露账号是否存在），
         限流照着邮箱记，所以两种情况的表现完全一致。
         """
-        result = accounts.send_verification(payload.email)
-        body = {"sent": True}
-        if result is not None:
-            # 只有测试区（`MODELPILOT_MAIL_DEV_ECHO`）会走到这里：不真发信，
-            # 把码直接给客户端，好让联调不依赖邮箱。
-            body["devCode"] = result
-        return body
+        return accounts.resend_verification(payload.email)
+
+    @router.post("/account/password/forgot")
+    def forgot(payload: EmailRequest):
+        """忘记密码 → 发一条重置码。
+
+        **注册过的邮箱和没注册过的邮箱返回完全一样**（不泄露账号是否存在），
+        也没给陌生地址发信（见 `Accounts.request_password_reset`）。
+        """
+        return accounts.request_password_reset(payload.email)
+
+    @router.post("/account/password/reset")
+    def reset(payload: ResetRequest):
+        """用重置码改密码。**成功之后所有会话失效**，客户端要用新密码重新登一次。
+
+        这一步**不发 token**：和注册/验证一样，签发会话只发生在 `login`。
+        """
+        return accounts.reset_password(payload.email, payload.code, payload.password)
+
+    @router.post("/account/password/change")
+    def change(payload: ChangeRequest,
+               authorization: str | None = Header(default=None)):
+        """已登录用户改密码。**只踢掉其它设备**，当前会话留着。"""
+        identity = accounts.resolve(authorization)
+        if identity is None:
+            raise HTTPException(401, "Sign in required", headers={"WWW-Authenticate": "Bearer"})
+        return accounts.change_password(identity[0], payload.currentPassword,
+                                        payload.newPassword, authorization)
 
     @router.get("/account/me")
     def me(authorization: str | None = Header(default=None)):

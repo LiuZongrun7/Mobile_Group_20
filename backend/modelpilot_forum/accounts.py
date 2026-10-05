@@ -113,6 +113,11 @@ MAX_USERNAME = 64
 MAX_EMAIL = 254
 
 # 验证码的几个上限。三条一起看：过期（时间）、尝试次数（人）、重发频率（成本）。
+# 验证码的用途。**分开存是有意的**：注册验证码不能拿去改密码，
+# 改密码的验证码也不能拿去验证邮箱——两种权限不一样，混用等于悄悄放宽。
+PURPOSE_REGISTER = "register"
+PURPOSE_RESET = "reset"
+
 CODE_DIGITS = 6
 CODE_TTL_MINUTES = 10
 CODE_RESEND_SECONDS = 60
@@ -164,6 +169,17 @@ def verify_password(password, stored):
         return False
 
 
+def validate_password(password):
+    """密码规则。返回 `(机器可读的 code, 给人看的说明)`；没问题返回 `(None, None)`。
+
+    **单独一个函数**，因为注册、重置、改密码三条路都要用它：三条各写一遍的话，
+    迟早有一条放宽（或者收紧）而另外两条不知道。
+    """
+    if not MIN_PASSWORD <= len(password or "") <= MAX_PASSWORD:
+        return "PASSWORD_INVALID", f"Password must be {MIN_PASSWORD}–{MAX_PASSWORD} characters"
+    return None, None
+
+
 def validate_registration(username, password):
     """返回 `(机器可读的 code, 给人看的说明)`；没问题返回 `(None, None)`。
 
@@ -175,9 +191,7 @@ def validate_registration(username, password):
         return "USERNAME_INVALID", f"Username must be 3–{MAX_USERNAME} characters"
     if any(character.isspace() for character in name):
         return "USERNAME_INVALID", "Username must not contain spaces"
-    if not 8 <= len(password or "") <= MAX_PASSWORD:
-        return "PASSWORD_INVALID", f"Password must be {MIN_PASSWORD}–{MAX_PASSWORD} characters"
-    return None, None
+    return validate_password(password)
 
 
 def normalize_email(value):
@@ -322,13 +336,14 @@ class Accounts:
             db.execute("DELETE FROM account_sessions WHERE user_id=?", (user_id,))
             db.execute("DELETE FROM accounts WHERE user_id=?", (user_id,))
 
-    def send_verification(self, email, purpose="register", user_id=None):
-        """生成一条验证码并发出去。返回 `dev_code`（没开回显时是 None）。
+    def send_verification(self, email, purpose=PURPOSE_REGISTER, user_id=None, deliver=True):
+        """生成一条验证码，必要时发出去。返回 `dev_code`（没开回显、或没发信时是 None）。
 
-        **邮箱不存在也照发不误**（调用方是"重发"接口）：这样"这个邮箱注册过没有"
-        就不会从响应里漏出去，而且限流的账是照着邮箱记的，两种情况一样。
-        发出去的码没有账号可验，最后仍然是 `CODE_INVALID`——那条判据在
-        {@link #verify_email} 里。
+        <p>`deliver=False`：**照样生成、照样记限流的账，但不发信**。用在"这个邮箱
+        没注册过"的时候——不给陌生地址发邮件（否则这个接口就成了替人发信的通道），
+        但响应和限流必须和"注册过"那条路**一模一样**，不然它就是一个
+        "这个邮箱注册过吗"的探测接口。返回值也一起按 deliver 走：
+        `devCode` 只在真发了的时候出现，否则响应的形状就泄露了答案。
         """
         address = normalize_email(email)
         current = now_ms()
@@ -353,10 +368,66 @@ class Accounts:
                        (address, purpose, code_digest(address, purpose, code), user_id,
                         current, current + CODE_TTL_MINUTES * 60_000))
 
+        if not deliver:
+            return None
         # 发信放在事务**外面**：SMTP 是一次网络往返（慢的时候几十秒），
         # 而这段时间里不该一直攥着数据库的写锁。
-        self.mailer.send_code(address, code, CODE_TTL_MINUTES)
+        self.mailer.send_code(address, code, CODE_TTL_MINUTES, purpose)
         return code if self.mailer.dev_echo else None
+
+    def _consume_code(self, db, address, purpose, supplied, current):
+        """在事务里核销一条验证码。返回 `(failure, account_row)`。
+
+        <p><b>失败时不抛异常</b>：调用方出了事务再抛。原因是
+        `Store.connect(write=True)` 遇到异常会 rollback，而"记一次失败尝试再抛"
+        会把那次计数一起回滚掉——表现就是一条码可以无限试（2026-10-05 真机上踩过）。
+
+        <p>`purpose` 要传对：注册码和重置码**不能互相顶用**。
+        """
+        row = db.execute("""SELECT * FROM email_codes
+            WHERE email=? AND purpose=? AND consumed IS NULL
+            ORDER BY created DESC LIMIT 1""", (address, purpose)).fetchone()
+        if row is None:
+            return problem(400, "CODE_INVALID", "That code is not correct"), None
+        if row["attempts"] >= CODE_MAX_ATTEMPTS:
+            return problem(429, "CODE_ATTEMPTS",
+                           "Too many attempts for this code, request a new one",
+                           headers={"Retry-After": str(CODE_RESEND_SECONDS)}), None
+        if row["expires"] <= current:
+            return problem(400, "CODE_EXPIRED", "That code has expired, request a new one"), None
+        if not hmac.compare_digest(row["code_hash"], code_digest(address, purpose, supplied)):
+            # 记一次失败：**这条计数是"一条码最多试 5 次"的全部依据**。
+            db.execute("UPDATE email_codes SET attempts=attempts+1 WHERE code_hash=?",
+                       (row["code_hash"],))
+            return problem(400, "CODE_INVALID", "That code is not correct"), None
+        db.execute("UPDATE email_codes SET consumed=? WHERE code_hash=?",
+                   (current, row["code_hash"]))
+        account = db.execute("SELECT * FROM accounts WHERE email=?", (address,)).fetchone()
+        if account is None:
+            # 码是对的，但没有账号可用（注册没成功、或邮箱根本没注册过）。
+            # **仍然按"码不对"回**：区别对待就是一个探测接口。
+            return problem(400, "CODE_INVALID", "That code is not correct"), None
+        return None, account
+
+    def resend_verification(self, email):
+        """重发**注册**验证码。
+
+        <p>没注册过的邮箱：照样记一行限流、返回一模一样的结果，但**不发信**——
+        否则这个接口既能探"这个邮箱注册过吗"，又能被当成给陌生地址发邮件的通道。
+        （2026-10-05 改：原来是不管有没有账号都发。改成不发之后，
+        响应形状和限流一点没变，探测不出来。）
+        """
+        address = normalize_email(email)
+        with self.store.connect() as db:
+            row = db.execute("SELECT user_id FROM accounts WHERE email=?", (address,)).fetchone()
+        if row is None:
+            self.send_verification(address, purpose=PURPOSE_REGISTER, deliver=False)
+            return {"sent": True}
+        code = self.send_verification(address, purpose=PURPOSE_REGISTER, user_id=row["user_id"])
+        body = {"sent": True}
+        if code is not None:
+            body["devCode"] = code
+        return body
 
     def verify_email(self, email, code):
         """核销一条验证码，把账号标成已验证。
@@ -376,40 +447,110 @@ class Accounts:
         failure = None
         result = None
         with self.store.connect(write=True) as db:
-            row = db.execute("""SELECT * FROM email_codes
-                WHERE email=? AND consumed IS NULL ORDER BY created DESC LIMIT 1""",
-                             (address,)).fetchone()
-            if row is None:
-                failure = problem(400, "CODE_INVALID", "That code is not correct")
-            elif row["attempts"] >= CODE_MAX_ATTEMPTS:
-                failure = problem(429, "CODE_ATTEMPTS",
-                                  "Too many attempts for this code, request a new one",
-                                  headers={"Retry-After": str(CODE_RESEND_SECONDS)})
-            elif row["expires"] <= current:
-                failure = problem(400, "CODE_EXPIRED", "That code has expired, request a new one")
-            elif not hmac.compare_digest(row["code_hash"],
-                                         code_digest(address, row["purpose"], supplied)):
-                # 记一次失败：**这条计数是"一条码最多试 5 次"的全部依据**。
-                db.execute("UPDATE email_codes SET attempts=attempts+1 WHERE code_hash=?",
-                           (row["code_hash"],))
-                failure = problem(400, "CODE_INVALID", "That code is not correct")
-            else:
-                db.execute("UPDATE email_codes SET consumed=? WHERE code_hash=?",
-                           (current, row["code_hash"]))
-                account = db.execute("SELECT user_id FROM accounts WHERE email=?",
-                                     (address,)).fetchone()
-                if account is None:
-                    # 码是对的，但没有账号可验（注册没成功、或邮箱根本没注册过）。
-                    # **仍然按"码不对"回**：区别对待就是一个探测接口。
-                    failure = problem(400, "CODE_INVALID", "That code is not correct")
-                else:
-                    db.execute("""UPDATE accounts SET email_verified=1, email_verified_at=?
-                        WHERE user_id=?""", (current, account["user_id"]))
-                    result = {"email": address, "emailVerified": True,
-                              "verifiedAtEpochMillis": current}
+            failure, account = self._consume_code(db, address, PURPOSE_REGISTER, supplied, current)
+            if failure is None:
+                db.execute("""UPDATE accounts SET email_verified=1, email_verified_at=?
+                    WHERE user_id=?""", (current, account["user_id"]))
+                result = {"email": address, "emailVerified": True,
+                          "verifiedAtEpochMillis": current}
         if failure is not None:
             raise failure
         return result
+
+    # ---- 密码：找回 / 修改 ----------------------------------------------
+
+    def request_password_reset(self, email):
+        """忘记密码：给这个邮箱发一条**重置码**。
+
+        <p>三条口径，每条都是防着某一类事故：
+
+        1. **邮箱没注册过就不发信**（`deliver=False`），但限流的账照记、响应照旧——
+           否则这个接口就变成一个"这个邮箱注册过吗"的探测接口，或者替人给陌生地址
+           发邮件的通道。
+        2. **服务器发不了信时，所有请求返回同一句 503**（在查账号**之前**判）。
+           放到查完账号之后再判的话，"注册过的邮箱 → 503、没注册的 → 200"
+           又是一个探测接口。
+        3. 真发信失败（SMTP 抽风）仍然如实报 503 `MAIL_FAILED`：这时候那个邮箱多半
+           真的存在，理论上漏了一点信息，但**让用户干等一封永远不会来的邮件更糟**。
+           这条取舍是有意的，写在这里免得以后有人以为漏了。
+        """
+        address = normalize_email(email)
+        complaint = validate_email(address)
+        if complaint:
+            raise problem(400, "EMAIL_REQUIRED" if not address else "EMAIL_INVALID", complaint)
+        if not self.mailer.configured and not self.mailer.dev_echo:
+            raise problem(503, "MAIL_NOT_CONFIGURED",
+                          "This server cannot send email right now")
+        with self.store.connect() as db:
+            row = db.execute("SELECT user_id FROM accounts WHERE email=?", (address,)).fetchone()
+        if row is None:
+            self.send_verification(address, purpose=PURPOSE_RESET, deliver=False)
+            return {"sent": True}
+        code = self.send_verification(address, purpose=PURPOSE_RESET,
+                                      user_id=row["user_id"])
+        body = {"sent": True}
+        if code is not None:
+            body["devCode"] = code
+        return body
+
+    def reset_password(self, email, code, password):
+        """用重置码改密码。**成功之后所有会话都失效**（包括当前这个）。
+
+        <p>为什么要踢掉所有会话：忘记密码的常见原因之一就是"号被人登了"。
+        改完密码却把入侵者的会话留着，等于白改。代价是用户要重新登录一次，
+        而这一次登录用新密码就行——客户端那边紧接着自动登一次。
+
+        <p>顺带把邮箱标成已验证：能收到这封信本身就证明了邮箱是他的。
+        """
+        address = normalize_email(email)
+        code_name, complaint = validate_password(password)
+        if complaint:
+            raise problem(400, code_name, complaint)
+        supplied = (code or "").strip()
+        current = now_ms()
+        failure = None
+        result = None
+        with self.store.connect(write=True) as db:
+            failure, account = self._consume_code(db, address, PURPOSE_RESET, supplied, current)
+            if failure is None:
+                db.execute("""UPDATE accounts SET password_hash=?, email_verified=1,
+                    email_verified_at=? WHERE user_id=?""",
+                           (hash_password(password), current, account["user_id"]))
+                revoked = db.execute("DELETE FROM account_sessions WHERE user_id=?",
+                                     (account["user_id"],)).rowcount
+                result = {"passwordChanged": True, "sessionsRevoked": max(0, revoked)}
+        if failure is not None:
+            raise failure
+        return result
+
+    def change_password(self, user_id, current_password, new_password, authorization=None):
+        """已登录用户改密码。**只踢掉其它设备**，当前这个会话留着。
+
+        <p>和 {@link #reset_password} 的区别就在这一点上：找回密码是"我进不去了"，
+        所以全踢；改密码是"我进来了，顺手换一个"，把当前设备也踢掉只会让人骂人。
+        """
+        code_name, complaint = validate_password(new_password)
+        if complaint:
+            raise problem(400, code_name, complaint)
+        with self.store.connect(write=True) as db:
+            row = db.execute("SELECT * FROM accounts WHERE user_id=?", (user_id,)).fetchone()
+            if row is None:
+                raise problem(401, "CREDENTIALS", "Sign in required")
+            if not verify_password(current_password or "", row["password_hash"]):
+                # 401 和"会话过期"同码：客户端那两种情况要做的事一样（重新登录）。
+                raise problem(401, "CREDENTIALS", "Current password is not correct")
+            keep = None
+            if authorization and authorization.startswith("Bearer "):
+                keep = hashlib.sha256(authorization[7:].strip().encode()).hexdigest()
+            db.execute("UPDATE accounts SET password_hash=? WHERE user_id=?",
+                       (hash_password(new_password), user_id))
+            if keep:
+                revoked = db.execute("""DELETE FROM account_sessions
+                    WHERE user_id=? AND token_hash<>?""", (user_id, keep)).rowcount
+            else:
+                revoked = db.execute("DELETE FROM account_sessions WHERE user_id=?",
+                                     (user_id,)).rowcount
+        return {"passwordChanged": True, "otherSessionsRevoked": max(0, revoked)}
 
     # ---- 登录 / 会话 ----------------------------------------------------
 

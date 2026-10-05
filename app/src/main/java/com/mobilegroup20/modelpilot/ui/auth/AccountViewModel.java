@@ -45,6 +45,23 @@ public final class AccountViewModel extends AndroidViewModel {
     public static final String STAGE_FORM = "FORM";
     /** 第二段：验证码。注册成功、或者登录被 403 EMAIL_UNVERIFIED 拒了之后进来。 */
     public static final String STAGE_VERIFY = "VERIFY";
+    /**
+     * 第三段：忘记密码。**一段里做两小步**（进来自动发码 → 填码 + 新密码），
+     * 不再往下分段。
+     *
+     * <p>为什么不像注册那样拆成两段：注册的「表单段」是用户自己填出来的，他回到那儿
+     * 还有事可做（改邮箱重来）。忘记密码的人回到表单段只有一件事——重新点一次
+     * 「忘记密码？」，纯属迷路。而且这一屏的东西本来就少（一个码 + 两个密码框），
+     * 挤在一段里反而看得全：上面是「码发到哪了」，下面是「填码设新密码」。
+     */
+    public static final String STAGE_RESET = "RESET";
+    /**
+     * 第四段：已登录状态下改密码。只有登录着才进得来。
+     *
+     * <p>它和 {@link #STAGE_FORM} 在已登录时长得一样（都是那个「已登录：某某」的面板），
+     * 区别是正面按钮从「退出」变成「保存新密码」、并且多出三个密码框。
+     */
+    public static final String STAGE_CHANGE = "CHANGE";
 
     private static final String TAG = "Account";
 
@@ -61,6 +78,33 @@ public final class AccountViewModel extends AndroidViewModel {
     public final MutableLiveData<Integer> notice = new MutableLiveData<>(0);
     /** 失败之后界面该做什么，取 {@link AccountInput#ACTION_NONE} 等常量。 */
     public final MutableLiveData<String> action = new MutableLiveData<>(AccountInput.ACTION_NONE);
+    /**
+     * 「正在自动登录」这一步**为什么**会发生（字符串资源 id，0 = 没什么好说的）。
+     *
+     * <p>自动登录有两条来路：邮箱验证通过（注册那条）和密码重设成功（忘记密码那条）。
+     * 两件事对用户的意义完全不同——一个是他刚验证完邮箱，一个是他刚把密码改掉、
+     * 别的设备都被踢了——所以不能说同一句「邮箱验证成功，正在登录…」。
+     *
+     * <p>它是一个独立的 LiveData 而不是复用 `notice`：`notice` 是**失败**的文案，
+     * 界面在失败分支里读它；成功分支读这个。混用一个字段的话，「上一条失败提示」
+     * 会在下一次成功时突然冒出来当成功提示用。
+     */
+    public final MutableLiveData<Integer> autoSignInReason = new MutableLiveData<>(0);
+    /**
+     * 忘记密码那屏的「验证码已发往 <邮箱>」和「如果这个邮箱注册过…」用的地址。
+     *
+     * <p>**优先用表单里的邮箱**（`email()`），没有才退回会话里存的账号邮箱：前者是用户
+     * 刚刚亲手敲进去的，他正对着它核对；后者是上次登录时服务端告诉我们的，可能已经过时。
+     */
+    public final MutableLiveData<String> resetAddress = new MutableLiveData<>("");
+    /**
+     * 忘记密码那屏用户敲的验证码和新密码（**只在内存里**，和密码同理）。
+     *
+     * <p>为什么不复用第一段那个 `code` 键：验证码段的码和忘记密码的码是两次不同的发送，
+     * 共用一个键的话，用户在验证码段填了一半再去点「忘记密码？」，那个半截的码会跟着
+     * 飘过来——而他根本没收到过那个码。而且两个框在不同容器里，本来也没法共用一个控件。
+     */
+    private String resetCode = "", resetNewPassword = "";
     /**
      * 重发验证码的冷却结束时刻（`SystemClock.elapsedRealtime()`，0 = 现在就能重发）。
      *
@@ -110,6 +154,23 @@ public final class AccountViewModel extends AndroidViewModel {
     /** 当前在表单段还是验证码段。 */
     public String stage() { String value = saved.get("stage"); return value == null ? STAGE_FORM : value; }
 
+    /** 现在是不是「验证码那一段」（注册/登录被拒之后）。已登录和免账号测试永远不是。 */
+    public boolean verifyStage() { return !signedIn() && STAGE_VERIFY.equals(stage()); }
+
+    /** 忘记密码那屏要显示的邮箱：用户填的优先，没填才用会话里记着的。 */
+    public String resetAddress() {
+        String value = resetAddress.getValue();
+        return value == null ? "" : value;
+    }
+
+    /** 忘记密码那屏的验证码。**只在内存里**：转屏之后要重敲，理由和密码一样。 */
+    public String resetCode() { return resetCode; }
+    public void resetCode(String value) { resetCode = value == null ? "" : value; }
+
+    /** 忘记密码那屏的新密码。同上，只在内存里。 */
+    public String resetNewPassword() { return resetNewPassword; }
+    public void resetNewPassword(String value) { resetNewPassword = value == null ? "" : value; }
+
     /** 当前是「注册」还是「登录」。默认登录；切换只改界面，不发请求。 */
     public boolean registerMode() { Boolean value = saved.get("registerMode"); return value != null && value; }
     public void registerMode(boolean value) { saved.set("registerMode", value); }
@@ -119,18 +180,301 @@ public final class AccountViewModel extends AndroidViewModel {
     public boolean forumTest() { return session.forumTest(); }
 
     /**
+     * 会话里存的账号邮箱（没登录、或者是没有这个字段的老快照，都是空串）。
+     *
+     * <p>忘记密码那屏要用它给已登录的用户回填「验证码发往哪儿」——
+     * **不能拿它当登录表单的邮箱**：那个框是用户自己的输入，拿会话去覆盖它，
+     * 用户就没法用另一个邮箱登录了。
+     */
+    public String accountEmail() { return session.accountEmail(); }
+
+    /** 现在是不是「已登录 + 改了密码那一步」。已登录时表单段和它有别，所以单独问一句。 */
+    public boolean changeStage() { return signedIn() && STAGE_CHANGE.equals(stage()); }
+
+    /** 现在是不是忘记密码那一段。 */
+    public boolean resetStage() { return !signedIn() && STAGE_RESET.equals(stage()); }
+
+    /**
      * 「邮箱写错了？返回修改」：回到表单段，把上一条提示清掉，别的什么都不动。
      *
      * <p>坑：注册成功之后改邮箱再点一次「注册」会**建出第二个账号**——契约里没有「改邮箱」
      * 接口，服务端也不可能把已经发出去的验证码改个地址。所以第一个（邮箱写错的）账号
      * 就留在服务端占着用户名和邮箱。这是有意的取舍：与其把用户卡在一个收不到信的邮箱上，
      * 不如让他换一个邮箱重来一次，界面会把「用户名/邮箱已被占用」如实说出来。
+     *
+     * <p>从忘记密码那屏返回也走这里：`autoSignInReason` 一并清掉，
+     * 否则上一次「密码已重设，正在登录…」会留在界面上变成一句已经不成立的话。
      */
     public void backToForm() {
         saved.set("stage", STAGE_FORM);
         notice.setValue(0);
         action.setValue(AccountInput.ACTION_NONE);
+        autoSignInReason.setValue(0);
         state.setValue("IDLE");
+    }
+
+    /**
+     * 进「修改密码」那一步（**只有已登录才进得来**）。
+     *
+     * <p>没登录时什么都不做：这个入口在未登录的界面上根本不存在，真被点到只能是
+     * 状态刚好变了（比如另一个页面把会话清了），那时候把界面弹到别处只会更乱。
+     */
+    public void changePasswordStage() {
+        if (!signedIn()) return;
+        saved.set("stage", STAGE_CHANGE);
+        notice.setValue(0);
+        action.setValue(AccountInput.ACTION_NONE);
+        autoSignInReason.setValue(0);
+        state.setValue("IDLE");
+    }
+
+    // ---------------------------------------------------------------- 忘记密码
+    /**
+     * 「忘记密码？」：进重设段，并且**立刻发一次码**。
+     *
+     * <p>为什么自动发：用户点这个入口的意思就是「我收不到/我不知道密码，给我一条路」，
+     * 再让他点一次「发送验证码」是多余的一步。发失败也照实说（见
+     * {@link #sendResetCode(boolean)}），不假装发出去了。
+     *
+     * <p>邮箱为空（用用户名登录的用户）时**不发请求**：服务端只会回 `EMAIL_REQUIRED`，
+     * 而用户真正要做的是回去把邮箱填上，所以这里直接告诉他这件事。
+     */
+    public void enterResetStage() {
+        if (signedIn()) return;
+        saved.set("stage", STAGE_RESET);
+        notice.setValue(0);
+        action.setValue(AccountInput.ACTION_NONE);
+        autoSignInReason.setValue(0);
+        String address = resetEmail();
+        resetAddress.setValue(address);
+        if (address.isEmpty()) {
+            notice.setValue(R.string.account_reset_need_email);
+            state.setValue("REQUIRED");
+            return;
+        }
+        state.setValue("IDLE");
+        sendResetCode(true);
+    }
+
+    /**
+     * 发重设用的验证码。`fromAutomatic` 只用来区分「重发按钮点的」——两者的请求完全一样，
+     * 区别只在冷却：自动那一次是我们刚替用户点的，必须按 60 秒计；手动这次已经由
+     * 按钮的倒计时把关了（`remainingResendMillis() > 0` 时按钮点不动，这里再兜一道）。
+     */
+    private void sendResetCode(boolean fromAutomatic) {
+        if (busy()) return;
+        if (api == null) { state.setValue("NOT_CONFIGURED"); return; }
+        if (!fromAutomatic && remainingResendMillis() > 0) return;
+        String email = resetEmail();
+        int problem = AccountInput.emailProblem(email);
+        if (problem != 0) {
+            // 本地就能看出这个地址发不出去（空/少个 @）。**不吞掉**：说清是哪一种，
+            // 用户才知道是回上一层填邮箱，还是把地址改对。
+            notice.setValue(problem);
+            action.setValue(AccountInput.ACTION_NONE);
+            state.setValue("FAILED");
+            return;
+        }
+        resetAddress.setValue(email);
+        int request = ++generation;
+        state.setValue("BUSY");
+        Call<AccountApi.Sent> call = api.forgotPassword(new AccountApi.ForgotPassword(email));
+        pending = call;
+        call.enqueue(new Callback<>() {
+            @Override public void onResponse(@NonNull Call<AccountApi.Sent> call,
+                                             @NonNull Response<AccountApi.Sent> response) {
+                if (request != generation) return;
+                AccountApi.Sent body = response.body();
+                if (!response.isSuccessful() || body == null || !body.sent) {
+                    // 429 带 `Retry-After`：服务端比本地倒计时清楚还要等多久
+                    // （同一邮箱 60 秒一次、一小时 5 封）。按它重新计时才不会连着撞墙。
+                    if (response.code() == 429) {
+                        long wait = AccountInput.retryAfterMillis(response.headers().get("Retry-After"));
+                        resendReadyAt.setValue(SystemClock.elapsedRealtime() + wait);
+                    }
+                    if (response.isSuccessful()) {
+                        // 200 但没说发出去了：当成失败说出来。当成成功的话，用户会去
+                        // 一个永远不会来新邮件的收件箱里翻。
+                        notice.setValue(R.string.account_reset_failed);
+                        action.setValue(AccountInput.ACTION_NONE);
+                        state.setValue("FAILED");
+                    } else failFor(request, response, AccountInput.Failure.OP_FORGOT_PASSWORD);
+                    return;
+                }
+                // **200 只说「请求被受理了」**：服务端对没注册过的邮箱返回的是一模一样的
+                // 响应（防枚举）。所以这里能确定的只有「如果是注册过的邮箱，码已经发了」，
+                // 界面文案也必须这么说（account_reset_code_sent）。
+                resendReadyAt.setValue(SystemClock.elapsedRealtime() + RESEND_COOLDOWN_MILLIS);
+                notice.setValue(R.string.account_reset_code_sent);
+                action.setValue(AccountInput.ACTION_NONE);
+                state.setValue("CODE_SENT");
+            }
+            @Override public void onFailure(@NonNull Call<AccountApi.Sent> call, @NonNull Throwable error) {
+                if (request != generation) return;
+                Log.w(TAG, "reset code request failed: " + error, error);
+                failFor(request, null, AccountInput.Failure.OP_FORGOT_PASSWORD);
+            }
+        });
+    }
+
+    /** 「重发验证码」按钮：和自动那一次发的是同一个请求，只是不用再判 fromAutomatic。 */
+    public void resendResetCode() { sendResetCode(false); }
+
+    /**
+     * 提交「验证码 + 新密码」，重设密码。
+     *
+     * <p>本地只能判两件事：码的形状和两次密码是否一致（还有新密码的长度）。码对不对、
+     * 这个邮箱存不存在都要问服务端，而且服务端**故意用同一个 `CODE_INVALID` 回答这两种情况**。
+     *
+     * <p>成功后必须立刻用新密码登录一次：服务端会把该账号**所有**会话作废，包括手上这个
+     * （`sessionsRevoked` 里就含它）。不自动登的话，用户会从「密码重设成功」直接掉到
+     * 未登录状态，而他会以为是自己又做错了什么。
+     */
+    public void resetPassword(String code, String newPassword, String confirm) {
+        if (busy()) return;
+        if (api == null) { state.setValue("NOT_CONFIGURED"); return; }
+        String email = resetEmail();
+        AccountInput.ResetProblem problem =
+                AccountInput.resetPasswordProblem(email, code, newPassword, confirm);
+        if (problem.message != 0) {
+            // 邮箱为空是唯一一件用户没法在这一屏修好的事（他得回上一层填），
+            // 用 REQUIRED 让界面把这句话和「验证码发往哪儿」一起摆正。
+            state.setValue(problem.askEmail ? "REQUIRED" : "INVALID");
+            invalidReason.setValue(problem.message);
+            notice.setValue(problem.message);
+            return;
+        }
+        // 新密码先拿在手里：重设成功之后要拿它自动登录，而那时候用户已经不在这一屏了。
+        // **只放内存**，理由见 pendingPassword 的注释。
+        pendingPassword = newPassword;
+        notice.setValue(0);
+        action.setValue(AccountInput.ACTION_NONE);
+        int request = ++generation;
+        state.setValue("BUSY");
+        Call<AccountApi.PasswordReset> call = api.resetPassword(new AccountApi.PasswordResetRequest(
+                email, code.replaceAll("\\s", ""), newPassword));
+        pending = call;
+        call.enqueue(new Callback<>() {
+            @Override public void onResponse(@NonNull Call<AccountApi.PasswordReset> call,
+                                             @NonNull Response<AccountApi.PasswordReset> response) {
+                if (request != generation) return;
+                AccountApi.PasswordReset body = response.body();
+                // `passwordChanged` 要一起看：200 + body 缺字段（老服务端/网关塞了个空体）
+                // 时不能当成改成功了——那会让用户以为密码换了，然后拿着新密码登不进来。
+                if (!response.isSuccessful() || body == null || !body.passwordChanged) {
+                    if (response.isSuccessful()) {
+                        notice.setValue(R.string.account_reset_failed);
+                        action.setValue(AccountInput.ACTION_NONE);
+                        state.setValue("FAILED");
+                    } else {
+                        failFor(request, response, AccountInput.Failure.OP_FORGOT_PASSWORD);
+                    }
+                    pendingPassword = null;
+                    return;
+                }
+                // 码已经用掉了，不能留在这一屏（再点一次必然 CODE_INVALID）。
+                // 冷却清掉：这条路上最可能发生的下一步是「登录失败 → 再试一次重设」。
+                resendReadyAt.setValue(0L);
+                autoSignInReason.setValue(R.string.account_reset_done);
+                autoSignIn(request, email, true);
+            }
+            @Override public void onFailure(@NonNull Call<AccountApi.PasswordReset> call, @NonNull Throwable error) {
+                if (request != generation) return;
+                Log.w(TAG, "password reset failed: " + error, error);
+                pendingPassword = null;
+                failFor(request, null, AccountInput.Failure.OP_FORGOT_PASSWORD);
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------- 改密码（已登录）
+    /**
+     * 已登录时改密码。
+     *
+     * <p>和重设不同，**这里不会掉登录**：服务端只作废其它会话，当前 token 继续有效，
+     * 所以不需要重新登录（重新登录反而会让用户在弱网下多一次可能失败的往返）。
+     *
+     * <p>401 `CREDENTIALS`（当前密码不对）用 {@link AccountInput.Failure#passwordChange} 翻译，
+     * 得到的是一句「当前密码不对」——**不是**登录失败那句。用户正登录着，说「账号或密码不对」
+     * 会让他以为账号出了问题。
+     */
+    public void changePassword(String current, String newPassword, String confirm) {
+        if (busy()) return;
+        if (api == null) { state.setValue("NOT_CONFIGURED"); return; }
+        if (!signedIn()) {
+            // 会话在我们看这一屏的时候过期/被清了。**照实说**，别让用户对着一个
+            // 一定失败的按钮反复点：告诉他登录已经失效，重新登一次再来改。
+            notice.setValue(R.string.account_change_failed);
+            action.setValue(AccountInput.ACTION_NONE);
+            state.setValue("FAILED");
+            return;
+        }
+        int problem = AccountInput.passwordChangeProblem(current, newPassword, confirm);
+        if (problem != 0) { state.setValue("INVALID"); invalidReason.setValue(problem); return; }
+        notice.setValue(0);
+        action.setValue(AccountInput.ACTION_NONE);
+        int request = ++generation;
+        state.setValue("BUSY");
+        Call<AccountApi.PasswordChanged> call = api.changePassword(
+                "Bearer " + session.token(), new AccountApi.PasswordChange(current, newPassword));
+        pending = call;
+        call.enqueue(new Callback<>() {
+            @Override public void onResponse(@NonNull Call<AccountApi.PasswordChanged> call,
+                                             @NonNull Response<AccountApi.PasswordChanged> response) {
+                if (request != generation) return;
+                AccountApi.PasswordChanged body = response.body();
+                if (!response.isSuccessful() || body == null || !body.passwordChanged) {
+                    if (response.isSuccessful()) {
+                        notice.setValue(R.string.account_change_failed);
+                        action.setValue(AccountInput.ACTION_NONE);
+                        state.setValue("FAILED");
+                    } else if (isSessionLost(response)) {
+                        // 401 但**错误体没说是哪一步错了**：契约里改密码的 401 只有
+                        // 「当前密码不对」（有 code）和「会话无效」。没有 code 的那种
+                        // 就是会话过期，说成「当前密码不对」会让用户一遍遍重输一个
+                        // 完全正确的密码。
+                        session.clear();
+                        RepositoryProvider.configureForum(session.forumBaseUrl(), session);
+                        notice.setValue(R.string.account_change_session_expired);
+                        action.setValue(AccountInput.ACTION_NONE);
+                        state.setValue("FAILED");
+                    } else {
+                        failFor(request, response, AccountInput.Failure.OP_PASSWORD_CHANGE);
+                    }
+                    return;
+                }
+                // 成功。`otherSessionsRevoked` 是服务端踢掉了几台别的设备——把它说出来，
+                // 否则用户在平板上会以为是自己掉线了（那不是 bug，是这次改密码的后果）。
+                int revoked = body.otherSessionsRevoked;
+                notice.setValue(revoked > 0
+                        ? R.string.account_change_done_count : R.string.account_change_done);
+                action.setValue(AccountInput.ACTION_NONE);
+                state.setValue("CHANGED");
+            }
+            @Override public void onFailure(@NonNull Call<AccountApi.PasswordChanged> call, @NonNull Throwable error) {
+                if (request != generation) return;
+                Log.w(TAG, "password change failed: " + error, error);
+                failFor(request, null, AccountInput.Failure.OP_PASSWORD_CHANGE);
+            }
+        });
+    }
+
+    /**
+     * 401 是不是「会话没了」而不是「当前密码错了」。
+     *
+     * <p>判别依据是错误体里有没有 `code`：契约里「当前密码不对」一定带
+     * `CREDENTIALS`，而会话无效那条是框架层拒绝的，body 通常是空的。**这是一条推测**，
+     * 所以只在 401 且没有 code 时才用它，而且文案两头都不说死（「登录可能已经失效，
+     * 重新登录后再改」），猜错也不会把用户引到错误的方向。
+     */
+    private static boolean isSessionLost(Response<?> response) {
+        return response.code() == 401 && AccountApi.errorCode(response) == null;
+    }
+
+    /** 忘记密码那屏要显示的邮箱：用户填的优先，没填才用会话里记着的。 */
+    private String resetEmail() {
+        String typed = email().trim();
+        return typed.isEmpty() ? accountEmail().trim() : typed;
     }
 
     // ---------------------------------------------------------------- 论坛测试身份
@@ -233,7 +577,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 if (body.emailVerified) {
                     // 契约说注册出来的账号一定是未验证的。万一服务端策略变了（比如把邮箱
                     // 验证设成可选），这里要能自己收尾，而不是把用户丢在一个「验证什么？」的界面上。
-                    autoSignIn(request, body.email == null || body.email.isEmpty() ? email : body.email);
+                    autoSignIn(request, body.email == null || body.email.isEmpty() ? email : body.email, false);
                     return;
                 }
                 enterVerifyStage(email, true);
@@ -296,7 +640,7 @@ public final class AccountViewModel extends AndroidViewModel {
                     state.setValue("VERIFIED_SIGN_IN_REQUIRED");
                     return;
                 }
-                autoSignIn(request, body.email == null || body.email.isEmpty() ? email : body.email);
+                autoSignIn(request, body.email == null || body.email.isEmpty() ? email : body.email, false);
             }
             @Override public void onFailure(@NonNull Call<AccountApi.Verified> call, @NonNull Throwable error) {
                 failed(request, error, email);
@@ -360,15 +704,23 @@ public final class AccountViewModel extends AndroidViewModel {
     }
 
     // ---------------------------------------------------------------- 收尾
-    /** 验证通过之后的自动登录。用的还是内存里那份密码。 */
-    private void autoSignIn(int request, String email) {
+    /**
+     * 验证通过（或密码重设成功）之后的自动登录。用的还是内存里那份密码。
+     *
+     * @param afterReset true = 这次自动登录是**重设密码**的收尾，不是邮箱验证的收尾。
+     *                   两者失败时的收尾完全一样（都要退回表单段、都要把码那一段作废），
+     *                   但**说的话不一样**：一个是「邮箱验证成功了，请登录」，一个是
+     *                   「密码已经改好了，请用新密码登录」。混用会让刚改完密码的用户
+     *                   以为自己刚才在验证邮箱。
+     */
+    private void autoSignIn(int request, String email, boolean afterReset) {
         String password = pendingPassword;
         if (password == null || password.isEmpty()) {
-            // 走到这儿说明验证是通过的、但本地没有密码（见 verify() 里那条注释）：
+            // 走到这儿说明上一步（验证/重设）是成功的、但本地没有密码（见 verify() 里那条注释）：
             // 退回登录段让用户自己登一次，**不能显示成已经登录**。
             saved.set("stage", STAGE_FORM);
             saved.set("registerMode", false);
-            state.setValue("VERIFIED_SIGN_IN_REQUIRED");
+            state.setValue(afterReset ? "RESET_SIGN_IN_REQUIRED" : "VERIFIED_SIGN_IN_REQUIRED");
             return;
         }
         state.setValue("VERIFIED");
@@ -381,7 +733,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 AccountApi.Account body = response.body();
                 if (!response.isSuccessful() || body == null
                         || body.token == null || body.token.isEmpty()) {
-                    // 邮箱已经验证成功了，这里失败的是登录。**不能退回验证码段**：
+                    // 上一步已经成功了，这里失败的是登录。**绝不能退回验证码段**：
                     // 那个码已经用掉了，用户再填多少次都只会得到 CODE_INVALID。
                     AccountInput.Failure failure = AccountInput.failure(response.code(),
                             AccountApi.errorCode(response));
@@ -389,7 +741,7 @@ public final class AccountViewModel extends AndroidViewModel {
                     action.setValue(failure.action);
                     saved.set("stage", STAGE_FORM);
                     saved.set("registerMode", false);
-                    state.setValue("VERIFIED_SIGN_IN_REQUIRED");
+                    state.setValue(afterReset ? "RESET_SIGN_IN_REQUIRED" : "VERIFIED_SIGN_IN_REQUIRED");
                     return;
                 }
                 store(body, request);
@@ -401,7 +753,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 action.setValue(AccountInput.ACTION_NONE);
                 saved.set("stage", STAGE_FORM);
                 saved.set("registerMode", false);
-                state.setValue("VERIFIED_SIGN_IN_REQUIRED");
+                state.setValue(afterReset ? "RESET_SIGN_IN_REQUIRED" : "VERIFIED_SIGN_IN_REQUIRED");
             }
         });
     }
@@ -414,7 +766,9 @@ public final class AccountViewModel extends AndroidViewModel {
         } catch (Exception ignored) {
             state.setValue("STORAGE"); return;
         }
-        pendingPassword = null; // 会话已经落地，密码不用再留着了
+        // 会话已经落地：密码不用再留着了，「上一步是为了什么」也不用再解释了。
+        pendingPassword = null;
+        autoSignInReason.setValue(0);
         RepositoryProvider.configureForum(session.forumBaseUrl(), session);
         state.setValue("SUCCESS");
     }
@@ -476,6 +830,34 @@ public final class AccountViewModel extends AndroidViewModel {
                 enterVerifyStage(email, true);
             }
         }
+        state.setValue("FAILED");
+    }
+
+    /**
+     * 忘记密码 / 改密码这两条路的失败落盘。
+     *
+     * <p>和 {@link #fail} 的差别只有一处：**翻译时带语境**。同一个 `CREDENTIALS`（或光秃秃的
+     * 401）在改密码语境下必须说「当前密码不对」，而登录那条路上说「邮箱/用户名或密码不对」。
+     * 顺便把 `autoSignInReason` 清掉——自动登录失败之后那句「正在用新密码登录…」已经不成立了。
+     *
+     * <p>不共享 {@link #fail} 里那段 `ACTION_VERIFY` 逻辑：那会把密码重设的失败
+     * 拐去「验证码已发往…」那一屏，而用户根本没有注册邮箱要验证。
+     *
+     * @param operation {@link AccountInput.Failure#OP_FORGOT_PASSWORD} 或
+     *                  {@link AccountInput.Failure#OP_PASSWORD_CHANGE}
+     */
+    private void failFor(int request, Response<?> response, String operation) {
+        if (request != generation) return;
+        int status = response == null ? 0 : response.code();
+        String code = response == null ? null : AccountApi.errorCode(response);
+        // 只有改密码那一路需要换语境（`CREDENTIALS` / 401 的文案不一样）；
+        // 忘记密码那一路用通用表就够——它在契约里根本不会收到 `CREDENTIALS`。
+        AccountInput.Failure failure = AccountInput.Failure.OP_PASSWORD_CHANGE.equals(operation)
+                ? AccountInput.Failure.passwordChange(status, code)
+                : AccountInput.Failure.signIn(status, code);
+        notice.setValue(failure.message);
+        action.setValue(failure.action);
+        autoSignInReason.setValue(0);
         state.setValue("FAILED");
     }
 

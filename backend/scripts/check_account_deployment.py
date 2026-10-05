@@ -224,6 +224,64 @@ def run(base, keep):
   check("me 返回同一个 userId", status == 200 and me.get("userId") == uid, f"{status} {me}")
   check("没凭据时 me 是 401", call("/api/account/me")[0] == 401)
 
+  print("1b. 密码的找回与修改")
+  # 找回：给注册过的邮箱发一条**重置码**（测试区回显；正式服务要去 IMAP 读）。
+  # 同一轮里注册码已经用掉了，这里要的是另一种用途的码，所以不会撞冷却。
+  forgotten = call("/api/account/password/forgot", "POST", {"email": address})
+  check("忘记密码 200（不泄露这个邮箱注册过没有）", forgotten[0] == 200, f"{forgotten[0]} {forgotten[1]}")
+  # 陌生地址每次运行都要换一个：限流是**照着邮箱**记的（同一邮箱 60 秒一次），
+  # 固定用一个地址的话第二次运行会拿到 429，看起来像"两条路不一样"。
+  stranger_forgot = call("/api/account/password/forgot", "POST",
+                         {"email": f"nobody-{name}@example.invalid"})
+  # 测试区开了验证码回显（`devCode`），所以"注册过的邮箱"那一个响应天然多一个字段
+  # ——**这是测试区独有的**，正式服务上两者逐字节一样。
+  # 判据直接从响应本身看（`/health` 是**正式服务**的健康检查，测试区没有它，
+  # 拿它判断会永远得到 False，然后误报一条失败——第一版就是这么错的）。
+  echo_on = "devCode" in forgotten[1]
+  def without_echo(body):
+      return {k: v for k, v in body.items() if k != "devCode"}
+  same = (without_echo(stranger_forgot[1]) == without_echo(forgotten[1]) if echo_on
+          else stranger_forgot[1] == forgotten[1])
+  check("没注册过的邮箱返回完全一样" + ("（测试区忽略 devCode）" if echo_on else ""),
+        stranger_forgot[0] == forgotten[0] and same,
+        f"{stranger_forgot[0]} {stranger_forgot[1]}")
+  reset_code, reset_source = read_code(address, forgotten[1])
+  check("拿到重置码（devCode 或 IMAP）", bool(reset_code), reset_source)
+  check("注册码不能拿去改密码",
+        call("/api/account/password/reset", "POST",
+             {"email": address, "code": code or "000000",
+              "password": "another password 9"})[1].get("code") == "CODE_INVALID")
+  if reset_code:
+    changed = call("/api/account/password/reset", "POST",
+                   {"email": address, "code": reset_code, "password": "another password 9"})
+    check("重置码能改密码", changed[0] == 200 and changed[1].get("passwordChanged") is True,
+          f"{changed[0]} {changed[1]}")
+    check("旧密码作废", call("/api/account/login", "POST",
+                            {"identifier": address, "password": password})[0] == 401)
+    check("新密码能登", call("/api/account/login", "POST",
+                            {"identifier": address, "password": "another password 9"})[0] == 200)
+    check("重置会踢掉所有会话（那个 token 现在 401）",
+          call("/api/account/me", token=app)[0] == 401)
+    back = call("/api/account/login", "POST",
+                {"identifier": address, "password": "another password 9"})
+    password, app = "another password 9", back[1].get("token")
+    # 改密码：要当前密码，**只踢其它设备**。
+    other = call("/api/account/login", "POST", {"identifier": address, "password": password})[1]
+    profile = call("/api/account/password/change", "POST",
+                   {"currentPassword": "definitely-not-it", "newPassword": "third password 7"},
+                   token=app)
+    check("当前密码不对是 401 CREDENTIALS",
+          profile[0] == 401 and profile[1].get("code") == "CREDENTIALS", f"{profile[0]} {profile[1]}")
+    revised = call("/api/account/password/change", "POST",
+                   {"currentPassword": password, "newPassword": "third password 7"}, token=app)
+    check("改密码 200", revised[0] == 200 and revised[1].get("passwordChanged") is True,
+          f"{revised[0]} {revised[1]}")
+    check("当前设备没被踢", call("/api/account/me", token=app)[0] == 200)
+    check("其它设备被踢了", call("/api/account/me", token=other.get("token"))[0] == 401)
+    password = "third password 7"
+    check("新密码生效", call("/api/account/login", "POST",
+                            {"identifier": address, "password": password})[0] == 200)
+
   print("2. 智能体只认账号 token")
   # 测试区（`--prefix /test-api`）没有挂智能体路由，那一整段在那边是**没验**，
   # 不是"验过了"——分开说清楚，别让一排 ✗ 看起来像服务坏了。

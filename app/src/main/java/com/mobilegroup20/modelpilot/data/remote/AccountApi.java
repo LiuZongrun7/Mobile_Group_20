@@ -18,7 +18,8 @@ import okhttp3.ResponseBody;
  * 用户是 APP 的用户，登录论坛、读用量、玩游戏的结算全都用同一个 `userId`。
  *
  * <p>接口对应 `backend/tokentrail_forum/account_routes.py`（服务端包名还没改，见仓库根 README）：
- * 注册、验证邮箱、重发验证码、登录、查我、退出。
+ * 注册、验证邮箱、重发验证码、登录、查我、退出，以及 2026-10 加的两条密码通道：
+ * 忘记密码（`forgot` + `reset`，不用登录）和改密码（`change`，要登录）。
  *
  * <p><b>注册不发 token、而且注册出来的账号一开始是没验证邮箱的</b>（服务端有意为之：
  * 注册接口被脚本刷时，自动登录等于顺手帮他建一堆可用会话）。所以注册之后本地必然
@@ -51,6 +52,47 @@ public interface AccountApi {
 
     /** 退出。**幂等**：token 已经失效时也返回成功。 */
     @POST("account/logout") Call<Void> logout(@Header("Authorization") String authorization);
+
+    /**
+     * 忘记密码第一步：往邮箱发一个重设用的验证码。200 返回 {@link Sent}。
+     *
+     * <p><b>这个邮箱注册过没有，返回完全一样</b>——服务端有意不给探测接口（否则任何人都能
+     * 拿它当「这个邮箱在不在你们站注册过」的查询器）。所以界面**不能**说「已发往你的账号」，
+     * 只能说「如果这个邮箱注册过，验证码已经在路上了」这类两边都成立的话。
+     *
+     * <p>没配发信服务时是 503 `MAIL_NOT_CONFIGURED` / `MAIL_FAILED`，而且**所有**这种请求
+     * 都返回同一个错——不能拿它反推邮箱存不存在。400 是邮箱格式（`EMAIL_REQUIRED` /
+     * `EMAIL_INVALID`），429 是限流（同一邮箱 60 秒一次、一小时 5 封，带 `Retry-After`）。
+     */
+    @POST("account/password/forgot") Call<Sent> forgotPassword(@Body ForgotPassword forgot);
+
+    /**
+     * 忘记密码第二步：用验证码设一个新密码。200 返回 {@link PasswordReset}。
+     *
+     * <p><b>成功之后这个账号的所有会话都失效，包括手上这个。</b>所以调用方必须紧接着用
+     * 新密码登录一次（{@link #login}），否则用户会从「密码重设成功」直接掉到未登录，
+     * 而且他不会知道这是正常的。
+     *
+     * <p>400 `CODE_INVALID` 同时表示「码错了」和「这个邮箱不存在」——服务端有意不区分，
+     * 文案也不能替它猜（猜错的那一半用户会以为自己的账号被人删了）。
+     * 400 `PASSWORD_INVALID` 是新密码不合规（服务端要求 8~200 位），
+     * 429 `CODE_ATTEMPTS` 是试错太多次（得重发），429 `RATE_LIMIT` 是发得太频繁。
+     */
+    @POST("account/password/reset") Call<PasswordReset> resetPassword(@Body PasswordResetRequest request);
+
+    /**
+     * 改密码（**要登录**）。200 返回 {@link PasswordChanged}。
+     *
+     * <p>和 {@link #resetPassword} 的关键区别：**当前这个会话仍然有效**，只踢掉其它设备
+     * （`otherSessionsRevoked`）。所以这里不需要重新登录，界面只需要明确告诉用户
+     * 「别的设备被登出了」——不说的话，他在平板上会以为是掉线。
+     *
+     * <p>401 `CREDENTIALS` 是当前密码不对（和登录时的 401 是同一个 code，但用户要做的事
+     * 完全不同：这里是「重新输一遍当前密码」，那边是「换个账号或者找回密码」，
+     * 所以界面文案必须分开，见 {@code AccountInput}）；401 无 code 是会话过期/没登录。
+     */
+    @POST("account/password/change") Call<PasswordChanged> changePassword(
+            @Header("Authorization") String authorization, @Body PasswordChange change);
 
     /**
      * 注册请求体：**三个字段全必填**，邮箱是用来收验证码的那个。
@@ -111,6 +153,74 @@ public interface AccountApi {
     /** 重发响应。`sent` 只是「请求被受理了」，不代表这个邮箱真实存在（服务端有意不区分）。 */
     final class Sent {
         @SerializedName("sent") public boolean sent;
+    }
+
+    /**
+     * 忘记密码第一步的请求体。字段名就是 `email`（契约里只有这一个字段）。
+     *
+     * <p>**这个类不能和 {@link Resend} 合并**：两个接口的路径不同、限流窗口是分开算的
+     * （重发管的是「验证注册邮箱」，这里管的是「找回密码」），合并之后哪天一边改了字段
+     * 另一边会跟着改，而它们并不是同一个契约。
+     */
+    final class ForgotPassword {
+        @SerializedName("email") public final String email;
+
+        public ForgotPassword(String email) { this.email = email; }
+    }
+
+    /**
+     * 重设密码的请求体。三个字段全必填，`code` 是忘记密码那封信里的 6 位数字。
+     *
+     * <p>`password` 是**新**密码（服务端要求 8~200 位）。请求里没有任何 token：
+     * 用户就是登不进来才走这条路的，验证码本身就证明了他能收这个邮箱的信。
+     */
+    final class PasswordResetRequest {
+        @SerializedName("email") public final String email;
+        @SerializedName("code") public final String code;
+        @SerializedName("password") public final String password;
+
+        public PasswordResetRequest(String email, String code, String password) {
+            this.email = email; this.code = code; this.password = password;
+        }
+    }
+
+    /**
+     * 改密码的请求体。**不带邮箱/用户名**：服务端从 `Authorization` 头里的会话解出是谁，
+     * 传标识符进来只会多一个「它和 token 对不上时听谁的」的问题。
+     */
+    final class PasswordChange {
+        @SerializedName("currentPassword") public final String currentPassword;
+        @SerializedName("newPassword") public final String newPassword;
+
+        public PasswordChange(String currentPassword, String newPassword) {
+            this.currentPassword = currentPassword; this.newPassword = newPassword;
+        }
+    }
+
+    /**
+     * 重设密码的响应。
+     *
+     * <p>`sessionsRevoked` 是**被作废的会话数，包括当前这个**（服务端把该账号的会话
+     * 一把全撤了）。调用方据此知道接下来必须自己登一次。
+     *
+     * <p>Gson 缺字段不报错，所以这些字段只用来说明，**不要拿它们当「成功了没有」的依据**：
+     * 成功与否看 HTTP 状态码 + `passwordChanged` 是不是 true。
+     */
+    final class PasswordReset {
+        @SerializedName("passwordChanged") public boolean passwordChanged;
+        @SerializedName("sessionsRevoked") public int sessionsRevoked;
+    }
+
+    /**
+     * 改密码的响应。
+     *
+     * <p>字段名是 `otherSessionsRevoked`（**不是** `sessionsRevoked`）：改密码时当前会话
+     * 是保留的，只有别的设备被踢。两个响应体长得像但字段名不同，抄错一个不会编译报错，
+     * 只会在真机上永远显示「其他设备：0」——契约测试里钉住了这一点。
+     */
+    final class PasswordChanged {
+        @SerializedName("passwordChanged") public boolean passwordChanged;
+        @SerializedName("otherSessionsRevoked") public int otherSessionsRevoked;
     }
 
     /**

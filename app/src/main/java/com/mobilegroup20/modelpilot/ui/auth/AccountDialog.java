@@ -1,6 +1,7 @@
 package com.mobilegroup20.modelpilot.ui.auth;
 
 import android.app.Dialog;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.text.Editable;
@@ -23,26 +24,43 @@ import com.mobilegroup20.modelpilot.R;
 import com.mobilegroup20.modelpilot.BuildConfig;
 
 /**
- * 账号对话框：注册 / 登录 / 邮箱验证码验证 / 退出，以及（Debug）免账号进论坛测试区。
- * <b>负责人：刘宗润。</b>
+ * 账号对话框：注册 / 登录 / 邮箱验证码验证 / 忘记密码 / 改密码 / 退出，
+ * 以及（Debug）免账号进论坛测试区。<b>负责人：刘宗润。</b>
  *
  * <p>账号是**这个 App 自己的**账号（后端 `/api/account/*`），不再是团队那台机器上的
  * 账号服务。同一个 `userId` 用来发帖、读用量、结算游戏资源——这就是「服务端为唯一
  * 数据源」在身份上的那一半。
  *
- * <p><b>两段式</b>：第一段填邮箱、用户名、密码；注册成功（或登录被 403 EMAIL_UNVERIFIED
- * 拒了）之后切到第二段填验证码。两段的控件**一次建好、靠可见性切换**，不是重建对话框：
- * 重建会把用户已经敲进去的邮箱和密码丢掉，而他退回第一段改邮箱（「邮箱写错了？返回修改」）
- * 是常事。
+ * <p><b>四段</b>：表单（邮箱/用户名/密码）、验证码（注册那条路）、忘记密码
+ * （验证码 + 新密码，见 {@link AccountViewModel#STAGE_RESET}）、改密码
+ * （当前密码 + 新密码，见 {@link AccountViewModel#STAGE_CHANGE}）。段位存在
+ * ViewModel 的 `SavedStateHandle` 里，转屏之后回到原来那一段。
  *
- * <p>密码**从不进 instance state**（`setSaveEnabled(false)`）：系统可能把它写进
- * 磁盘上的 Bundle，那等于把密码明文留在手机上。验证码同理——它是一次性的凭证。
+ * <p>各段的控件**一次建好、靠可见性切换**，不是重建对话框：重建会把用户已经敲进去的
+ * 邮箱和密码丢掉，而他退回第一段改邮箱（「邮箱写错了？返回修改」）是常事。
+ *
+ * <p><b>密码一次都不进 instance state</b>（一律 `setSaveEnabled(false)`，也从不写进
+ * `SavedStateHandle`）：系统可能把它写进磁盘上的 Bundle，那等于把密码明文留在手机上。
+ * 验证码同理——它是一次性的凭证。代价是转屏之后密码框会空掉，用户得重敲一次；
+ * 这个代价是有意付的。
  */
 public final class AccountDialog extends DialogFragment {
     private AccountViewModel model;
-    private TextInputEditText email, username, password, code;
-    private LinearLayout formGroup, verifyGroup;
-    private TextView message, verifyHeader;
+    /**
+     * 六块面板。全部一次建好，{@link #render()} 里按段位开关可见性。
+     *
+     * <p>拆成 {@link Section} 而不是散着若干个 `LinearLayout` 字段，是因为每个 Section
+     * 自己管着「我这一块要不要露出来」以及「我下面的输入框要不要清空」——散着写的时候
+     * 每加一段就要在 `onCreateDialog` 和 `render()` 两处各补一排 `setVisibility`，
+     * 漏一个的结果是两块面板同时显示（用户会看到两组密码框，完全不知道该填哪个）。
+     */
+    private Section identitySection, formGroup, changeGroup, verifyGroup, resetGroup;
+    private TextInputEditText email, username, password;
+    /** 验证码段和忘记密码段各有一个码框：同名的控件只能挂在一个父容器下，而这两段并存会打架。 */
+    private TextInputEditText code, resetCode;
+    private TextInputEditText currentPassword, newPassword, confirmPassword;
+    private TextInputEditText resetNewPassword, resetConfirm;
+    private TextView message, verifyHeader, resetHeader, resetResend, forgotLink, changeLink;
     private boolean testOnly;
     /** 重发按钮上的秒数每秒都要重画；剩余时间用结束时刻现算，见 {@link #renderResendButton}。 */
     private CountDownTimer resendTimer;
@@ -60,32 +78,27 @@ public final class AccountDialog extends DialogFragment {
         // 第一段：邮箱 + 用户名 + 密码。**两种模式都显示这三个框**——登录的 identifier
         // 服务端本来就允许邮箱或用户名，界面没必要为它分叉出一套控件（分叉之后
         // 「我到底填哪个」会变成一个新问题）。
-        formGroup = new LinearLayout(context); formGroup.setOrientation(LinearLayout.VERTICAL);
-        email = input(formGroup, R.string.account_email,
+        //
+        // 已登录时它只用来**显示**账号（邮箱/用户名只读），因为改密码那一屏要占掉
+        // 密码那一栏，所以这里拆成两块：身份（邮箱+用户名）和密码。
+        identitySection = new Section(context); identitySection.group.setOrientation(LinearLayout.VERTICAL);
+        identitySection.header = new TextView(context); identitySection.group.addView(identitySection.header);
+        email = input(identitySection.group, R.string.account_email,
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        username = input(formGroup, R.string.account_username,
+        username = input(identitySection.group, R.string.account_username,
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL);
-        password = input(formGroup, R.string.account_password,
+        content.addView(identitySection.group);
+        formGroup = new Section(context); formGroup.group.setOrientation(LinearLayout.VERTICAL);
+        password = input(formGroup.group, R.string.account_password,
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setSaveEnabled(false); password.setFreezesText(false);
-        content.addView(formGroup);
+        content.addView(formGroup.group);
         // 第二段：验证码。头一行是「验证码已发往 <邮箱>」——用户据此确认自己没把邮箱写错，
         // 写错了就往下点「返回修改」。
-        verifyGroup = new LinearLayout(context); verifyGroup.setOrientation(LinearLayout.VERTICAL);
-        verifyHeader = new TextView(context); verifyGroup.addView(verifyHeader);
-        code = input(verifyGroup, R.string.account_code, InputType.TYPE_CLASS_NUMBER);
-        // 验证码是从邮件里**复制粘贴**过来的，粘贴常带空格或换行（"123 456"）。
-        // 在输入法这一层只留数字并截到 6 位：要是让 LengthFilter 先按字符截断，
-        // "123 456" 会变成 "123 45"，用户看到的是「验证码是 6 位数字」——
-        // 明明填对了却被说格式不对，这种错最难查。
-        code.setFilters(new InputFilter[] { (source, start, end, dest, dstart, dend) -> {
-            StringBuilder digits = new StringBuilder();
-            for (int i = start; i < end && digits.length() < AccountInput.CODE_LENGTH; i++) {
-                char character = source.charAt(i);
-                if (Character.isDigit(character)) digits.append(character);
-            }
-            return digits.toString();
-        } });
+        verifyGroup = new Section(context); verifyGroup.group.setOrientation(LinearLayout.VERTICAL);
+        verifyHeader = new TextView(context); verifyGroup.group.addView(verifyHeader);
+        code = input(verifyGroup.group, R.string.account_code, InputType.TYPE_CLASS_NUMBER);
+        code.setFilters(new InputFilter[] { digitsOnly() });
         // 验证码是一次性凭证：和密码一样**不能被系统存进磁盘上的 Bundle**。
         code.setSaveEnabled(false); code.setFreezesText(false);
         // 「邮箱写错了？返回修改」放在内容里而不是按钮上：对话框只有三个按钮位，
@@ -93,25 +106,70 @@ public final class AccountDialog extends DialogFragment {
         TextView back = new TextView(context); back.setText(R.string.account_back_to_form);
         back.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
         back.setOnClickListener(v -> { model.backToForm(); render(); });
-        verifyGroup.addView(back);
-        content.addView(verifyGroup);
-        if (!model.signedIn() && !testOnly) {
-            // 邮箱和用户名都从 ViewModel 回填：转屏之后 EditText 是新的，
-            // 值只能在 ViewModel/SavedStateHandle 里。
-            email.setText(model.email());
-            username.setText(model.username());
-            email.addTextChangedListener(new TextWatcher() {
-                public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
-                public void onTextChanged(CharSequence s, int start, int before, int count) { model.email(s.toString()); }
-                public void afterTextChanged(Editable value) { }
-            });
-            username.addTextChangedListener(new TextWatcher() {
-                public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
-                public void onTextChanged(CharSequence s, int start, int before, int count) { model.username(s.toString()); }
-                public void afterTextChanged(Editable value) { }
-            });
+        verifyGroup.group.addView(back);
+        content.addView(verifyGroup.group);
+        // 第三段：忘记密码。**两小步挤在一段里**（上面「码发到哪了」，下面「填码设新密码」），
+        // 不再往下分段——忘了密码的人已经迷路了，多一屏只会让他多迷一次路。
+        resetGroup = new Section(context); resetGroup.group.setOrientation(LinearLayout.VERTICAL);
+        resetHeader = new TextView(context); resetHeader.setTypeface(bold(resetHeader.getTypeface()));
+        resetHeader.setPadding(0, 0, 0, Math.round(4 * getResources().getDisplayMetrics().density));
+        resetGroup.group.addView(resetHeader);
+        resetCode = input(resetGroup.group, R.string.account_reset_code, InputType.TYPE_CLASS_NUMBER);
+        resetCode.setFilters(new InputFilter[] { digitsOnly() });
+        resetCode.setSaveEnabled(false); resetCode.setFreezesText(false);
+        resetNewPassword = passwordInput(resetGroup.group, R.string.account_new_password);
+        resetConfirm = passwordInput(resetGroup.group, R.string.account_new_password_confirm);
+        resetResend = new TextView(context); resetResend.setText(R.string.account_resend);
+        resetResend.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
+        resetResend.setOnClickListener(v -> { model.resendResetCode(); render(); });
+        resetGroup.group.addView(resetResend);
+        TextView resetBack = new TextView(context); resetBack.setText(R.string.account_back_to_login);
+        resetBack.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
+        resetBack.setOnClickListener(v -> { model.backToForm(); render(); });
+        resetGroup.group.addView(resetBack);
+        content.addView(resetGroup.group);
+        // 第四段：已登录时改密码。当前密码 / 新密码 / 确认，三个都是密码框。
+        changeGroup = new Section(context); changeGroup.group.setOrientation(LinearLayout.VERTICAL);
+        currentPassword = passwordInput(changeGroup.group, R.string.account_current_password);
+        newPassword = passwordInput(changeGroup.group, R.string.account_new_password);
+        confirmPassword = passwordInput(changeGroup.group, R.string.account_new_password_confirm);
+        TextView changeBack = new TextView(context); changeBack.setText(R.string.account_change_back);
+        changeBack.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
+        changeBack.setOnClickListener(v -> { model.backToForm(); render(); });
+        changeGroup.group.addView(changeBack);
+        content.addView(changeGroup.group);
+        // 两个入口链接。放在**所有面板之后**：它们是「去另一段」的出口，
+        // 而每一段自己的说明在上面，顺序反过来会让用户先看到出口再看到说明。
+        // 颜色照 `account_back_to_form` 的路子（蓝色），一眼能认出是能点的。
+        forgotLink = new TextView(context); forgotLink.setText(R.string.account_forgot_password);
+        forgotLink.setTextColor(context.getColor(R.color.account_link));
+        forgotLink.setPadding(0, Math.round(12 * getResources().getDisplayMetrics().density), 0, 0);
+        forgotLink.setOnClickListener(v -> { model.enterResetStage(); render(); });
+        content.addView(forgotLink);
+        changeLink = new TextView(context); changeLink.setText(R.string.account_change_password);
+        changeLink.setTextColor(context.getColor(R.color.account_link));
+        changeLink.setPadding(0, Math.round(12 * getResources().getDisplayMetrics().density), 0, 0);
+        changeLink.setOnClickListener(v -> { model.changePasswordStage(); render(); });
+        content.addView(changeLink);
+        // 第一段的两个文本框：邮箱和用户名都从 ViewModel 回填（转屏之后 EditText 是新的，
+        // 值只能在 ViewModel/SavedStateHandle 里）。**已登录时不挂监听**：那时候它们
+        // 只是把账号显示出来给用户看，改它们没有任何意义（也没有「改邮箱」这个接口）。
+        email.setText(model.email());
+        username.setText(model.username());
+        if (!model.signedIn()) {
+            email.addTextChangedListener(watcher(value -> model.email(value)));
+            username.addTextChangedListener(watcher(value -> model.username(value)));
         }
-        // 第二段的按钮是「验证」+「重发验证码」，第一段是「注册/登录」+「注册⇄登录」。
+        // 忘记密码那屏也要回填邮箱，但**用的是另一个键**（`emailReset`）：
+        // 它在已登录时也能用（那时候表单里的邮箱框是只读的、显示的是账号邮箱），
+        // 直接写 `email` 会把只读的展示值改掉，用户下次看到的就是错的邮箱。
+        // 它同样**不是密码**，进 SavedStateHandle 没问题。
+        resetCode.setText(model.resetCode());
+        resetCode.addTextChangedListener(watcher(value -> model.resetCode(value)));
+        resetNewPassword.setText(model.resetNewPassword());
+        resetNewPassword.addTextChangedListener(watcher(value -> model.resetNewPassword(value)));
+        // 第二段的按钮是「验证」+「重发验证码」，忘记密码段是「重设密码」+「重发验证码」，
+        // 第一段是「注册/登录」+「注册⇄登录」，改密码段是「保存新密码」。
         // 文字在 render() 里按当前段位改写，这里只是先把三个按钮建出来。
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
                 .setTitle(testOnly ? R.string.forum_test_enter : R.string.account_title).setView(content)
@@ -125,53 +183,79 @@ public final class AccountDialog extends DialogFragment {
         // 先把段位和提示语摆好再 show()：render() 是在 onStart 里跑的，而 DialogFragment
         // 自己的 onStart 就已经把对话框显示出来了——不在这里摆一次，转屏回到第二段的
         // 用户会先看见一帧「邮箱/用户名/密码」的空表单，然后才被换成验证码。
-        boolean verifyStage = verifyStage();
-        formGroup.setVisibility(verifyStage ? View.GONE : View.VISIBLE);
-        verifyGroup.setVisibility(verifyStage ? View.VISIBLE : View.GONE);
-        String current = model.state.getValue() == null ? "IDLE" : model.state.getValue();
-        message.setText(messageFor(current, verifyStage));
-        if (verifyStage) verifyHeader.setText(verifyHeaderText());
+        layout(messageFor(), model.resetStage());
+        if (model.resetStage()) resetHeader.setText(codeSentHeader());
         return builder.create();
     }
-    /** 现在是不是第二段（验证码那一段）。已登录和免账号测试这两个面板永远不是。 */
-    private boolean verifyStage() {
-        return !model.signedIn() && !testOnly
-                && AccountViewModel.STAGE_VERIFY.equals(model.stage());
-    }
-    /**
-     * 第二段的头一行：「验证码已发往 <邮箱>」。
-     *
-     * <p>邮箱为空时**不显示一个空地址**（那会变成「验证码已发往 」）：只有测试身份和
-     * 没有邮箱的老快照会走到这儿，说「你的注册邮箱」比露出一个空白强。
-     */
-    private CharSequence verifyHeaderText() {
-        String address = model.email().trim();
-        return address.isEmpty() ? getString(R.string.account_code_sent_unknown)
-                : getString(R.string.account_code_sent_to, address);
+    /** 忘记密码那段的「验证码已发往 <邮箱>」（或「发到你的注册邮箱」）。 */
+    private CharSequence codeSentHeader() {
+        String address = model.resetAddress().trim();
+        // 邮箱为空时**不显示一个空地址**（那会变成「验证码已发往 」）：没有邮箱的老快照、
+        // 或者拿用户名登录的用户会走到这儿，说「你的注册邮箱」比露出一个空白强。
+        return getString(address.isEmpty() ? R.string.account_reset_email_unknown
+                : R.string.account_code_sent_to, address);
     }
     private TextInputEditText input(LinearLayout parent, int hint, int type) {
         TextInputLayout wrapper = new TextInputLayout(parent.getContext()); wrapper.setHint(hint);
         TextInputEditText field = new TextInputEditText(parent.getContext()); field.setInputType(type);
         wrapper.addView(field); parent.addView(wrapper); return field;
     }
+    /** 密码框的公共部分：类型 + **绝不进 Bundle**（理由见类注释）。 */
+    private TextInputEditText passwordInput(LinearLayout parent, int hint) {
+        TextInputEditText field = input(parent, hint,
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        field.setSaveEnabled(false); field.setFreezesText(false);
+        return field;
+    }
+    /**
+     * 验证码框的输入过滤：只留数字，最多 {@link AccountInput#CODE_LENGTH} 位。
+     *
+     * <p>验证码是从邮件里**复制粘贴**过来的，粘贴常带空格或换行（"123 456"）。
+     * 在输入法这一层只留数字并截到 6 位：要是让 LengthFilter 先按字符截断，
+     * "123 456" 会变成 "123 45"，用户看到的是「验证码是 6 位数字」——
+     * 明明填对了却被说格式不对，这种错最难查。
+     */
+    private InputFilter digitsOnly() {
+        return (source, start, end, dest, dstart, dend) -> {
+            StringBuilder digits = new StringBuilder();
+            for (int i = start; i < end && digits.length() < AccountInput.CODE_LENGTH; i++) {
+                char character = source.charAt(i);
+                if (Character.isDigit(character)) digits.append(character);
+            }
+            return digits.toString();
+        };
+    }
+    private TextWatcher watcher(java.util.function.Consumer<String> sink) {
+        return new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                sink.accept(s == null ? "" : s.toString());
+            }
+            public void afterTextChanged(Editable value) { }
+        };
+    }
+    private static Typeface bold(Typeface base) { return Typeface.create(base, Typeface.BOLD); }
     @Override public void onStart() {
         super.onStart();
         AlertDialog dialog = (AlertDialog) requireDialog();
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (model.signedIn()) { model.signOut(); return; }
-            if (testOnly) { model.enterForumTest(); return; }
-            if (AccountViewModel.STAGE_VERIFY.equals(model.stage())) {
-                model.verify(code == null || code.getText() == null ? "" : code.getText().toString());
+            if (model.changeStage()) {
+                model.changePassword(text(currentPassword), text(newPassword), text(confirmPassword));
                 return;
             }
-            String secret = password == null || password.getText() == null
-                    ? "" : password.getText().toString();
-            if (model.registerMode()) model.register(secret); else model.signIn(secret);
+            if (model.signedIn()) { model.signOut(); return; }
+            if (testOnly) { model.enterForumTest(); return; }
+            if (model.resetStage()) {
+                model.resetPassword(text(resetCode), text(resetNewPassword), text(resetConfirm));
+                return;
+            }
+            if (model.verifyStage()) { model.verify(text(code)); return; }
+            if (model.registerMode()) model.register(text(password)); else model.signIn(text(password));
         });
         if (dialog.getButton(AlertDialog.BUTTON_NEUTRAL) != null) {
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
                 // 第二段的中性按钮是「重发验证码」，第一段是「注册 ⇄ 登录」。
-                if (AccountViewModel.STAGE_VERIFY.equals(model.stage())) { model.resend(); return; }
+                if (model.verifyStage()) { model.resend(); return; }
                 // 「注册 ⇄ 登录」只是切换界面，**不发请求**。切过去还能切回来。
                 model.registerMode(!model.registerMode());
                 render();
@@ -203,22 +287,34 @@ public final class AccountDialog extends DialogFragment {
         if (message == null || !isAdded()) return;
         AlertDialog dialog = (AlertDialog) requireDialog();
         String state = model.state.getValue() == null ? "IDLE" : model.state.getValue();
-        boolean verifyStage = verifyStage();
-        formGroup.setVisibility(verifyStage ? View.GONE : View.VISIBLE);
-        verifyGroup.setVisibility(verifyStage ? View.VISIBLE : View.GONE);
+        boolean resetStage = model.resetStage();
+        layout(messageFor(), resetStage);
+        if (resetStage) resetHeader.setText(codeSentHeader());
         boolean busy = "BUSY".equals(state);
-        if (verifyStage) verifyHeader.setText(verifyHeaderText());
-        message.setText(messageFor(state, verifyStage));
         Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         Button neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-        if (model.signedIn() || testOnly) {
-            // 已登录和免账号测试这两条路的按钮文字是固定的（退出/退出测试模式/重试），
-            // 这里只跟着 busy 走——**保持原样**，别把两段式的文字混进来。
+        if (model.changeStage()) {
+            // 已登录 + 改密码：正面按钮从「退出」变成「保存新密码」。
+            positive.setText(R.string.account_change_submit);
             positive.setEnabled(!busy);
             if (neutral != null) neutral.setEnabled(!busy);
             return;
         }
-        if (verifyStage) {
+        if (model.signedIn() || testOnly) {
+            // 已登录和免账号测试这两条路的按钮文字是固定的（退出/退出测试模式/重试），
+            // 这里只跟着 busy 走——**保持原样**，别把别的段位的文字混进来。
+            positive.setEnabled(!busy);
+            if (neutral != null) neutral.setEnabled(!busy);
+            return;
+        }
+        if (resetStage) {
+            positive.setText(R.string.account_reset_submit);
+            positive.setEnabled(!busy);
+            // 忘记密码段没有中性按钮（对话框只有三个按钮位），重发链接在内容里。
+            if (neutral != null) neutral.setEnabled(!busy);
+            renderResetResend(busy);
+            if (model.remainingResendMillis() > 0 && !busy) startResendTimer(); else stopResendTimer();
+        } else if (model.verifyStage()) {
             positive.setText(R.string.account_verify);
             positive.setEnabled(!busy);
             renderResendButton(neutral, busy);
@@ -236,6 +332,48 @@ public final class AccountDialog extends DialogFragment {
         }
     }
     /**
+     * 按当前段位摆面板：一次把六块的可见性和几个链接的文字/色/可点性都摆正。
+     *
+     * <p>`render()` 和 `onCreateDialog()` **共用**这一份，是为了让「对话框刚建出来」和
+     * 「状态变了一下」两条路走完全一样的代码。以前 `onCreateDialog` 里手抄了一份只摆
+     * 两块的版本，加段位的时候必然漏——漏的表现是刚打开的一瞬间两块面板叠在一起。
+     */
+    private void layout(CharSequence prompt, boolean resetStage) {
+        boolean signedIn = model.signedIn();
+        boolean changeStage = model.changeStage();
+        // 已登录时邮箱/用户名是只读的展示值（账号邮箱，不是表单里那个可能为空的输入）。
+        // 空的时候不留一个空的只读框：那看起来像「你的账号没有邮箱」。
+        boolean identity = !changeStage
+                && (!signedIn || !model.accountEmail().trim().isEmpty());
+        identitySection.group.setVisibility(identity ? View.VISIBLE : View.GONE);
+        if (signedIn) {
+            email.setText(model.accountEmail());
+            username.setText(model.name() == null ? "" : model.name());
+        }
+        identitySection.header.setVisibility(identity && signedIn ? View.VISIBLE : View.GONE);
+        if (identity && signedIn) {
+            identitySection.header.setText(R.string.account_change_identity);
+            identitySection.header.setTypeface(bold(identitySection.header.getTypeface()));
+        }
+        // 密码框：未登录时是登录/注册用的，改密码那一段有自己那三个，不能同时露出来。
+        formGroup.group.setVisibility(!signedIn && !resetStage ? View.VISIBLE : View.GONE);
+        changeGroup.group.setVisibility(changeStage ? View.VISIBLE : View.GONE);
+        verifyGroup.group.setVisibility(model.verifyStage() ? View.VISIBLE : View.GONE);
+        resetGroup.group.setVisibility(resetStage ? View.VISIBLE : View.GONE);
+        // 两个入口：未登录时是「忘记密码？」，已登录时是「修改密码」。它们互斥——
+        // 同时显示会让用户以为「忘记了」和「改密码」是同一件事（它们是两条不同的通道）。
+        forgotLink.setVisibility(!signedIn && !testOnly ? View.VISIBLE : View.GONE);
+        changeLink.setVisibility(signedIn && !testOnly ? View.VISIBLE : View.GONE);
+        changeLink.setText(changeStage ? R.string.account_change_back : R.string.account_change_password);
+        // 进了改密码那一段之后，这个链接就是「返回账号」了：它的动作也要跟着换，
+        // 文字和动作对不上的话，用户点「返回账号」会再进一次改密码（看起来像卡住）。
+        changeLink.setOnClickListener(v -> {
+            if (model.changeStage()) model.backToForm(); else model.changePasswordStage();
+            render();
+        });
+        message.setText(prompt);
+    }
+    /**
      * 重发按钮：冷却里显示剩余秒数并禁用。
      *
      * <p>剩余时间是**用结束时刻现算的**，不是把秒数存下来每秒减一：转屏或者切后台之后
@@ -249,6 +387,17 @@ public final class AccountDialog extends DialogFragment {
                 ? getString(R.string.account_resend_in, seconds) : getString(R.string.account_resend));
         neutral.setEnabled(!busy && seconds <= 0);
     }
+    /** 忘记密码段的重发链接：同上，只是它是个 TextView（那一段没占中性按钮位）。 */
+    private void renderResetResend(boolean busy) {
+        long remaining = model.remainingResendMillis();
+        int seconds = (int) Math.ceil(remaining / 1000.0);
+        resetResend.setText(seconds > 0
+                ? getString(R.string.account_resend_in, seconds) : getString(R.string.account_resend));
+        // **冷却里也要能点**（和验证码段那个按钮不一样）：限流是服务端说了算，
+        // 按 429 的 `Retry-After` 重新计时比让用户干等一个可能已经偏了的本地倒计时准。
+        resetResend.setEnabled(true);
+        resetResend.setAlpha(seconds > 0 || busy ? 0.5f : 1f);
+    }
     private void startResendTimer() {
         stopResendTimer();
         long remaining = model.remainingResendMillis();
@@ -261,27 +410,64 @@ public final class AccountDialog extends DialogFragment {
     private void tickResendButton() {
         if (!isAdded()) { stopResendTimer(); return; }
         AlertDialog dialog = (AlertDialog) requireDialog();
-        renderResendButton(dialog.getButton(AlertDialog.BUTTON_NEUTRAL),
-                "BUSY".equals(model.state.getValue()));
+        boolean busy = "BUSY".equals(model.state.getValue());
+        // 同一个计时器服务两段：它们在编辑框上都得每秒重画，只是画在不同控件上。
+        if (model.resetStage()) renderResetResend(busy); else renderResendButton(dialog.getButton(AlertDialog.BUTTON_NEUTRAL), busy);
     }
     private void stopResendTimer() { if (resendTimer != null) { resendTimer.cancel(); resendTimer = null; } }
-    /** 状态 → 提示语。**每一种失败都有自己的话**，落不到具体分支时也要说清是哪一类。 */
-    private CharSequence messageFor(String state, boolean verifyStage) {
+    /** 一个输入框在不在、是不是密码框。`null` 读成空串，省得每个调用点都判一次。 */
+    private static String text(TextInputEditText field) {
+        return field == null || field.getText() == null ? "" : field.getText().toString();
+    }
+    /**
+     * 状态 → 提示语。**每一种失败都有自己的话**，落不到具体分支时也要说清是哪一类。
+     *
+     * <p>优先级：忙 → 本条状态自带的说明 → 本状态没话可说时用那一段的通用说明。
+     * 忙必须排在最前：请求进行中却显示上一句失败提示，用户会以为这次又失败了。
+     */
+    private CharSequence messageFor() {
+        String state = model.state.getValue() == null ? "IDLE" : model.state.getValue();
+        boolean resetStage = model.resetStage();
         switch (state) {
             case "BUSY":
-                return getString(verifyStage ? R.string.account_verifying
+                return getString(resetStage ? R.string.account_resetting
+                        : model.changeStage() ? R.string.account_changing
+                        : model.verifyStage() ? R.string.account_verifying
                         : model.registerMode() ? R.string.account_registering : R.string.account_signing_in);
             // 注册成功但**还没验证**：这句话必须说清楚，否则用户以为已经完事了。
             case "REGISTERED": return getString(R.string.account_registered);
             // FAILED 的具体理由来自服务端，由 AccountInput 翻译好放在 notice 里
             // （邮箱被占 / 用户名被占 / 码错了 / 码过期了 …各是一句话）。
             case "CODE_SENT":
-            case "FAILED": return getString(noticeOr(R.string.forum_request_error));
-            case "VERIFIED": return getString(R.string.account_verified);
-            case "VERIFIED_SIGN_IN_REQUIRED": {
+            case "FAILED":
+            case "CHANGED": {
                 int notice = noticeOr(0);
-                return notice == 0 ? getString(R.string.account_verified_manually)
-                        : getString(R.string.account_verified_manually_reason, getString(notice));
+                return getString(notice == 0 ? defaultMessage(state) : notice);
+            }
+            case "REQUIRED": {
+                // 忘记密码那屏的「没邮箱」：这句话由 AccountInput 挑好放在 notice 里。
+                int notice = noticeOr(0);
+                return notice == 0 ? getString(defaultMessage(state)) : getString(notice);
+            }
+            case "VERIFIED": {
+                // 验证成功（或密码重设成功），正在自动登录。理由放在 autoSignInReason 里——
+                // 「邮箱验证成功了」和「密码已经改好了」是两件事，不能共用一句话。
+                Integer reason = model.autoSignInReason.getValue();
+                return getString(R.string.account_verified_signing_in,
+                        getString(reason == null || reason == 0 ? R.string.account_verified : reason));
+            }
+            // 上一步成功了、但自动登录没成功。**必须把「哪一步成功了」说清楚**：用户
+            // 得知道自己现在到底该拿哪个密码登录。
+            case "VERIFIED_SIGN_IN_REQUIRED": {
+                Integer reason = model.autoSignInReason.getValue();
+                return getString(R.string.account_verified_manually_reason,
+                        getString(reason == null || reason == 0 ? R.string.account_verified : reason));
+            }
+            case "RESET_SIGN_IN_REQUIRED": {
+                // 重设/改密码之后自动登录失败：密码**已经改好了**，所以第一句必须是这个事实。
+                int notice = noticeOr(0);
+                return notice == 0 ? getString(R.string.account_reset_sign_in_required)
+                        : getString(R.string.account_reset_sign_in_required_reason, getString(notice));
             }
             // 本地校验拦下来的：具体理由在 `invalidReason` 里，比「格式不对」有用。
             case "INVALID": {
@@ -296,14 +482,42 @@ public final class AccountDialog extends DialogFragment {
             case "SERVER": return getString(R.string.forum_request_error);
             default: break; // IDLE：还没发生任何事，显示当前段位/身份的说明
         }
-        if (testOnly) return getString(R.string.forum_test_explanation);
-        if (model.signedIn()) return getString(
-                model.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in, model.name());
-        if (verifyStage) return getString(R.string.account_code_hint);
-        return getString(model.registerMode() ? R.string.account_new : R.string.account_existing);
+        return getString(defaultMessage(state));
+    }
+    /** 状态里没话可说时，这一段自己的说明（每个身份/段位各有一句）。 */
+    private int defaultMessage(String state) {
+        // 改密码成功之后**停在原地**（不 dismiss、不退出登录）：用户多半想确认一下
+        // 「别的设备真的被踢了吗」，那句话就在这条提示里。而失败提示也必须留着——
+        // 用户要能看着它决定下一步做什么。
+        if ("CHANGED".equals(state)) {
+            int notice = noticeOr(0);
+            return notice == 0 ? R.string.account_change_done : notice;
+        }
+        if (testOnly) return R.string.forum_test_explanation;
+        if (model.changeStage()) return R.string.account_change_hint;
+        if (model.signedIn()) return model.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in;
+        if (model.resetStage()) {
+            // CODE_SENT 时上面已经用 notice 显示过「如果这个邮箱注册过…」了，
+            // 走到这儿的是 IDLE/REQUIRED 那几种，说这一段的通用说明。
+            return R.string.account_reset_hint;
+        }
+        if (model.verifyStage()) return R.string.account_code_hint;
+        return model.registerMode() ? R.string.account_new : R.string.account_existing;
     }
     private int noticeOr(int fallback) {
         Integer notice = model.notice.getValue();
         return notice == null || notice == 0 ? fallback : notice;
+    }
+    /**
+     * 一块面板：一个容器 + 一个可选的小标题。
+     *
+     * <p>存在的理由是「一块面板的整体可见性只写一次」。之前每加一段都要在
+     * `onCreateDialog` 和 `render()` 里各补一排 `setVisibility`，漏一个就会出现
+     * 两组输入框同时显示——用户完全不知道该填哪个。
+     */
+    private static final class Section {
+        final LinearLayout group;
+        TextView header;
+        Section(android.content.Context context) { group = new LinearLayout(context); }
     }
 }

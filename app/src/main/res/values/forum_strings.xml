@@ -58,6 +58,8 @@
     <string name="account_sign_out">退出</string>
     <string name="account_username">用户名（论坛昵称）</string>
     <string name="account_password">密码</string>
+    <string name="account_forgot_password">忘记密码？</string>
+    <string name="account_change_password">修改密码</string>
     <string name="account_email">邮箱</string>
     <!-- 账号现在只服务论坛：用量/预算/账本全在本机（key 也不出手机），跟账号无关。 -->
     <string name="account_existing">用邮箱或用户名登录。账号只用于论坛（用量和账本都在本机，不需要登录）。</string>
@@ -85,9 +87,15 @@
     <string name="account_code_attempts">验证码试错次数太多了，得重发一个新的才能继续。</string>
     <string name="account_verify">验证</string>
     <string name="account_verifying">正在验证…</string>
-    <string name="account_verified">邮箱验证成功，正在用刚才的密码登录…</string>
-    <string name="account_verified_manually">邮箱验证成功，但自动登录没成功。请用刚才的密码登录一次。</string>
-    <string name="account_verified_manually_reason">邮箱验证成功，但自动登录没成功：%1$s 请用刚才的密码手动登录一次。</string>
+    <string name="account_verified">邮箱验证成功。</string>
+    <!-- 「上一步成功了，正在自动登录」的**通用外壳**：%1$s 是那一步的结果
+         （注册验证那条路是「邮箱验证成功。」，忘记密码那条路是「密码已重设，…」）。
+         两条路收尾时做的事一样，但对用户的意义完全不同，所以理由由调用方给。 -->
+    <string name="account_verified_signing_in">%1$s 正在自动登录…</string>
+    <string name="account_verified_manually">邮箱验证成功。但自动登录没成功，请用刚才的密码登录一次。</string>
+    <!-- 「上一步成功了，但自动登录失败」。%1$s 同上——不能写死「邮箱验证成功」，
+         不然刚把密码重设完的用户会以为自己在验证邮箱。 -->
+    <string name="account_verified_manually_reason">%1$s 但自动登录没成功，请手动登录一次。</string>
     <string name="account_verify_unconfirmed">服务器没有确认验证成功，请重新输入一次验证码。</string>
     <string name="account_resend">重发验证码</string>
     <string name="account_resend_in">重发验证码（%1$d 秒）</string>
@@ -109,6 +117,68 @@
     <string name="account_credentials_error">邮箱/用户名或密码不对。</string>
     <string name="account_rate_limit">操作太频繁了，请等 1 分钟左右再试。</string>
     <string name="account_storage_error">本机没能保存登录状态（可能存储空间不足），请重试。</string>
+
+    <!-- ============ 忘记密码（`password/forgot` + `password/reset`）============
+         这一屏是给「已经登不进来、正在着急」的人看的，所以每一句都要回答
+         「码发到哪儿」「我该做什么」「接下来会发生什么」，不能有废话。 -->
+
+    <!-- STAGE_RESET 头一行：「验证码已发往 <邮箱>」。邮箱是空的（用用户名登录的用户
+         根本没填邮箱）时不显示空地址，让下面这句告诉他回哪儿填。 -->
+    <string name="account_reset_email_unknown">验证码会发到你的注册邮箱</string>
+    <!-- 没邮箱时的提示语。只填了用户名登录的用户会走到这儿——他不知道我们要邮箱。 -->
+    <string name="account_reset_need_email">找回密码要用注册时的邮箱，请返回上一层把它填进「邮箱」那一栏，再点「忘记密码？」。</string>
+    <!-- 发出去之后的诚实说明。服务端**不告诉我们这个邮箱注册过没有**（防枚举），
+         所以只能说「如果你注册过」——说成「已发往你的账号」会把没注册过的用户骗去干等。 -->
+    <string name="account_reset_code_sent">如果 %1$s 注册过，验证码已经在路上了：去收件箱找 6 位数字（也看看垃圾邮件）。收不到就点下面「重发验证码」。</string>
+    <string name="account_reset_hint">验证码会发到你的注册邮箱。填邮件里的 6 位验证码，再设一个新密码——重设成功后所有设备都要用新密码重新登录。</string>
+    <string name="account_reset_code">邮件里的 6 位验证码</string>
+    <string name="account_new_password">新密码（至少 8 位）</string>
+    <string name="account_new_password_confirm">再输一次新密码</string>
+    <string name="account_reset_submit">重设密码</string>
+    <string name="account_resetting">正在重设密码…</string>
+    <!-- 重设成功、正在用新密码自动登录。**必须说清「所有设备」**：用户手上的平板和
+         另一台手机都已经被服务端登出了，不说他会以为是掉线。 -->
+    <string name="account_reset_done">密码已重设，所有设备上的登录都失效了，正在用新密码登录…</string>
+    <!-- 重设成功但自动登录失败（网络断在中间）。这时候**密码已经改了**，
+         所以第一句必须是这个事实，第二句才是「用新密码登一次」。 -->
+    <string name="account_reset_sign_in_required">密码已经改好了，但自动登录没成功。请用**新密码**登录一次（其它设备上的登录已经失效）。</string>
+    <string name="account_reset_failed">没能重设密码，请稍后再试。</string>
+    <!-- 重设成功但自动登录失败时，后面跟的那句「具体为什么失败」（网络/服务器…）。 -->
+    <string name="account_reset_sign_in_required_reason">密码已经改好了，但自动登录没成功（%1$s）。请用**新密码**登录一次——其它设备上的登录已经失效了。</string>
+    <!-- 「返回登录」是忘记密码那屏的退路。**不能说「返回修改」**：那会让人以为
+         要回去改邮箱，而这一屏多数人只是改了主意。 -->
+    <string name="account_back_to_login">返回登录</string>
+    <!-- 503：服务端压根发不出信。忘了密码的人这时候最需要知道「不是你的账号有问题」。 -->
+    <string name="account_reset_mail_not_configured">服务器还没配好发信服务，现在发不出验证码，所以没法重设密码。你的密码没有被改动。可以过一会儿再试，或联系管理员。</string>
+    <string name="account_reset_mail_failed">重设密码的邮件没能发出去（服务器发信失败）。你的密码没有被改动，稍后再试一次。</string>
+
+    <!-- ============ 已登录时「修改密码」（`password/change`）============ -->
+
+    <string name="account_current_password">当前密码</string>
+    <string name="account_current_password_empty">请先填写当前密码。</string>
+    <!-- 401 CREDENTIALS 在**改密码**语境下的那句话。和 account_credentials_error
+         （「邮箱/用户名或密码不对。」）必须分开：用户是登录着进来的，账号一定是对的，
+         说成「账号或密码不对」会让他以为账号出了问题。 -->
+    <string name="account_current_password_wrong">当前密码不对：重新输一遍。（其它设备上的登录仍然有效。）</string>
+    <!-- 密码上限来自契约（服务端 8~200 位）。超长时必须说上限，说「至少 8 位」
+         会把一个填了 201 位的用户指向完全相反的方向。 -->
+    <string name="account_password_long">密码最多 200 位。</string>
+    <!-- 两次不一致。**这是唯一能在本地判出来的重设/改密码失败**，其余都要问服务端。 -->
+    <string name="account_password_mismatch">两次输入的密码不一样，重新确认一下。</string>
+    <string name="account_change_hint">改密码后，**其它设备**上的登录会失效，需要重新登录；这台设备不受影响。</string>
+    <!-- 已登录时上面那两栏（邮箱/用户名）是只读的展示值，加一个小标题说清它们是账号。 -->
+    <string name="account_change_identity">当前账号</string>
+    <string name="account_change_submit">保存新密码</string>
+    <string name="account_changing">正在修改密码…</string>
+    <!-- 成功提示。`otherSessionsRevoked` 是服务端告诉我们踢掉了几台设备。 -->
+    <string name="account_change_done">密码已修改，其他设备的登录已失效（这台设备不受影响）。</string>
+    <string name="account_change_done_count">密码已修改，其他设备上的 %1$d 个登录已失效（这台设备不受影响）。</string>
+    <string name="account_change_failed">没能修改密码，请稍后再试。</string>
+    <!-- 401 但服务端**没说是哪一步错了**（错误体空/不是 JSON）。契约里改密码的 401 有两种：
+         当前密码不对（带 code）和会话无效。没有 code 的那种只能按后者说，而且说得留余地
+         ——猜错时用户看到的是一句「可能」，不会把他锁在错误的方向上。 -->
+    <string name="account_change_session_expired">登录状态可能已经失效了，密码没有被改动。请重新登录后再改密码。</string>
+    <string name="account_change_back">返回账号</string>
     <string name="forum_test_enter">免账号测试</string>
     <string name="forum_test_badge">测试区 · 帖子不进入正式论坛</string>
     <string name="forum_test_explanation">无需注册或登录。测试身份有效期为 24 小时，可以测试新闻、图文发帖、点赞和评论。</string>

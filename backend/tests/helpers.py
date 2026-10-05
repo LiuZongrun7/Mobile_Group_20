@@ -22,8 +22,14 @@ class RecordingMailer:
     dev_echo = False
     configured = True
 
-    def send_code(self, email, code, minutes):
+    def __init__(self):
+        # 每一封信的用途也记下来：注册码和重置码**不能互相顶用**，
+        # 而"发了哪一种"正是那条测试要看的东西。
+        self.purposes = []
+
+    def send_code(self, email, code, minutes, purpose="register"):
         OUTBOX[email] = code
+        self.purposes.append((email, purpose))
 
 
 def create_app_for_tests(settings, verifier=None, mailer=None, **kwargs):

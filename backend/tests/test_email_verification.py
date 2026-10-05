@@ -32,7 +32,7 @@ class FailingMailer:
     dev_echo = False
     configured = True
 
-    def send_code(self, email, code, minutes):
+    def send_code(self, email, code, minutes, purpose="register"):
         raise OSError("smtp is down")
 
 
@@ -45,8 +45,8 @@ class SilentMailer:
     def __init__(self):
         self.calls = []
 
-    def send_code(self, email, code, minutes):
-        self.calls.append((email, code))
+    def send_code(self, email, code, minutes, purpose="register"):
+        self.calls.append((email, code, purpose))
 
 
 def app_for(tmp_path, mailer=None, **overrides):
@@ -114,8 +114,9 @@ def test_register_sends_exactly_one_code_and_no_token(tmp_path):
         assert body["emailVerified"] is False
         # 注册**不自动登录**（和以前一样）：被脚本刷时，自动登录等于送一堆会话
         assert "token" not in body
-        assert [address for address, _ in mailer.calls] == [ADDRESS]
+        assert [address for address, _, _ in mailer.calls] == [ADDRESS]
         assert len(mailer.calls[0][1]) == 6 and mailer.calls[0][1].isdigit()
+        assert mailer.calls[0][2] == "register", "注册那封信的用途必须是 register"
 
 
 def test_the_code_is_not_stored_in_plaintext(tmp_path):

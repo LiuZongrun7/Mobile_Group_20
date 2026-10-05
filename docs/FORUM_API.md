@@ -14,6 +14,10 @@ Android 已提供 News / Community 页面、最多 9 张图片的发帖草稿、
 
 **注册要邮箱，而且验证过才能登录**（2026-10-05 加）：填 `email` + `username`（论坛里显示的昵称）+ 密码 → 服务端发一封 6 位验证码的邮件 → 客户端在同一个对话框里进第二段填码 → 验证通过后自动用刚填的密码登录。没验证的账号登录返回 `403 EMAIL_UNVERIFIED`，客户端据此跳到验证码那一屏。错误码、限流和"发信失败就回滚账号"那几条见 [`SERVER_API.md`](SERVER_API.md#账号apiaccount)；邮箱那几列是后加的，**加邮箱之前建的老账号继续用用户名登录**（判据是建号时间）。
 
+**密码**：忘了密码可以用注册邮箱收一条重置码改（`/api/account/password/forgot` + `reset`，
+改完所有设备都要重新登录）；已经登录的可以在账号对话框里改（`password/change`，只踢其它设备）。
+注册码和重置码是两种码，不能互相顶用。
+
 `gradle.properties` 已配置公开地址 `forumBaseUrl=https://43.140.212.47/api/`。账号模块**已经接好了**：`data/AccountSession` 实现 `SessionProvider`，通过下面的接入点把会话交给论坛。
 
 账号模块在建立/恢复会话后调用 `RepositoryProvider.configureForum("https://your-api.example/api/", sessionProvider)`。`SessionProvider.token()` 和 `accountId()` 必须每次返回当前会话；退出登录时返回 null。会话提供者需要能安全地被 HTTP 回调读取。更换 API 或 provider 时再调用 configureForum。客户端不在 Gradle 或仓库保存 token，不创建第二套账号体系。

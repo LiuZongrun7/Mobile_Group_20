@@ -76,6 +76,9 @@
 | `POST /account/register` → 201 | 注册：`{email, username, password}`。建号 + **发一封验证码邮件**。**不返回 token** |
 | `POST /account/verify` | `{email, code}` 核销验证码，把账号标成已验证。**也不返回 token** |
 | `POST /account/verify/resend` | `{email}` 重发验证码。**对存在和不存在的邮箱返回完全一样** |
+| `POST /account/password/forgot` | `{email}` 发一条**重置码**。注册过没有返回一样 |
+| `POST /account/password/reset` | `{email, code, password}` 改密码。**成功即踢掉所有会话** |
+| `POST /account/password/change` | `{currentPassword, newPassword}`（要登录）改密码，**只踢其它设备** |
 | `POST /account/login` | `{identifier, password}`（邮箱或用户名）→ 会话 token；**没验证过邮箱是 403** |
 | `GET /account/me` | 当前账号（`userId` / `username` / `email` / `emailVerified` / `createdAtEpochMillis`） |
 | `POST /account/logout` | 退出。**幂等**，已经失效的 token 也返回成功 |
@@ -92,6 +95,28 @@
 - 发信配置（163 / SMTP）见 [`../backend/README.md`](../backend/README.md)；
   正式服务**不开**"验证码回显"，那个开关只在测试区生效。
 
+### 密码的找回与修改（2026-10-05 加）
+
+两条路，**故意做成不一样的**：
+
+- **找回（忘了密码）**：`forgot` 发重置码 → `reset` 用码改密码 →
+  **所有会话立刻失效**（包括当前设备）。理由是忘记密码最常见的起因之一就是
+  "号被人登了"，改完密码却把入侵者的会话留着等于白改。代价是用户要重新登录一次，
+  而客户端紧接着用新密码自动登一次，用户视角就是"改完就进来了"。
+  另外，**能收到这封信本身就证明邮箱是他的**，所以重置成功顺带把邮箱标成已验证。
+- **修改（已经登录）**：`change` 要**当前密码**（确认是本人），
+  **只踢其它设备**：当前这个会话留着——把当前设备也踢掉只会让人骂人。
+
+三条不许变成探测接口的地方：
+
+1. `forgot` 对注册过和没注册过的邮箱**返回完全一样**，而且**不注册就不发信**
+   （不给陌生地址发邮件，也不当替人发信的通道）；
+2. 服务器发不了信时，**所有** `forgot` 都返回同一句 503（这条判据在查账号之前），
+   否则"注册过 → 503、没注册 → 200"就是一个探测接口；真发信失败（SMTP 抽风）
+   仍然如实报 `MAIL_FAILED`，那一点信息泄露是有意换的——比让用户干等一封不会来的信强；
+3. **注册码和重置码不能互相顶用**（`email_codes.purpose` 分开存）：
+   两种权限不一样，混用等于悄悄放宽。
+
 ### 错误码是接口的一部分
 
 响应统一是 `{"code", "message"}`，客户端按 `code` 决定下一步：
@@ -106,7 +131,7 @@
 | `RATE_LIMIT` | 429 | 按 `Retry-After` 等（60 秒 / 一小时上限） |
 | `EMAIL_UNVERIFIED` | 403 | 跳到验证码那一屏 |
 | `CREDENTIALS` | 401 | 用户名/邮箱或密码错（**和"账号不存在"同一条**，不给探测接口） |
-| `MAIL_NOT_CONFIGURED` / `MAIL_FAILED` | 503 | 说清"**账号没有注册成功**"，稍后再试 |
+| `MAIL_NOT_CONFIGURED` / `MAIL_FAILED` | 503 | 注册时说清"**账号没有注册成功**"；找回密码时说"服务器现在发不了信" |
 
 ### 四个没有变的口径
 

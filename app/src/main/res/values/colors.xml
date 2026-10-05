@@ -165,4 +165,11 @@
     <!-- 置灰段（能力不满足的模型）的文字色。**不是灰到看不见**：
          名字要能读出来，只是明确点不动（见 ModelSheetFragment 那段注释）。 -->
     <color name="chat_disabled_ink">#A3ACBB</color>
+
+    <!-- 账号对话框里那两个入口链接（「忘记密码？」「修改密码」）。
+         **和 account_back_to_form 是同一个蓝色**（「邮箱写错了？返回修改」本来的样子），
+         所以这不是新引进的一种颜色，只是把它从内联常量提出来，好让三处链接一致。
+         对话框永远走论坛那套浅色主题（ForumTheme），白底上 #1565C0 约 5.8:1，过 AA；
+         用主题的 colorPrimary（紫）会和按钮抢注意力，一眼看不出"这是能点的链接"。 -->
+    <color name="account_link">#1565C0</color>
 </resources>
