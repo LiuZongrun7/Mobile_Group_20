@@ -260,7 +260,9 @@ public class MainActivity extends AppCompatActivity
                     com.mobilegroup20.modelpilot.chat.EngineTuning.describe(this));
         }
         binding.chatPage.setVisibility(chat ? View.VISIBLE : View.GONE);
-        binding.dashboardPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
+        binding.insightsPage.setVisibility(dashboard ? View.VISIBLE : View.GONE);
+        // 旧统计页不再挂在导航上（它的数字来自桩数据，见布局里那段注释）。
+        binding.dashboardPage.setVisibility(View.GONE);
         binding.emptyPage.setVisibility(chat || forum || dashboard ? View.GONE : View.VISIBLE);
         binding.forumPage.setVisibility(forum ? View.VISIBLE : View.GONE);
         binding.getRoot().setBackgroundColor(0xFFFFFBFE);
@@ -283,6 +285,21 @@ public class MainActivity extends AppCompatActivity
             if (chat) chatTx.show(chatFragment); else chatTx.hide(chatFragment);
             chatTx.setMaxLifecycle(chatFragment, chat ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED)
                     .commitNow();
+        }
+        // Insights：和 Chat 一样只在第一次进入时挂上，之后保留它自己的滚动位置。
+        Fragment insightsFragment = getSupportFragmentManager().findFragmentByTag("insights");
+        if (insightsFragment == null && dashboard) {
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.insights_page,
+                            new com.mobilegroup20.modelpilot.ui.insights.InsightsFragment(),
+                            "insights")
+                    .commitNow();
+        } else if (insightsFragment != null) {
+            androidx.fragment.app.FragmentTransaction insightsTx =
+                    getSupportFragmentManager().beginTransaction();
+            if (dashboard) insightsTx.show(insightsFragment); else insightsTx.hide(insightsFragment);
+            insightsTx.setMaxLifecycle(insightsFragment,
+                    dashboard ? Lifecycle.State.RESUMED : Lifecycle.State.STARTED).commitNow();
         }
         Fragment forumFragment = getSupportFragmentManager().findFragmentByTag("forum");
         if (forumFragment == null && forum) {

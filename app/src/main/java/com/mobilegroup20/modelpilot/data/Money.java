@@ -62,6 +62,23 @@ public final class Money {
      * <p>界面不做乘法，只做显示——同一笔钱在两个页面上写成两个值是这类项目
      * 最常见也最难看出来的 bug。
      */
+    /**
+     * 微美元 → `$0.42` 这样的字符串。
+     *
+     * <p>账本里的价目是**按美元抄的官方定价页**（见 `BundledPricingSource`），
+     * 所以这里先照原币种显示；人民币换算是另一件事（`formatCny`），
+     * 它依赖一个汇率常量，界面上必须标明"估算"，不能悄悄混进同一个数字里。
+     *
+     * <p>小于 1 分钱的显示成 `< $0.01` 而不是 `$0.00`：
+     * 后者看起来像"没花钱"，而它其实是"花了，但小到显示不出来"。
+     */
+    public static String formatUsd(long usdMicros) {
+        if (usdMicros > 0 && usdMicros < 10_000L) {
+            return "< $0.01";
+        }
+        return String.format(java.util.Locale.US, "$%.2f", usdMicros / 1_000_000.0);
+    }
+
     public static String formatCny(long usdMicros) {
         long cnyMicros = toCnyMicros(usdMicros);
         long sign = cnyMicros < 0 ? -1 : 1;

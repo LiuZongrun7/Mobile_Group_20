@@ -158,6 +158,11 @@ public final class RepositoryProvider {
         return providers;
     }
 
+    /** 账本的读端（Insights 用；它只读，写入都走 {@link #ledger()}）。 */
+    public static com.mobilegroup20.modelpilot.data.local.UsageCallDao usageCalls() {
+        return database().usageCallDao();
+    }
+
     /** 设置里改了 base URL、或存/删了 key 之后调它；下一次 {@link #providers()} 重新算。 */
     public static synchronized void reloadProviders() {
         providers = null;

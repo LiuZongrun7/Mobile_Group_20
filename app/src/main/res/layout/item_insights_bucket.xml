@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Insights 里的一行分解（按 provider / 按模型）。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dashboard_card"
+    android:layout_marginTop="6dp"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/bucket_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#0B1B33"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        tools:text="DeepSeek" />
+
+    <TextView
+        android:id="@+id/bucket_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:textColor="#5F6F94"
+        android:textSize="12sp"
+        tools:text="6 calls · 8,240 tokens · $0.42" />
+</LinearLayout>

@@ -602,6 +602,18 @@
              新建主线的落地页（设计稿 `01-home.png`）：项目分组 + 最近对话 + 底部输入条。
              内容是 Fragment（`ChatHomeFragment`），因为它要跟着 Room 的 LiveData 自己刷，
              而这一层只负责"哪一页可见"。 -->
+        <!-- ===== Insights（第 4 屏）=====
+             读本机账本（`usage_call` 里 source=APP 的那些）。**替换掉原来那个统计页**：
+             那一页读 `daily_usage`（只滚导入记录）而且开着桩数据，显示的数字和
+             "这个 App 真实花了多少"没有关系。旧的 `dashboard_page` 先留着不删
+             （它那套 breakdown 还有参考价值），但不再挂到导航上。 -->
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/insights_page"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone" />
+
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/chat_page"
             android:layout_width="match_parent"

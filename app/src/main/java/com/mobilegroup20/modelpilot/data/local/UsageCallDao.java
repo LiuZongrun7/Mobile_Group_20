@@ -42,6 +42,21 @@ public interface UsageCallDao {
     @Query("SELECT COUNT(*) FROM usage_call WHERE uid = :uid")
     int countFor(String uid);
 
+    /**
+     * 本机账本在某个月里的明细（Insights 用）。
+     *
+     * <p>为什么不走 `daily_usage`：那张表的滚动只收 `IMPORTED`（导入的旧记录），
+     * 而 App 自己发出去的调用是 `source = APP`。Insights 要回答的是"我花了多少"，
+     * 那就得直接读原始记录——而且原始记录里才有 `task_id` / `kind` / `route`，
+     * 汇总表里那些维度都被磨平了。
+     *
+     * <p>`uid` 固定 `local`（见 `CallLedger` 的类注释）：花的是这台手机上的 key，
+     * 和登录了没有无关。
+     */
+    @Query("SELECT * FROM usage_call WHERE uid = :uid AND source = 'APP'"
+            + " AND day BETWEEN :from AND :to ORDER BY startedAtEpochMillis DESC")
+    List<UsageCallEntity> localCallsInRange(String uid, String from, String to);
+
     /** 清空。只有测试和「重置本地数据」会用，正常流程没有删除路径。 */
     @Query("DELETE FROM usage_call")
     void deleteAll();

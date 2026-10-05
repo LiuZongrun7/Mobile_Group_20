@@ -168,6 +168,25 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 - 压缩本身走 `chat/Summarizer` + `ProviderClient.complete(...)`（非流式那一趟），
   指令见 `Summarizer.INSTRUCTION`——**改那句话等于改产品行为**。
 
+### 6.2 按 outline v12 补的第二批（2026-10-04 记）
+
+| outline 里的条目 | 状态 |
+| --- | --- |
+| §4-5「Populate dated prices」 | **做了**：`BundledPricingSource` 录了 DeepSeek 两个模型（数字与链接抄自官方定价页）。其余五家留空 —— 没核过就不能写 |
+| §6「save the selected route, **policy version and reason**」 | **做了**：`usage_call` 加 `reason` / `policy`（迁移 v6），`AutoRouter.POLICY_VERSION` = `capability-then-price-v1` |
+| §6「message-level token fields are not wired」 | **做了**：上游报的 usage 回填到那条回答上（`MessageEntity.tokensIn/Out`） |
+| §4-5 / §5 / §8 W10–12「Connect Insights to local call records」+ local budget | **做了**：第 4 屏改成读本机账本（`ui/insights/`）。旧统计页读 `daily_usage`（只滚导入记录）且开着桩数据，显示的数字和真实花费无关，已从导航上摘掉 |
+| §4-3 §5 记忆的查看/编辑/重置界面 | 还没做（引擎与 DAO 都有了） |
+| §4-4 §7.2 文件选择 + PDFBox 抽取 + source links | 还没做 |
+| §4-6 §8 W10–12 导出 | 还没做 |
+| §4-2 §7.1 其余六家的实测 | 还没做（只有 DeepSeek 端到端跑过） |
+| §4-1 §5 草稿恢复 | 还没做（消息是留着的，输入框内容不保留） |
+
+**Insights 的口径**（`ui/insights/Insights.java`，纯函数、有单测）：
+token 按四桶加；算不出价的调用**单独计数并显示**（"其中 N 次还没有价格"）；
+Auto 占比只按回答算，不把压缩算进去；本地月度上限存在 `data/Budget`，
+**和套餐/充值/统一支付无关**（用户自己填一个数，超了只提醒）。
+
 **已知的、有意留着的坑**（不是忘了）：
 
 - 附件（图片/PDF）在数据模型与两个渲染器里都通了，但界面上的 `+` 还没接；
@@ -176,9 +195,8 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 - Insights 需要的聚合查询还没写：`daily_usage` 的滚动只收 `IMPORTED`，
   App 自己那些调用要另走一条（`usage_call` 里 `source = APP` 且 `uid = local`）。
   任务级那一条现在可以直接查：`GROUP BY task_id`（回答与压缩已经挂在同一个任务号下）。
-- **`BundledPricingSource` 还是空表**，所以账本里每一行的 `costMicros` 都是 NULL
-  （"价格未知"，这是对的，但不该一直这样）。DeepSeek 那四个价已经在
-  `ProviderRegistry` 里连官方定价页链接一起记着，抄进价目表就能算钱了。
+- ~~`BundledPricingSource` 还是空表~~ **2026-10-04 已录 DeepSeek**；
+  其余五家仍未核价，界面上照实显示"价格未知"。
 - `MIGRATION_3_4` 里的四张表原来把若干列写成了 NOT NULL，而实体里那些字段没有
   `@NonNull`（Room 按可空生成）——**迁移建出来的表与全新安装不一致**。
   2026-10-04 修好了，同时发现真正的原因是 **androidTest 源集里有个引用旧导航 id

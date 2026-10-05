@@ -289,6 +289,34 @@
     <!-- 一家都没配时的说法。**它要紧挨着那颗按钮**：空白 + 一颗按钮，
          用户至少知道下一步该点哪里。 -->
     <string name="keys_none_yet">No providers yet. Add the ones you have a key for.</string>
+
+    <!-- ============ Insights（第 4 屏，读本机账本） ============ -->
+    <string name="insights_month_line">%1$s · %2$s</string>
+    <string name="insights_this_device">this device</string>
+    <string name="insights_tokens">Tokens</string>
+    <string name="insights_tokens_note">in %1$s · cache %2$s · out %3$s</string>
+    <string name="insights_cost">Estimated cost</string>
+    <string name="insights_cost_unknown">Unknown</string>
+    <!-- 有价也有未知：**必须把"其中几次没有价"说出来**，否则这个金额看起来像全部。 -->
+    <string name="insights_cost_note">%1$d of %2$d calls have no price yet — they are not counted above.</string>
+    <string name="insights_cost_all_unknown">None of the %1$d calls has a price yet. Missing prices stay unknown instead of showing 0.</string>
+    <string name="insights_budget">Monthly limit (local)</string>
+    <string name="insights_budget_set">Set</string>
+    <string name="insights_budget_none">Not set</string>
+    <string name="insights_budget_value">%1$s of %2$s</string>
+    <string name="insights_budget_under">%1$s left this month.</string>
+    <string name="insights_budget_over">Over the limit you set. Nothing is charged by ModelPilot — this number only warns you.</string>
+    <!-- 说清楚这个数字是什么：**不是我们的额度、也不是充值**。 -->
+    <string name="insights_budget_why">A number you set for yourself. ModelPilot does not sell credit: you pay each provider directly with your own key.</string>
+    <string name="insights_routing">Model choice</string>
+    <string name="insights_routing_value">Auto chose %1$d of %2$d answers (%3$d%%) · %4$d compressions</string>
+    <string name="insights_routing_none">No answers recorded this month yet.</string>
+    <string name="insights_providers">By provider</string>
+    <string name="insights_models">By model</string>
+    <string name="insights_bucket_detail">%1$d calls · %2$s tokens · %3$s</string>
+    <string name="insights_bucket_partial">%1$d without a price</string>
+    <string name="insights_empty">Nothing recorded on this device this month. Numbers appear here after you send a message.</string>
+    <string name="insights_footnote">Recorded on this phone from calls you made with your own keys. Amounts are estimates from each provider\'s published prices, not invoices.</string>
     <string name="keys_configured">Configured</string>
     <string name="keys_edit">Edit</string>
     <string name="keys_pick_provider">Add provider</string>

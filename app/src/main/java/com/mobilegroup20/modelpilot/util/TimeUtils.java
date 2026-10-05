@@ -81,6 +81,12 @@ public final class TimeUtils {
     }
 
     /** 某个字符串是本月吗。用来判断赛季该不该重置。 */
+    /** 本月的显示名，如 `October 2026`（Insights 顶部那行副标题用）。 */
+    public static String currentMonthLabel() {
+        return java.time.LocalDate.now(ZONE).format(java.time.format.DateTimeFormatter
+                .ofPattern("MMMM yyyy", java.util.Locale.US));
+    }
+
     public static boolean isCurrentMonth(String month) {
         return currentMonth().equals(month);
     }
