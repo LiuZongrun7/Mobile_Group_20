@@ -51,12 +51,33 @@ import java.util.List;
 public final class ChatConversationFragment extends Fragment {
 
     private static final String ARG_CHAT_ID = "chat_id";
+    /** 从首页带过来的那句话：非空 = 打开之后立刻发出去（"首页按一次发送"的语义）。 */
+    private static final String ARG_PENDING_TEXT = "pending_text";
+    private static final String ARG_PROVIDER = "pending_provider";
+    private static final String ARG_MODEL = "pending_model";
 
-    /** 打开某条对话。 */
+    /** 打开某条对话（从列表点进来）。 */
     public static ChatConversationFragment open(String chatId) {
+        return open(chatId, null, null, null);
+    }
+
+    /**
+     * 打开某条对话。
+     *
+     * @param pendingText 还没发出去的那句话；非空时打开后**立刻发送**。
+     *                    从首页发消息走的就是这一条——一次点击 = 一次请求，
+     *                    而不是"先建一条对话、再让用户按一次发送"。
+     * @param providerId  首页那颗胶囊上手动选的模型（null = Auto）；不带上它的话，
+     *                    用户在首页选完模型会发现"选了没用"。
+     */
+    public static ChatConversationFragment open(String chatId, String pendingText,
+                                               String providerId, String modelId) {
         ChatConversationFragment fragment = new ChatConversationFragment();
         Bundle args = new Bundle();
         args.putString(ARG_CHAT_ID, chatId);
+        args.putString(ARG_PENDING_TEXT, pendingText);
+        args.putString(ARG_PROVIDER, providerId);
+        args.putString(ARG_MODEL, modelId);
         fragment.setArguments(args);
         return fragment;
     }
@@ -107,6 +128,17 @@ public final class ChatConversationFragment extends Fragment {
         // 草稿恢复（大纲 §4-1）：转屏由 Android 自己保，这里管的是"进程被杀掉之后"。
         binding.conversationInput.setText(
                 com.mobilegroup20.modelpilot.data.Drafts.get(requireContext(), chatId));
+
+        // 从首页带过来的那句话：**只在第一次创建视图时发**（`saved == null`）。
+        // 少了这个判断，转屏会把它再发一遍——那就是白花一次钱。
+        // 已经在发的那一轮由 ViewModel 撑着（它跨转屏活着），不需要重发。
+        String pendingText = requireArguments().getString(ARG_PENDING_TEXT);
+        if (saved == null && pendingText != null && !pendingText.trim().isEmpty()) {
+            manualProviderId = requireArguments().getString(ARG_PROVIDER);
+            manualModelId = requireArguments().getString(ARG_MODEL);
+            renderChip();
+            model.send(pendingText, manualProviderId, manualModelId);
+        }
         model.chat().observe(getViewLifecycleOwner(), this::renderHeader);
         model.projectName().observe(getViewLifecycleOwner(), this::renderProject);
         model.messages().observe(getViewLifecycleOwner(), messages -> {

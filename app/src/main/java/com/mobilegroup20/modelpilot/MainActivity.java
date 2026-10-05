@@ -387,10 +387,11 @@ public class MainActivity extends AppCompatActivity
      * 不需要自己维护"现在在哪一页"。
      */
     @Override
-    public void openChat(String chatId) {
+    public void openChat(String chatId, String pendingText, String providerId, String modelId) {
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.chat_page,
-                        com.mobilegroup20.modelpilot.ui.chat.ChatConversationFragment.open(chatId),
+                        com.mobilegroup20.modelpilot.ui.chat.ChatConversationFragment
+                                .open(chatId, pendingText, providerId, modelId),
                         "conversation")
                 .addToBackStack("conversation")
                 .commit();

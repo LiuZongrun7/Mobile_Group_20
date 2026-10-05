@@ -377,7 +377,10 @@ public final class ChatHomeFragment extends Fragment {
         }
         binding.chatInput.setText("");
         com.mobilegroup20.modelpilot.data.Drafts.clear(requireContext(), HOME_DRAFT);
-        model.startChat(text, model.projectId(), chatId -> openChat(chatId));
+        // **把这句话一起交给对话页去发**：一次点击 = 一次请求（见 startChat 的注释）。
+        // 手动选的模型也一起带过去——不然首页那颗 Auto/模型胶囊就是个摆设。
+        model.startChat(text, model.projectId(),
+                chatId -> openChat(chatId, text, model.manualProviderId(), model.manualModelId()));
     }
 
     private void startChatIn(String projectId) {
@@ -397,8 +400,13 @@ public final class ChatHomeFragment extends Fragment {
                 model.manualModelId(), TaskKind.TEXT);
     }
     private void openChat(String chatId) {
+        openChat(chatId, null, null, null);
+    }
+
+    /** `pendingText` 非空 = 这句话还没发出去，交给对话页在打开时立刻发。 */
+    private void openChat(String chatId, String pendingText, String providerId, String modelId) {
         if (getActivity() instanceof Host) {
-            ((Host) getActivity()).openChat(chatId);
+            ((Host) getActivity()).openChat(chatId, pendingText, providerId, modelId);
             return;
         }
         pending("Chat");
@@ -422,9 +430,14 @@ public final class ChatHomeFragment extends Fragment {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    /** 首页要跳的两处（对话页、账号页）由宿主 Activity 接，Fragment 不自己换页。 */
+    /**
+     * 首页要跳的两处（对话页、账号页）由宿主 Activity 接，Fragment 不自己换页。
+     *
+     * <p>`pendingText` 不是 null 时，对话页打开后要**立刻把这句话发出去**——
+     * 那正是"首页按一次发送"的语义。手动选型也一起带过去。
+     */
     public interface Host {
-        void openChat(String chatId);
+        void openChat(String chatId, String pendingText, String providerId, String modelId);
 
         void openAccount();
     }

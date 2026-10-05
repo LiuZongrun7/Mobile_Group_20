@@ -100,16 +100,21 @@ public final class ChatHomeViewModel extends ViewModel {
     }
 
     /**
-     * 从首页开一条新对话：**先落库，再交给对话页**。
+     * 从首页开一条新对话，**并把这句话交给对话页去发**。
      *
-     * <p>这里不发送请求：发送链路（拼上下文 → 渲染 → 流式收 → 记账）在对话页那侧。
-     * 首页只负责"用户想聊这个"，所以它落下的第一条消息**一定没有回答**——
-     * 这是真实状态，不编一个假回答填上（`CONTRACTS.md` §4 那条底线）。
+     * <p><b>2026-10-05 改。</b>原来这里顺手把用户那条消息也插进库，然后只开对话页——
+     * 于是从首页发出去之后，用户看到自己那句话躺在对话里、**却没有任何回答**，
+     * 得再按一次发送。第一版这么写是为了"先落库再发"（怕发出去而界面没记下），
+     * 但那个约束应该由发送链路自己保证，而不是让用户多点一次。
+     *
+     * <p>现在：这里只建对话（标题取这句话），消息由对话页的发送链路插入并立刻发出去，
+     * 一次点击 = 一次请求。代价是"建了对话但还没发出去"的这一瞬间如果进程被杀，
+     * 会留下一条没有消息的对话——比"点了没反应"好接受得多。
      */
     public void startChat(String text, String projectId, ProjectCreated onCreated) {
         String body = text == null ? "" : text.trim();
         if (body.isEmpty()) {
-            return;
+            return;                     // 空消息不发（各家都会 400）
         }
         final ChatEntity chat = new ChatEntity();
         chat.id = UUID.randomUUID().toString();
@@ -123,16 +128,8 @@ public final class ChatHomeViewModel extends ViewModel {
         chat.createdAtEpochMillis = System.currentTimeMillis();
         chat.updatedAtEpochMillis = chat.createdAtEpochMillis;
 
-        final MessageEntity first = new MessageEntity();
-        first.id = UUID.randomUUID().toString();
-        first.chatId = chat.id;
-        first.role = "USER";
-        first.text = body;
-        first.createdAtEpochMillis = chat.createdAtEpochMillis;
-
         io.execute(() -> {
             dao.upsertChat(chat);
-            dao.upsertMessage(first);
             if (onCreated != null) {
                 // 回调切回主线程：写库在线程池里，而调用方多半要动界面。
                 main.post(() -> onCreated.onCreated(chat.id));
