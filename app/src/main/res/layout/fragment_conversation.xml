@@ -156,6 +156,24 @@
             android:paddingEnd="10dp"
             android:paddingBottom="10dp">
 
+            <!-- 待发送的附件。**放在输入框上方、点一下能取消**：
+                 选了图却不想发了，不该逼用户重开一次对话。 -->
+            <TextView
+                android:id="@+id/conversation_attachment_chip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:background="@drawable/bg_chat_pill_grey"
+                android:paddingStart="10dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="6dp"
+                android:textColor="#3A4A61"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="📎 poster.png · 280 KB（点一下取消）"
+                tools:visibility="visible" />
+
             <EditText
                 android:id="@+id/conversation_input"
                 android:layout_width="match_parent"

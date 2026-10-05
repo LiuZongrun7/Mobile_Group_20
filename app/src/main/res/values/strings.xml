@@ -244,6 +244,15 @@
     <!-- 手动选择时 Details 里显示的那句：Auto 没参与，所以没有"为什么"。 -->
     <string name="chat_route_manual_explain">You picked this model, so Auto did not choose for this message.</string>
     <string name="chat_stop">Stop</string>
+    <!-- ============ 附件（这一版只收图片） ============ -->
+    <!-- 1 文件名 2 大小（KB）。点一下取消，所以文案里写了"点一下"。 -->
+    <string name="chat_attach_chip">📎 %1$s · %2$d KB（点一下取消）</string>
+    <!-- 气泡里附件那一行。**缩略图还没做**（见 ChatConversationFragment 的注释）。 -->
+    <string name="chat_attach_line">📎 附件：%1$s · %2$d KB</string>
+    <string name="chat_attach_only_images">Only images can be attached for now. PDF text extraction is not built yet.</string>
+    <string name="chat_attach_unreadable">Could not read that file.</string>
+    <!-- 上限说清楚是几 MB，而不是只说"太大了"。 -->
+    <string name="chat_attach_too_large">That file is too large to attach (limit %1$d MB).</string>
     <!-- 流断了的那句。**必须说出来**：用户看到的字是真的，但这句话不完整。 -->
     <string name="chat_incomplete">This answer was cut off — the connection dropped mid-stream.</string>
     <!-- 这一轮压过上下文。说明"更早的内容没丢，只是收进了记忆"，不然用户会以为历史被删了。 -->

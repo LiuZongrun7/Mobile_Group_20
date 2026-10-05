@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.mobilegroup20.modelpilot.R;
+import com.mobilegroup20.modelpilot.chat.AttachmentCodec;
 import com.mobilegroup20.modelpilot.chat.AutoRouter;
 import com.mobilegroup20.modelpilot.chat.CallLedger;
 import com.mobilegroup20.modelpilot.chat.CanonicalMessage;
@@ -245,15 +246,28 @@ public final class ChatConversationViewModel extends ViewModel {
 
     /** 用户点了发送。`manual*` 都为 null 表示 Auto。 */
     public void send(String text, @Nullable String manualProviderId, @Nullable String manualModelId) {
+        send(text, manualProviderId, manualModelId, java.util.Collections.emptyList());
+    }
+
+    /**
+     * 用户点了发送（带附件）。
+     *
+     * <p>**只有附件、没有文字**也算一条合法消息（"这张图里是什么"完全可以不打字），
+     * 所以判空要看"文字和附件都空"。
+     */
+    public void send(String text, @Nullable String manualProviderId, @Nullable String manualModelId,
+                     List<CanonicalMessage.Attachment> attachments) {
         String body = text == null ? "" : text.trim();
-        if (body.isEmpty()) {
+        List<CanonicalMessage.Attachment> files = attachments == null
+                ? java.util.Collections.<CanonicalMessage.Attachment>emptyList() : attachments;
+        if (body.isEmpty() && files.isEmpty()) {
             return;                     // 空消息各家都会 400，在本地就拦住（不用花钱）
         }
         if (!busy.compareAndSet(false, true)) {
             return;                     // 已经在发：不排队（排队会变成两条并发的回答）
         }
         send.setValue(SendState.idle().streaming(""));
-        io.execute(() -> run(body, manualProviderId, manualModelId));
+        io.execute(() -> run(body, manualProviderId, manualModelId, files));
     }
 
     /**
@@ -273,7 +287,8 @@ public final class ChatConversationViewModel extends ViewModel {
 
     // ---- 发送链路 ------------------------------------------------------
 
-    private void run(String body, @Nullable String manualProviderId, @Nullable String manualModelId) {
+    private void run(String body, @Nullable String manualProviderId, @Nullable String manualModelId,
+                     List<CanonicalMessage.Attachment> attachments) {
         long startedAt = System.currentTimeMillis();
         // **这一轮提问的任务号**：回答、压缩（将来还有工具）都挂在它下面。
         // 大纲要的"任务级成本"就是这个 id 的聚合——没有它，账本只能回答
@@ -286,6 +301,9 @@ public final class ChatConversationViewModel extends ViewModel {
             userMessage.chatId = chatId;
             userMessage.role = CanonicalMessage.Role.USER.name();
             userMessage.text = body;
+            // 附件与文字一起落库：落的是**数据 URL（图片）或抽出来的正文（PDF）**，
+            // 于是"重开这条对话再发一条"时，附件仍然能进上下文（见 AttachmentCodec）。
+            userMessage.attachmentsJson = AttachmentCodec.toJson(attachments);
             userMessage.createdAtEpochMillis = startedAt;
             dao.upsertMessage(userMessage);
 
@@ -542,7 +560,9 @@ public final class ChatConversationViewModel extends ViewModel {
     }
 
     private static CanonicalMessage toCanonical(MessageEntity message) {
-        return new CanonicalMessage(message.id, role(message.role), message.text, null, null,
+        // 附件从库里还原（历史消息也带附件——不然"接着问这张图"就断了）。
+        return new CanonicalMessage(message.id, role(message.role), message.text,
+                AttachmentCodec.fromJson(message.attachmentsJson), null,
                 message.toolCallId, message.createdAtEpochMillis);
     }
 

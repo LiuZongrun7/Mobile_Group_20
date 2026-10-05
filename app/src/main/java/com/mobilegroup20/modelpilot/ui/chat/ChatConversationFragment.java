@@ -89,6 +89,10 @@ public final class ChatConversationFragment extends Fragment {
      *  它是一次界面上的临时选择，ViewModel 只关心"发的时候用哪个"。 */
     private String manualProviderId;
     private String manualModelId;
+    /** 待发送的附件（这一版最多一个：一次选一张图）。 */
+    private com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment pendingAttachment;
+    /** 附件大小上限。超了直接说不收——不静默截断，也不让一张原图把对话拖垮。 */
+    private static final long MAX_ATTACHMENT_BYTES = 4L * 1024 * 1024;
     /** 正在流式回来的那一行。**只重渲染它**，不重建整条对话（见 renderMessages）。 */
     private ItemMessageAssistantBinding streamingRow;
     /** 流式重渲染的节流（毫秒）：Markdown + 公式排版不便宜，见 renderSendState。 */
@@ -112,8 +116,8 @@ public final class ChatConversationFragment extends Fragment {
 
         binding.conversationBack.setOnClickListener(v -> goBack());
         binding.conversationMore.setOnClickListener(v -> showMore());
-        binding.conversationAttach.setOnClickListener(v ->
-                pending(getString(R.string.chat_attach)));
+        binding.conversationAttach.setOnClickListener(v -> pickAttachment());
+        binding.conversationAttachmentChip.setOnClickListener(v -> clearAttachment());
         binding.conversationModelChip.setOnClickListener(v -> openModelSheet());
         binding.conversationSend.setOnClickListener(v -> onSendClicked());
         // 监听只注册一次（转屏后仍然在）：注册在点击里的话，每次点开弹层都会再注册一遍。
@@ -144,6 +148,7 @@ public final class ChatConversationFragment extends Fragment {
         }
         model.chat().observe(getViewLifecycleOwner(), this::renderHeader);
         model.projectName().observe(getViewLifecycleOwner(), this::renderProject);
+        renderAttachmentChip();
         model.messages().observe(getViewLifecycleOwner(), messages -> {
             // 库里的消息变了（新消息落库）：这时候必须整块重建——
             // 正在流式回来的那一行由 renderSendState 自己维护，见它的注释。
@@ -218,7 +223,9 @@ public final class ChatConversationFragment extends Fragment {
                 addRouteLine(inflater, message.providerId, message.modelId, message.route, null);
                 addAssistantText(inflater, message.text);
             } else {
-                addUserBubble(inflater, message.text);
+                addUserBubble(inflater, message.text,
+                        com.mobilegroup20.modelpilot.chat.AttachmentCodec
+                                .fromJson(message.attachmentsJson));
             }
         }
         if (sending) {
@@ -250,10 +257,27 @@ public final class ChatConversationFragment extends Fragment {
                 || CanonicalMessage.Role.TOOL.name().equals(message.role);
     }
 
-    private void addUserBubble(LayoutInflater inflater, String text) {
+    private void addUserBubble(LayoutInflater inflater, String text,
+                               java.util.List<com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment> attachments) {
         ItemMessageUserBinding row = ItemMessageUserBinding.inflate(inflater,
                 binding.conversationMessages, false);
-        row.messageText.setText(text);
+        StringBuilder body = new StringBuilder();
+        for (com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment attachment : attachments) {
+            // 这一版附件在气泡里只显示一行说明（名字 + 大小）。**缩略图还没做**——
+            // 那要在气泡里放 ImageView、还要处理 data URL 的解码与缓存，是下一步。
+            if (body.length() > 0) {
+                body.append('\n');
+            }
+            body.append(getString(R.string.chat_attach_line, attachment.fileName,
+                    attachment.bytes / 1024));
+        }
+        if (text != null && !text.isEmpty()) {
+            if (body.length() > 0) {
+                body.append('\n');
+            }
+            body.append(text);
+        }
+        row.messageText.setText(body.toString());
         binding.conversationMessages.addView(row.getRoot());
     }
 
@@ -305,6 +329,116 @@ public final class ChatConversationFragment extends Fragment {
 
     // ---- 发送 ----------------------------------------------------------
 
+    // ---- 附件 ----------------------------------------------------------
+
+    /**
+     * 选一个文件（系统文件选择器；`OpenDocument` 走 SAF，**不用申请存储权限**——
+     * 用户选哪个我们才拿得到哪个，这也是大纲 §5 说的 "native file pickers"）。
+     *
+     * <p>**这一版只收图片**：图片在两个渲染器里都是现成的形态（OpenAI 用 data URL、
+     * Anthropic 用 base64），不加新依赖就能真的发出去。PDF 要在本机抽文字
+     * （PDFBox-Android + 页数/字数上限），是下一步；现在选了非图片会明确说"只收图片"，
+     * 而不是假装收下再发一个空附件。
+     */
+    private void pickAttachment() {
+        attachmentPicker.launch(new String[] {"image/*"});
+    }
+
+    private final androidx.activity.result.ActivityResultLauncher<String[]> attachmentPicker =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts
+                    // **OpenDocument 的入参是 String[]、回调却是单个 Uri**
+                    // （多选要用 OpenMultipleDocuments）——写错了编译期就会报。
+                    .OpenDocument(), uri -> {
+                if (uri == null) {
+                    return;                     // 用户取消了
+                }
+                attachImage(uri);
+            });
+
+    /** 把选中的图片读成 data URL（渲染器要的就是这个形态，见 Attachment 的注释）。 */
+    private void attachImage(android.net.Uri uri) {
+        try {
+            android.content.ContentResolver resolver = requireContext().getContentResolver();
+            String mime = resolver.getType(uri);
+            if (mime == null || !mime.startsWith("image/")) {
+                toast(getString(R.string.chat_attach_only_images));
+                return;
+            }
+            byte[] bytes;
+            try (java.io.InputStream in = resolver.openInputStream(uri)) {
+                bytes = in == null ? null : readAll(in);
+            }
+            if (bytes == null || bytes.length == 0) {
+                toast(getString(R.string.chat_attach_unreadable));
+                return;
+            }
+            if (bytes.length > MAX_ATTACHMENT_BYTES) {
+                // **有上限**：data URL 会把字节变大约三分之一，整段还要进库、进请求。
+                // 超了直接说不收——不静默截断，也不让一张原图把这条对话拖垮。
+                toast(getString(R.string.chat_attach_too_large,
+                        MAX_ATTACHMENT_BYTES / (1024 * 1024)));
+                return;
+            }
+            String dataUrl = "data:" + mime + ";base64,"
+                    + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+            pendingAttachment = new com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment(
+                    com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.IMAGE,
+                    fileName(uri, mime), dataUrl, bytes.length, null);
+            renderAttachmentChip();
+        } catch (Exception failed) {
+            android.util.Log.e("ModelPilot", "读取附件失败", failed);
+            toast(getString(R.string.chat_attach_unreadable));
+        }
+    }
+
+    private static byte[] readAll(java.io.InputStream in) throws java.io.IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = in.read(buffer)) > 0) {
+            out.write(buffer, 0, read);
+        }
+        return out.toByteArray();
+    }
+
+    /** 显示名：优先问系统要（"IMG_2026.png"），拿不到就用 mime 编一个。 */
+    private String fileName(android.net.Uri uri, String mime) {
+        try (android.database.Cursor cursor = requireContext().getContentResolver().query(
+                uri, new String[] {android.provider.OpenableColumns.DISPLAY_NAME},
+                null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                String name = cursor.getString(0);
+                if (name != null && !name.isEmpty()) {
+                    return name;
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // 拿不到名字不影响发送，用兜底的名字即可。
+        }
+        return "image." + (mime.contains("png") ? "png" : mime.contains("webp") ? "webp" : "jpg");
+    }
+
+    private void renderAttachmentChip() {
+        if (binding == null) {
+            return;
+        }
+        boolean has = pendingAttachment != null;
+        binding.conversationAttachmentChip.setVisibility(has ? View.VISIBLE : View.GONE);
+        if (has) {
+            binding.conversationAttachmentChip.setText(getString(R.string.chat_attach_chip,
+                    pendingAttachment.fileName, pendingAttachment.bytes / 1024));
+        }
+    }
+
+    private void clearAttachment() {
+        pendingAttachment = null;
+        renderAttachmentChip();
+    }
+
+    private void toast(String message) {
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+    }
+
     private void onSendClicked() {
         ChatConversationViewModel.SendState state = model.sendState().getValue();
         if (state != null && state.sending) {
@@ -312,14 +446,19 @@ public final class ChatConversationFragment extends Fragment {
             return;
         }
         String text = binding.conversationInput.getText().toString().trim();
-        if (text.isEmpty()) {
-            return;                        // 空消息不发（各家都会 400）
+        if (text.isEmpty() && pendingAttachment == null) {
+            return;                        // 空消息不发（各家都会 400）；但"只有附件"是合法的
         }
         binding.conversationInput.setText("");
         // **发出去了就清草稿**：留着的话下次进来框里又出现刚发过的那句话。
         com.mobilegroup20.modelpilot.data.Drafts.clear(requireContext(),
                 requireArguments().getString(ARG_CHAT_ID));
-        model.send(text, manualProviderId, manualModelId);
+        model.send(text, manualProviderId, manualModelId,
+                pendingAttachment == null
+                        ? java.util.Collections
+                                .<com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment>emptyList()
+                        : java.util.Collections.singletonList(pendingAttachment));
+        clearAttachment();
     }
 
     private void renderSendState(ChatConversationViewModel.SendState state) {
