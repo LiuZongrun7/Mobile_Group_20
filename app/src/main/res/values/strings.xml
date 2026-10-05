@@ -289,6 +289,51 @@
     <!-- 对话页还没说过话时的空态。 -->
     <string name="chat_conversation_empty">Ask anything — this conversation stays on this phone.</string>
 
+    <!-- ============ 导出数据（Me → Data & memory，设计稿第 27/28 张） ============
+         这一屏只有一次机会说清楚"你将拿到什么"，所以三件事都写在按钮上面：
+         导出了哪些范围、CSV 为什么是 zip、以及**不含 key**（我们不导出 key，
+         但用户有理由怀疑，得主动说）。 -->
+    <string name="export_title">Export data</string>
+    <string name="export_intro">Everything below is read from this phone and written to a file you choose. Nothing is uploaded.</string>
+    <string name="export_section_include">INCLUDE</string>
+    <string name="export_scope_conversations">Conversations and memory</string>
+    <string name="export_scope_conversations_note">Messages, projects, project instructions and compaction summaries.</string>
+    <string name="export_scope_usage">Usage records</string>
+    <string name="export_scope_usage_note">Every model call made from this phone: time, model, tokens, cost and the routing reason.</string>
+    <string name="export_section_range">USAGE RANGE</string>
+    <string name="export_range_all">All time</string>
+    <string name="export_range_7">Last 7 days</string>
+    <string name="export_range_30">Last 30 days</string>
+    <string name="export_range_month">This month</string>
+    <string name="export_section_format">FORMAT</string>
+    <string name="export_format_json">JSON — one file</string>
+    <string name="export_format_csv">CSV — a zip of sheets</string>
+    <!-- CSV 会拿到 zip 这件事**必须提前说**：一张表一个文件，对话和用量是两张表。
+         用户选了 CSV 却拿到一个 zip、又没人解释，是这个功能最容易招骂的一处。 -->
+    <string name="export_format_json_note">One .json file holding everything you selected, in a shape you can read.</string>
+    <string name="export_format_csv_note">A .zip holding one .csv per table (projects, conversations, memory, usage) plus a meta.json. Messages are quoted per RFC 4180 and the files start with a UTF-8 BOM so Excel reads Chinese correctly.</string>
+    <string name="export_privacy">No API keys, tokens or request URLs are included. Attachments export as kind, file name, size and extracted text — never a local file path.</string>
+    <!-- 保存成功后报数。**分开报**：某个范围一条都没有时（比如从没记过用量），
+         用户要能看出来是"那边是空的"，而不是以为整件事失败了。 -->
+    <string name="export_saved">Saved %1$s</string>
+    <string name="export_counts_conversations">%1$d conversations</string>
+    <string name="export_counts_messages">%1$d messages</string>
+    <string name="export_counts_memories">%1$d summaries</string>
+    <string name="export_counts_usage">%1$d calls</string>
+    <string name="export_counts_empty">Nothing to export yet</string>
+    <string name="export_working">Building the file…</string>
+    <string name="export_generate">Export</string>
+    <!-- **不借用 @android:string/cancel**：设备是中文时它会显示"取消"，
+         而这一页其余部分全是英文（真机上就是这么混出来的）。 -->
+    <string name="export_cancel">Cancel</string>
+    <string name="export_need_scope">Pick at least one thing to export.</string>
+    <string name="export_failed">Export failed: %1$s</string>
+    <string name="export_cancelled">Not saved.</string>
+    <!-- 「我的」页那颗入口按钮。设计稿第 27 张把它叫「数据与记忆」，
+         而记忆的查看/修改在每条对话的菜单里（这里只说一句，不做第二个入口）。 -->
+    <string name="export_entry">Data &amp; memory</string>
+    <string name="export_memory_hint">Memory is reviewed and edited per conversation: open a chat → ⋮ → Conversation memory.</string>
+
     <!-- ============ 设置：API keys（Me → API keys） ============ -->
     <!-- 这一页最需要说清楚的一件事：key 去哪了。写成一句"我们不会上传"没人信，
          所以直接说清数据的走向（存在这台手机的 Keystore 里、请求从这台手机直发）。 -->

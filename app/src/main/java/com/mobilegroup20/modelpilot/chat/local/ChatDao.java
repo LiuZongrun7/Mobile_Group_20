@@ -57,6 +57,25 @@ public interface ChatDao {
     @Query("SELECT * FROM chat WHERE id = :id")
     ChatEntity chat(String id);
 
+    /**
+     * 全部项目 / 全部对话的**同步**版本，给导出用（{@code data/export}）。
+     *
+     * <p>和上面那两个 {@code LiveData} 版本有两处不同，都是故意的：
+     * <ul>
+     *   <li><b>同步返回</b>：导出是「读一遍、写一个文件」的一次性动作，它要的是一份
+     *       前后一致的快照，不是一个会自己变的列表。用 LiveData 反而得挂个观察者
+     *       再等它回调，导出逻辑就变成了异步的（见 {@code ExportSource} 的注释）；</li>
+     *   <li><b>按创建时间升序</b>：界面按「最近活跃」排是对的（人找的是刚聊过的），
+     *       而导出是一份存档，存档按时间顺序排才好读、也才稳定——同样的数据导两次
+     *       得到的行序一致，diff 才有意义。</li>
+     * </ul>
+     */
+    @Query("SELECT * FROM chat ORDER BY created_at_epoch_millis ASC")
+    List<ChatEntity> allChatsForExport();
+
+    @Query("SELECT * FROM project ORDER BY created_at_epoch_millis ASC")
+    List<ProjectEntity> allProjectsForExport();
+
     /** 对话页顶部那两行（项目名 + 标题）要跟着改名走，所以这里是 LiveData。 */
     @Query("SELECT * FROM chat WHERE id = :id")
     LiveData<ChatEntity> chatLive(String id);

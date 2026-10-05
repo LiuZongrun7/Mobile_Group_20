@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「导出数据」（`Me → Data & memory`，设计稿第 27/28 张）。
+
+  **2026-10-06 从对话框改成底部弹层**，真机上量出来的原因：这一屏的内容
+  （两个范围 + 两个说明 + 四个日期选项 + 两个格式 + 一句"不含 key"）比 AlertDialog
+  能给的高度高，结果**格式选择和解说被挤到屏幕外**——而格式是要用户做的决定之一，
+  "不含 key"更是这一屏最该被读到的一句。弹层能占满屏幕、标题与按钮固定、
+  中间滚动，正好解决这件事（和「记忆」「选模型」两个弹层同一套做法）。
+
+  范围、格式、日期三样都摆在明面上：这个弹层做完就只有一次机会说清楚「你将拿到什么」，
+  而它最容易出的误会是两件：以为导出里有 key（我们从来不导 key，得主动说），
+  以及选了 CSV 却拿到 zip（一张表一个 csv，两个范围就是两个文件，只能打包）。
+  用量日期那一组在没勾"用量记录"时禁用（见 ExportDialog）：让用不上的选项可点，
+  用户就会以为它生效了。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#FFFFFF"
+    android:orientation="vertical"
+    android:paddingTop="8dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="#E1E5EC" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:text="@string/export_title"
+        android:textColor="#0B1B33"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="20dp"
+        android:text="@string/export_intro"
+        android:textColor="#7A8699"
+        android:textSize="12sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="8dp">
+
+            <!-- ===== 范围 ===== -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/export_section_include" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/export_scope_conversations"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="16dp"
+                android:text="@string/export_scope_conversations" />
+
+            <TextView
+                style="@style/ExportSubtitle"
+                android:text="@string/export_scope_conversations_note" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/export_scope_usage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:paddingStart="8dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="16dp"
+                android:text="@string/export_scope_usage" />
+
+            <TextView
+                style="@style/ExportSubtitle"
+                android:text="@string/export_scope_usage_note" />
+
+            <!-- ===== 用量范围 =====
+                 只作用于用量：一条对话砍掉中间几天就是一份读不通的记录，
+                 所以对话没有"按日期导出"这回事（见 ExportRequest 的注释）。 -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/export_section_range" />
+
+            <RadioGroup
+                android:id="@+id/export_range_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="16dp">
+
+                <RadioButton
+                    android:id="@+id/export_range_all"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/export_range_all" />
+
+                <RadioButton
+                    android:id="@+id/export_range_7"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/export_range_7" />
+
+                <RadioButton
+                    android:id="@+id/export_range_30"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/export_range_30" />
+
+                <RadioButton
+                    android:id="@+id/export_range_month"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/export_range_month" />
+            </RadioGroup>
+
+            <!-- ===== 格式 ===== -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/export_section_format" />
+
+            <RadioGroup
+                android:id="@+id/export_format_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="16dp">
+
+                <RadioButton
+                    android:id="@+id/export_format_json"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/export_format_json" />
+
+                <RadioButton
+                    android:id="@+id/export_format_csv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/export_format_csv" />
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/export_format_note"
+                style="@style/ExportSubtitle"
+                tools:text="@string/export_format_json_note" />
+
+            <!-- ===== 不含什么 =====
+                 这段是这一屏最该被读到的一句，所以它不藏在帮助页里，
+                 也不放在需要滚动才能看到的地方不行——它是滚动的最后一段。 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingTop="14dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp"
+                android:text="@string/export_privacy"
+                android:textColor="#7A8699"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 状态行固定在这一段上面：生成中、条数、失败原因都写在这里。
+         **不放进滚动区**：用户按下按钮那一刻它就在视线里，不该还要往下找。 -->
+    <TextView
+        android:id="@+id/export_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="2dp"
+        android:textColor="#1E7BF6"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:text="3 conversations · 340 messages · 88 calls"
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/export_cancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/export_cancel" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/export_go"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/export_generate" />
+    </LinearLayout>
+</LinearLayout>

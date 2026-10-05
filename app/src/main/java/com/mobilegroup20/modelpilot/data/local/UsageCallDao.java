@@ -60,4 +60,23 @@ public interface UsageCallDao {
     /** 清空。只有测试和「重置本地数据」会用，正常流程没有删除路径。 */
     @Query("DELETE FROM usage_call")
     void deleteAll();
+
+    /**
+     * 导本机账本（`data/export`）。
+     *
+     * <p><b>这里不过滤 {@code source}，也不过滤天以外的东西。</b>导出要的是「这台手机上
+     * 记下来的全部」，导入进来的旧记录（{@code IMPORTED}）和 App 自己发出去的
+     * （{@code APP}）都在里面——用户对账时看的是他自己花了多少，而不是我们内部按来源
+     * 分了几个桶（那是 Insights 的事，它只读 {@code APP}）。来源如实写进每一行，
+     * 拿到文件的人自己按 {@code source} 列筛。
+     *
+     * <p>起止日可空 = 那一头不限。写成 `(:from IS NULL OR ...)` 而不是给两个方法：
+     * 「只给上界」「只给下界」「两头都给」「都不给」是四种调用，四个方法名比一个条件难维护。
+     * 这个条件用不上索引的极端情况（两头都不限时退化成全表扫）恰好也是「全都要」，
+     * 那时候本来就该扫全表。
+     */
+    @Query("SELECT * FROM usage_call WHERE uid = :uid"
+            + " AND (:from IS NULL OR day >= :from) AND (:to IS NULL OR day <= :to)"
+            + " ORDER BY startedAtEpochMillis ASC")
+    List<UsageCallEntity> callsForExport(String uid, String from, String to);
 }

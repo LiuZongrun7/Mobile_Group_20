@@ -667,6 +667,18 @@
                 android:text="@string/keys_title"
                 android:visibility="gone" />
 
+            <!-- 「数据与记忆」→ 导出数据（设计稿第 27/28 张）。
+                 **完全本机**：导的是这台手机上的对话与账本，和论坛服务端在不在无关，
+                 所以它和 API keys 一样只在「我的」页出现，不受登录状态影响。 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/export_button"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/export_entry"
+                android:visibility="gone" />
+
             <!-- **只在 debug 包里出现**的压缩阈值旋钮（`chat/EngineTuning`）。
                  默认阈值约 88K tokens，正常对话触发不到压缩，于是那条路径在真机上
                  从来没跑过一次；答辩前想演示它就得能临时调小。release 包里这个按钮

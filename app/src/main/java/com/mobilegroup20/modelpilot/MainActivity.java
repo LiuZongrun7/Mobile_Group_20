@@ -258,6 +258,9 @@ public class MainActivity extends AppCompatActivity
         // 是给我们自己在真机上把压缩跑起来用的（见 chat/EngineTuning 的类注释）。
         boolean tuning = me && BuildConfig.DEBUG;
         binding.debugTuningButton.setVisibility(tuning ? View.VISIBLE : View.GONE);
+        // 导出数据（设计稿第 27/28 张「数据与记忆」）。和 API keys 同理：**完全本机**，
+        // 导的是这台手机上的对话与账本，所以不看登录状态、只要在「我的」页就给入口。
+        binding.exportButton.setVisibility(me ? View.VISIBLE : View.GONE);
         if (tuning) {
             binding.debugTuningButton.setText(
                     com.mobilegroup20.modelpilot.chat.EngineTuning.describe(this));
@@ -325,6 +328,10 @@ public class MainActivity extends AppCompatActivity
             binding.emptyLabel.setOnClickListener(account ? v -> openAccount() : null);
             binding.apiKeysButton.setOnClickListener(me
                     ? v -> com.mobilegroup20.modelpilot.ui.settings.ApiKeysDialog
+                            .show(getSupportFragmentManager())
+                    : null);
+            binding.exportButton.setOnClickListener(me
+                    ? v -> com.mobilegroup20.modelpilot.ui.settings.ExportSheet
                             .show(getSupportFragmentManager())
                     : null);
             binding.debugTuningButton.setOnClickListener(tuning ? v -> pickCompressionKnobs() : null);
