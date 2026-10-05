@@ -19,6 +19,8 @@ glide = "4.16.0"
 # 回答渲染：Markdown + LaTeX（公式）。ext-latex 底下用的是 jlatexmath-android。
 markwon = "4.6.2"
 jlatexmath = "0.2.0"
+# PDF 的本机文字抽取（大纲 §7.2）。Apache-2.0，是 Apache PDFBox 的 Android 移植。
+pdfbox = "2.0.27.0"
 recyclerview = "1.4.0"
 swiperefresh = "1.2.0"
 archTesting = "2.2.0"
@@ -58,6 +60,7 @@ markwon-latex = { module = "io.noties.markwon:ext-latex", version.ref = "markwon
 # 公式渲染后端（ext-latex 依赖它画位图）。希腊字母在数学里太常见，单独加一份字体。
 jlatexmath = { module = "ru.noties:jlatexmath-android", version.ref = "jlatexmath" }
 jlatexmath-greek = { module = "ru.noties:jlatexmath-android-font-greek", version.ref = "jlatexmath" }
+pdfbox = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfbox" }
 androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "recyclerview" }
 androidx-swiperefresh = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefresh" }
 androidx-arch-testing = { module = "androidx.arch.core:core-testing", version.ref = "archTesting" }

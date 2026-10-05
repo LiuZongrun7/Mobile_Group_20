@@ -91,6 +91,11 @@ dependencies {
     implementation(libs.jlatexmath)
     implementation(libs.jlatexmath.greek)
 
+    // PDF 的本机文字抽取（大纲 §4-4/§7.2）：附件里的 PDF 在**本机**抽出正文再发出去，
+    // 文件本身不上传（"除论坛外全在手机上"那条）。扫描件没有文字层，抽出来是空的——
+    // 那种情况会明确告诉用户，而不是发一段空内容给模型。
+    implementation(libs.pdfbox)
+
     // Room：数据侧（张莉那块）的本地库。注解处理器必须挂在 annotationProcessor 上，
     // 它在编译期生成建表语句和查询实现，所以列名写错是编译报错而不是运行时崩。
     // 生成物不进 APK，只影响编译时间。

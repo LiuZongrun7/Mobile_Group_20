@@ -263,13 +263,21 @@ public final class ChatConversationFragment extends Fragment {
                 binding.conversationMessages, false);
         StringBuilder body = new StringBuilder();
         for (com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment attachment : attachments) {
-            // 这一版附件在气泡里只显示一行说明（名字 + 大小）。**缩略图还没做**——
-            // 那要在气泡里放 ImageView、还要处理 data URL 的解码与缓存，是下一步。
+            if (attachment.kind == com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.IMAGE) {
+                // 图片：显示缩略图，**再补一行名字/大小**（用户要能确认自己发的是哪张）。
+                android.graphics.Bitmap thumbnail = thumbnail(attachment.uri);
+                if (thumbnail != null) {
+                    row.messageImage.setImageBitmap(thumbnail);
+                    row.messageImage.setVisibility(View.VISIBLE);
+                }
+            }
             if (body.length() > 0) {
                 body.append('\n');
             }
             body.append(getString(R.string.chat_attach_line, attachment.fileName,
-                    attachment.bytes / 1024));
+                    attachment.kind == com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.PDF
+                            ? (attachment.extractedText == null ? 0 : attachment.extractedText.length())
+                            : attachment.bytes / 1024));
         }
         if (text != null && !text.isEmpty()) {
             if (body.length() > 0) {
@@ -335,13 +343,12 @@ public final class ChatConversationFragment extends Fragment {
      * 选一个文件（系统文件选择器；`OpenDocument` 走 SAF，**不用申请存储权限**——
      * 用户选哪个我们才拿得到哪个，这也是大纲 §5 说的 "native file pickers"）。
      *
-     * <p>**这一版只收图片**：图片在两个渲染器里都是现成的形态（OpenAI 用 data URL、
-     * Anthropic 用 base64），不加新依赖就能真的发出去。PDF 要在本机抽文字
-     * （PDFBox-Android + 页数/字数上限），是下一步；现在选了非图片会明确说"只收图片"，
-     * 而不是假装收下再发一个空附件。
+     * <p>收两类：**图片**（原样发 data URL）与 **PDF**（在本机抽出正文再发，
+     * 文件本身不出手机——这就是大纲 §4-4/§7.2 说的 "local PDFBox text extraction"）。
+     * 别的类型现在明确说不收，而不是假装收下再发一个空附件。
      */
     private void pickAttachment() {
-        attachmentPicker.launch(new String[] {"image/*"});
+        attachmentPicker.launch(new String[] {"image/*", "application/pdf"});
     }
 
     private final androidx.activity.result.ActivityResultLauncher<String[]> attachmentPicker =
@@ -352,18 +359,30 @@ public final class ChatConversationFragment extends Fragment {
                 if (uri == null) {
                     return;                     // 用户取消了
                 }
-                attachImage(uri);
+                attach(uri);
             });
 
+    /** 看类型分两路：图片读成 data URL，PDF 在本机抽正文。 */
+    private void attach(android.net.Uri uri) {
+        android.content.ContentResolver resolver = requireContext().getContentResolver();
+        String mime = resolver.getType(uri);
+        if (mime == null) {
+            toast(getString(R.string.chat_attach_unreadable));
+            return;
+        }
+        if (mime.startsWith("image/")) {
+            attachImage(uri, mime);
+        } else if (mime.equals("application/pdf")) {
+            attachPdf(uri);
+        } else {
+            toast(getString(R.string.chat_attach_only_images));
+        }
+    }
+
     /** 把选中的图片读成 data URL（渲染器要的就是这个形态，见 Attachment 的注释）。 */
-    private void attachImage(android.net.Uri uri) {
+    private void attachImage(android.net.Uri uri, String mime) {
         try {
             android.content.ContentResolver resolver = requireContext().getContentResolver();
-            String mime = resolver.getType(uri);
-            if (mime == null || !mime.startsWith("image/")) {
-                toast(getString(R.string.chat_attach_only_images));
-                return;
-            }
             byte[] bytes;
             try (java.io.InputStream in = resolver.openInputStream(uri)) {
                 bytes = in == null ? null : readAll(in);
@@ -388,6 +407,54 @@ public final class ChatConversationFragment extends Fragment {
         } catch (Exception failed) {
             android.util.Log.e("ModelPilot", "读取附件失败", failed);
             toast(getString(R.string.chat_attach_unreadable));
+        }
+    }
+
+    /**
+     * PDF：**在本机抽正文**（文件不上传），抽到的文字随附件一起进上下文。
+     *
+     * <p>抽取要在后台线程做（要读流、解压，几十页就是几百毫秒到几秒），
+     * 所以这里起一个线程，回来再更新界面。
+     */
+    private void attachPdf(android.net.Uri uri) {
+        final String name = fileName(uri, "application/pdf");
+        toast(getString(R.string.chat_attach_extracting));
+        new Thread(() -> {
+            com.mobilegroup20.modelpilot.chat.PdfText.Result result;
+            long bytes = 0;
+            try (java.io.InputStream in = requireContext().getContentResolver()
+                    .openInputStream(uri)) {
+                result = com.mobilegroup20.modelpilot.chat.PdfText.extract(requireContext(), in);
+            } catch (Exception failed) {
+                android.util.Log.e("ModelPilot", "打开 PDF 失败", failed);
+                result = null;
+            }
+            final com.mobilegroup20.modelpilot.chat.PdfText.Result outcome = result;
+            if (outcome == null || !outcome.ok()) {
+                android.util.Log.w("ModelPilot", "PDF 没抽出正文: "
+                        + (outcome == null ? "open-failed" : outcome.problem));
+                post(() -> toast(getString(outcome != null && "scanned".equals(outcome.problem)
+                        ? R.string.chat_attach_pdf_scanned : R.string.chat_attach_pdf_failed)));
+                return;
+            }
+            final com.mobilegroup20.modelpilot.chat.PdfText.Result extracted = outcome;
+            post(() -> {
+                pendingAttachment = new com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment(
+                        com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.PDF,
+                        name, uri.toString(), extracted.text.length(), extracted.text);
+                renderAttachmentChip();
+                if (extracted.truncated) {
+                    // 截断了就要说：不说的话用户会以为整份都进去了。
+                    toast(getString(R.string.chat_attach_pdf_truncated,
+                            extracted.pages, com.mobilegroup20.modelpilot.chat.PdfText.MAX_PAGES));
+                }
+            });
+        }, "pdf-extract").start();
+    }
+
+    private void post(Runnable action) {
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(action);
         }
     }
 
@@ -425,14 +492,77 @@ public final class ChatConversationFragment extends Fragment {
         boolean has = pendingAttachment != null;
         binding.conversationAttachmentChip.setVisibility(has ? View.VISIBLE : View.GONE);
         if (has) {
-            binding.conversationAttachmentChip.setText(getString(R.string.chat_attach_chip,
-                    pendingAttachment.fileName, pendingAttachment.bytes / 1024));
+            boolean pdf = pendingAttachment.kind
+                    == com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.PDF;
+            binding.conversationAttachmentChip.setText(pdf
+                    ? getString(R.string.chat_attach_chip_pdf, pendingAttachment.fileName,
+                            pendingAttachment.extractedText == null
+                                    ? 0 : pendingAttachment.extractedText.length())
+                    : getString(R.string.chat_attach_chip, pendingAttachment.fileName,
+                            pendingAttachment.bytes / 1024));
         }
     }
 
     private void clearAttachment() {
         pendingAttachment = null;
         renderAttachmentChip();
+    }
+
+    // ---- 缩略图 --------------------------------------------------------
+
+    /** 解码过的缩略图缓存（key = data URL 的哈希）。**整条对话每次变化都会重建气泡**，
+     *  不缓存的话每来一个字就要把所有图重新解码一遍。 */
+    private final android.util.LruCache<Integer, android.graphics.Bitmap> thumbnails =
+            new android.util.LruCache<>(8);
+
+    /** 缩略图最长边（px）。解码时按它降采样——原图直接进 ImageView 会吃掉几十 MB。 */
+    private static final int THUMBNAIL_MAX_PX = 720;
+
+    /**
+     * 从 data URL 解出一张缩略图。
+     *
+     * <p>**在解码阶段就降采样**（`inSampleSize`），而不是解出来再缩放：
+     * 一张 4000×3000 的图完整解码是 48MB，几张就能把 App 撑爆，
+     * 而我们要显示的只是一个 220dp 高的缩略图。
+     */
+    private android.graphics.Bitmap thumbnail(String dataUrl) {
+        if (dataUrl == null) {
+            return null;
+        }
+        int key = dataUrl.hashCode();
+        android.graphics.Bitmap cached = thumbnails.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        int marker = dataUrl.indexOf(";base64,");
+        if (marker < 0) {
+            return null;                     // 不是 data URL（旧记录或被手改过）：不显示图
+        }
+        try {
+            byte[] bytes = android.util.Base64.decode(dataUrl.substring(marker + 8),
+                    android.util.Base64.DEFAULT);
+            android.graphics.BitmapFactory.Options bounds =
+                    new android.graphics.BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+            int sample = 1;
+            int longest = Math.max(bounds.outWidth, bounds.outHeight);
+            while (longest / sample > THUMBNAIL_MAX_PX) {
+                sample *= 2;
+            }
+            android.graphics.BitmapFactory.Options options =
+                    new android.graphics.BitmapFactory.Options();
+            options.inSampleSize = sample;
+            android.graphics.Bitmap bitmap =
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+            if (bitmap != null) {
+                thumbnails.put(key, bitmap);
+            }
+            return bitmap;
+        } catch (RuntimeException unreadable) {
+            android.util.Log.w("ModelPilot", "附件缩略图解码失败", unreadable);
+            return null;                     // 解不出来就不显示图，文字那行还在
+        }
     }
 
     private void toast(String message) {
