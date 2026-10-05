@@ -8,6 +8,7 @@ import io.noties.markwon.Markwon;
 import io.noties.markwon.ext.latex.JLatexMathPlugin;
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
 import io.noties.markwon.ext.tables.TablePlugin;
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin;
 
 /**
  * 回答的渲染：**Markdown + LaTeX 公式**。
@@ -73,11 +74,19 @@ public final class Markdown {
      * 比要求模型"记得空行"可靠。
      */
     static String normalize(String text) {
-        if (text.indexOf("$$") < 0) {
-            return text;
+        if (text.indexOf('$') < 0) {
+            return text;                 // 一个 $ 都没有：不用动（含空串）
         }
+        // **单个 $ 包起来的行内公式 → 补成 $$**。
+        // Markwon 的 latex 内联触发符是 `$$`（不是单个 `$`），而模型写行内公式
+        // 十次有九次用单个 `$`，于是屏幕上就是 `$a^2+b^2$` 的原文。
+        // 转换用**数学界的通行规则**：开头的 `$` 后面不能是空白、结尾的 `$` 前面不能是空白
+        // ——这样"价格 $5 到 $10"不会被误当成公式（结尾那个 $ 前面是空格），
+        // 而 `$x = 5$` 这种会正常转换。
+        String inlined = text.replaceAll(
+                "\\$([^\\s$][^$\\n]*?[^\\s$])\\$", "\\$\\$$1\\$\\$");
         // 行首的 $$ 前面补空行；行尾的 $$ 后面补空行。用 (?m) 多行模式逐行看。
-        String fixed = text.replaceAll("(?m)^[ \\t]*(\\$\\$)", "\n$1");
+        String fixed = inlined.replaceAll("(?m)^[ \\t]*(\\$\\$)", "\n$1");
         fixed = fixed.replaceAll("(?m)(\\$\\$)[ \\t]*$", "$1\n");
         // 上面可能补出三四个连续换行，收成最多两个（段落之间一个空行就够）。
         return fixed.replaceAll("\\n{3,}", "\n\n");
@@ -96,7 +105,7 @@ public final class Markdown {
         JLatexMathPlugin latex = JLatexMathPlugin.create(mathSizePx, builder -> builder
                 .blocksEnabled(true)
                 .blocksLegacy(true)
-                .inlinesEnabled(false)
+                .inlinesEnabled(true)
                 // **Markwon 的 latex 出错是静默回退成文本的**：不挂这个 handler 的话，
                 // 屏幕上只有原文、日志里什么都没有，只能靠猜（今天就猜了两轮）。
                 .errorHandler((source, error) -> {
@@ -106,6 +115,16 @@ public final class Markdown {
         return Markwon.builder(context)
                 .usePlugin(StrikethroughPlugin.create())
                 .usePlugin(TablePlugin.create(context))
+                // **行内公式要求这个插件在场**：`JLatexMathPlugin.configure()` 里
+                // 有一句 `registry.require(MarkwonInlineParserPlugin.class)`，
+                // 没有它就抛 `IllegalStateException: Requested plugin is not added` ——
+                // 而那句是在 `Markwon.build()` 里跑的，所以表现是"App 一渲染就崩"，
+                // 而不是"公式显示不出来"。
+                // 之前把 `inlinesEnabled(false)` 时它不查这一句，所以块公式能用、行内一开就崩。
+                // 这个类本来就被 ext-latex 传递依赖进来了（io.noties.markwon:inline-parser），
+                // 一行注册的事，查了两轮才看到——**那两轮都是靠猜，真正定位靠的是
+                // `MarkdownRenderTest` 打印出来的堆栈**。
+                .usePlugin(MarkwonInlineParserPlugin.create())
                 .usePlugin(latex)
                 .build();
     }
