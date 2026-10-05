@@ -2,7 +2,7 @@
 
 ## 当前交付状态
 
-Android 已提供 News / Community 页面、最多 9 张图片的发帖草稿、帖子详情、点赞与评论、分页及失败重试。论坛后端已部署至 `https://43.140.212.47/api/`，复用服务器 `aibox_backend` 的登录账号，真实双账号图文、点赞评论、幂等、重启持久化及退出会话联调已通过。运行目录、备份、RSS 和 HTTPS 续期见 [`backend/README.md`](../backend/README.md)。没有后端配置时客户端显示准备中，不回退到假帖子。论坛独立于其他模块的 `USE_STUBS` 开关。
+Android 已提供 News / Community 页面、最多 9 张图片的发帖草稿、帖子详情、点赞与评论、分页及失败重试。论坛后端已部署至 `https://43.140.212.47/api/`，账号是我们自己的（**邮箱注册 + 邮箱验证**，2026-10-05 起；不再借那台机器上其它项目的账号），真实双账号图文、点赞评论、幂等、重启持久化及退出会话联调已通过。运行目录、备份、RSS 和 HTTPS 续期见 [`backend/README.md`](../backend/README.md)。没有后端配置时客户端显示准备中，不回退到假帖子。论坛独立于其他模块的 `USE_STUBS` 开关。
 
 新闻在服务端采集，只使用英文 AI 与科技 RSS；不做好友、关注、私信、视频、通知栏推送。媒体新闻单独建模，不能标成 `ForumPost.Source.OFFICIAL` 供 agent 当作官方证据。
 
@@ -10,7 +10,9 @@ Android 已提供 News / Community 页面、最多 9 张图片的发帖草稿、
 
 开发期可以直接点击调试 APK 中的“免账号测试”。测试会话使用独立 `/test-api/` 服务和独立帖子池，不需要账号；正式接口要求**登录 APP 账号**（2026-02 起就是 `/api/account/*` 那个账号，见下）。测试身份有效期 24 小时，新闻与正式服务共享只读新闻快照，帖子/图片/点赞/评论隔离。`POST /test-api/forum/test-session` 返回 `{token,accountId,displayName,expiresAtEpochMillis}`；`DELETE` 同一路径携带该 Bearer token 退出。服务端仅存 token 的 SHA-256，正式 `/api/` 拒绝该 token；客户端 Release 构建隐藏入口。部署细节见 backend/README.md。
 
-**2026-09-27 起账号归我们自己**：注册、登录、退出都打 `/api/account/*`（`POST register` / `POST login` / `GET me` / `POST logout`），会话 token 由我们自己签发、库里只存 sha256。**不再调用那台机器上其它项目的 `/api/login`、`/api/users/me`**——这个 APP 里没有「团队」这回事，用户就是 APP 的用户。`posts.author_uid` 存的**就是**账号的 `user_id`（还是原来那个值，所以论坛数据一个字没改）。密码用 `hashlib.scrypt`（标准库，每用户一份随机盐），**不存明文、不存裸 sha256**。退出撤销当前会话；离线时仅保证本机退出。新闻和帖子均要求登录。
+**2026-09-27 起账号归我们自己**：注册、验证、登录、退出都打 `/api/account/*`（`POST register` / `POST verify` / `POST verify/resend` / `POST login` / `GET me` / `POST logout`），会话 token 由我们自己签发、库里只存 sha256。**不再调用那台机器上其它项目的 `/api/login`、`/api/users/me`**——这个 APP 里没有「团队」这回事，用户就是 APP 的用户。`posts.author_uid` 存的**就是**账号的 `user_id`（还是原来那个值，所以论坛数据一个字没改）。密码用 `hashlib.scrypt`（标准库，每用户一份随机盐），**不存明文、不存裸 sha256**。退出撤销当前会话；离线时仅保证本机退出。新闻和帖子均要求登录。
+
+**注册要邮箱，而且验证过才能登录**（2026-10-05 加）：填 `email` + `username`（论坛里显示的昵称）+ 密码 → 服务端发一封 6 位验证码的邮件 → 客户端在同一个对话框里进第二段填码 → 验证通过后自动用刚填的密码登录。没验证的账号登录返回 `403 EMAIL_UNVERIFIED`，客户端据此跳到验证码那一屏。错误码、限流和"发信失败就回滚账号"那几条见 [`SERVER_API.md`](SERVER_API.md#账号apiaccount)；邮箱那几列是后加的，**加邮箱之前建的老账号继续用用户名登录**（判据是建号时间）。
 
 `gradle.properties` 已配置公开地址 `forumBaseUrl=https://43.140.212.47/api/`。账号模块**已经接好了**：`data/AccountSession` 实现 `SessionProvider`，通过下面的接入点把会话交给论坛。
 

@@ -1,11 +1,14 @@
 package com.mobilegroup20.modelpilot.data.remote;
 
 import retrofit2.Call;
+import retrofit2.Response;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
 import retrofit2.http.POST;
+import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+import okhttp3.ResponseBody;
 
 /**
  * APP 账号接口（后端 `/api/account/*`）。<b>负责人：刘宗润。</b>
@@ -14,18 +17,34 @@ import com.google.gson.annotations.SerializedName;
  * Java 账号服务，和本项目的后端是两套东西。这一版之后，账号由我们自己的后端发，
  * 用户是 APP 的用户，登录论坛、读用量、玩游戏的结算全都用同一个 `userId`。
  *
- * <p>四个接口对应 `backend/tokentrail_forum/account_routes.py`（服务端包名还没改，见仓库根 README）：
- * 注册、登录、查我、退出。注册<b>不发 token</b>（服务端有意为之：
- * 注册接口被脚本刷时，自动登录等于顺手帮他建一堆可用会话），
- * 所以注册成功之后要再走一次 {@link #login}。
+ * <p>接口对应 `backend/tokentrail_forum/account_routes.py`（服务端包名还没改，见仓库根 README）：
+ * 注册、验证邮箱、重发验证码、登录、查我、退出。
+ *
+ * <p><b>注册不发 token、而且注册出来的账号一开始是没验证邮箱的</b>（服务端有意为之：
+ * 注册接口被脚本刷时，自动登录等于顺手帮他建一堆可用会话）。所以注册之后本地必然
+ * 还要走两步：收验证码 → {@link #verify} → {@link #login}。
+ *
+ * <p><b>这个契约是冻结的</b>（2026-02）：请求体字段名、错误体的 `code` 值都被 Android 端和
+ * 测试依赖着。改字段名等于让所有已装的旧版本 App 静默失败，所以只能加不能改。
  */
 public interface AccountApi {
 
-    /** 注册。201 返回 {@link Account}（**不含 token**）；用户名重复返回 409。 */
-    @POST("account/register") Call<Account> register(@Body Credentials credentials);
+    /** 注册。201 返回 {@link Account}（**不含 token**、`emailVerified=false`）；用户名重复 409。 */
+    @POST("account/register") Call<Account> register(@Body Registration registration);
 
-    /** 登录。返回带 `token` 的 {@link Account}；用户名或密码错都是 401。 */
-    @POST("account/login") Call<Account> login(@Body Credentials credentials);
+    /** 验证邮箱。200 返回 {@link Verified}；码错 400 `CODE_INVALID`、过期 400 `CODE_EXPIRED`。 */
+    @POST("account/verify") Call<Verified> verify(@Body Verification verification);
+
+    /**
+     * 重发验证码。200 返回 {@link Sent}。
+     *
+     * <p>这个接口**不暴露邮箱存不存在**（防枚举）：没注册过的邮箱也返回成功，
+     * 所以界面只能说「发出去了」，不能说「发到你的账号了」。
+     */
+    @POST("account/verify/resend") Call<Sent> resend(@Body Resend resend);
+
+    /** 登录。返回带 `token` 的 {@link Account}；凭证错 401，邮箱没验证 403。 */
+    @POST("account/login") Call<Account> login(@Body Login login);
 
     /** 当前账号。App 启动时用它确认会话还有效。**服务端是 GET，不是 POST。** */
     @GET("account/me") Call<Account> me(@Header("Authorization") String authorization);
@@ -33,26 +52,130 @@ public interface AccountApi {
     /** 退出。**幂等**：token 已经失效时也返回成功。 */
     @POST("account/logout") Call<Void> logout(@Header("Authorization") String authorization);
 
-    /** 用户名 + 密码。两个接口共用同一个请求体。 */
-    final class Credentials {
+    /**
+     * 注册请求体：**三个字段全必填**，邮箱是用来收验证码的那个。
+     *
+     * <p>`username` 是论坛里显示的昵称，和邮箱各自独立占用（409 分成
+     * `USERNAME_TAKEN` 与 `EMAIL_TAKEN` 两条，界面要分开说）。
+     */
+    final class Registration {
+        @SerializedName("email") public final String email;
         @SerializedName("username") public final String username;
         @SerializedName("password") public final String password;
 
-        public Credentials(String username, String password) {
-            this.username = username; this.password = password;
+        public Registration(String email, String username, String password) {
+            this.email = email; this.username = username; this.password = password;
         }
+    }
+
+    /**
+     * 登录请求体。
+     *
+     * <p><b>字段是 `identifier`，不是 `username`</b>：它装的是「邮箱或用户名」，用
+     * `username` 当字段名会让「用邮箱登录」看起来像个错误用法。服务端为了兼容旧版
+     * 仍然接受 `{"username","password"}`，但新代码只发 `identifier`。
+     */
+    final class Login {
+        @SerializedName("identifier") public final String identifier;
+        @SerializedName("password") public final String password;
+
+        public Login(String identifier, String password) {
+            this.identifier = identifier; this.password = password;
+        }
+    }
+
+    /** 验证请求体。`code` 是邮件里那 6 位数字，服务端只认它和邮箱的配对。 */
+    final class Verification {
+        @SerializedName("email") public final String email;
+        @SerializedName("code") public final String code;
+
+        public Verification(String email, String code) {
+            this.email = email; this.code = code;
+        }
+    }
+
+    /** 重发请求体。只有邮箱——没登录也要能重发（账号还没验证过，本来就登不进去）。 */
+    final class Resend {
+        @SerializedName("email") public final String email;
+
+        public Resend(String email) { this.email = email; }
+    }
+
+    /** 验证响应。**没有 token**：验证只负责把邮箱标成已验证，登录是另一件事。 */
+    final class Verified {
+        @SerializedName("emailVerified") public boolean emailVerified;
+        @SerializedName("email") public String email;
+        @SerializedName("verifiedAtEpochMillis") public long verifiedAtEpochMillis;
+    }
+
+    /** 重发响应。`sent` 只是「请求被受理了」，不代表这个邮箱真实存在（服务端有意不区分）。 */
+    final class Sent {
+        @SerializedName("sent") public boolean sent;
     }
 
     /**
      * 账号响应。字段名和 `account_routes.py` 一一对应。
      *
-     * <p>`token` 只在登录时非空——注册不带 token，`me` 也不重复发。
+     * <p>`token` 只在登录时非空——注册不带 token，验证接口也不发，`me` 不重复发。
+     *
+     * <p>`email`/`emailVerified` 是 2026-02 加邮箱注册时补的。**Gson 反序列化不会
+     * 因为 JSON 里缺字段而报错**（对象字段保持 null / false），所以老服务端
+     * （没有这两个字段）也不会让 App 崩，只是界面显示不出邮箱而已。
      */
     final class Account {
         @SerializedName("userId") public String userId;
         @SerializedName("username") public String username;
+        @SerializedName("email") public String email;
+        @SerializedName("emailVerified") public boolean emailVerified;
         @SerializedName("createdAtEpochMillis") public long createdAtEpochMillis;
         @SerializedName("token") public String token;
         @SerializedName("expiresAtEpochMillis") public long expiresAtEpochMillis;
+    }
+
+    /**
+     * 统一错误体 `{"code","message"}`。
+     *
+     * <p>`code` 是给程序看的（界面按它选文案），`message` 是给人看的英文调试信息
+     * ——**不要直接把它显示给用户**，那是服务端日志口吻，而且没有本地化。
+     */
+    final class Error {
+        @SerializedName("code") public String code;
+        @SerializedName("message") public String message;
+    }
+
+    /**
+     * 从一次失败的响应里取出错误码。**拿不到就返回 null**，调用方按 HTTP 状态码兜底。
+     *
+     * <p>可以重复调用（底层是 peek 不是 read），见 {@link #error}。
+     */
+    static String errorCode(Response<?> response) {
+        Error error = error(response);
+        return error == null ? null : error.code;
+    }
+
+    /**
+     * 解析错误体 `{"code","message"}`。JSON 坏了、是空的、或者根本不是 JSON
+     * （网关返回的 HTML），都当没有，返回 null 让调用方按状态码兜底。
+     *
+     * <p><b>坑：`errorBody()` 是个只能读一次的流。</b>直接 `errorBody().string()` 的话，
+     * 第二次调用拿到的是空串——而空串会安静地变成「没有 code」，界面于是显示一句笼统的
+     * 「请求没成功」，真正的原因（比如 EMAIL_TAKEN）就这么没了。所以这里用
+     * `source.request()` 把内容读进缓冲区再 clone 出来读，读多少次结果都一样。
+     */
+    static Error error(Response<?> response) {
+        if (response == null) return null;
+        ResponseBody body = response.errorBody();
+        if (body == null) return null;
+        try {
+            // 错误体只有几十个字节。真遇到一个巨大的 body（网关塞了个 HTML 错误页），
+            // 与其为了它把内存读爆，不如干脆不解析——状态码兜底照样能给用户一句话。
+            if (body.contentLength() > 16 * 1024) return null;
+            okio.BufferedSource source = body.source();
+            source.request(Long.MAX_VALUE);
+            String json = source.getBuffer().clone().readUtf8();
+            return new Gson().fromJson(json, Error.class);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

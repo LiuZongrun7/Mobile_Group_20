@@ -45,15 +45,16 @@
 ## 前缀与身份
 
 ```
-账号 token ──┬──► /api/account/*            账号（注册/登录/查我/退出）
+账号 token ──┬──► /api/account/*            账号（注册+邮箱验证/登录/查我/退出）
 （App 用）    ├──► /api/forum/*              论坛与新闻（图文、点赞、评论、官方帖、热帖）
               └──► /api/agent/*              应用内智能体（ask / status）
 ```
 
 **身份只有一个：账号 token。**（2026-02 起收紧；2026-09-30 中转删除后它成了唯一一种凭据。）
 
-- 账号：用户名 + 密码 → `tt_app_` 前缀的会话 token。`user_id` 形如 `u_<32 hex>`。
+- 账号：**邮箱**（+ 用户名、密码）→ `tt_app_` 前缀的会话 token。`user_id` 形如 `u_<32 hex>`。
   密码用 `hashlib.scrypt` 存（每用户独立盐，`scrypt$n$r$p$salt$hash`）。
+  **邮箱必须验证过才能登录**（2026-10-05 起），见下面那节。
 - **智能体那本账（`agent_usage`）的归属列是 `user_id`**（记账链删掉之后，
   这是服务端唯一一张还按账号记数的表）。
 - **智能体只认账号 token**，论坛也只认账号 token（或 Debug 下的 `tt_test_` 测试身份）。
@@ -72,21 +73,56 @@
 
 | 接口 | 作用 |
 |---|---|
-| `POST /account/register` → 201 | 注册。**不返回 token**——注册完自己登一次 |
-| `POST /account/login` | 登录，签发会话 token |
-| `GET /account/me` | 当前账号（`userId` / `username` / `createdAtEpochMillis`） |
+| `POST /account/register` → 201 | 注册：`{email, username, password}`。建号 + **发一封验证码邮件**。**不返回 token** |
+| `POST /account/verify` | `{email, code}` 核销验证码，把账号标成已验证。**也不返回 token** |
+| `POST /account/verify/resend` | `{email}` 重发验证码。**对存在和不存在的邮箱返回完全一样** |
+| `POST /account/login` | `{identifier, password}`（邮箱或用户名）→ 会话 token；**没验证过邮箱是 403** |
+| `GET /account/me` | 当前账号（`userId` / `username` / `email` / `emailVerified` / `createdAtEpochMillis`） |
 | `POST /account/logout` | 退出。**幂等**，已经失效的 token 也返回成功 |
 
-三个口径：
+### 邮箱验证（2026-10-05 加）
+
+- **注册必须有邮箱**，而且**验证过才能登录**（`403 EMAIL_UNVERIFIED`）。不拦登录的话，
+  填谁的邮箱都能注册，"验证码"就只是个装饰。
+- 验证码 6 位数字，**10 分钟过期**，一条码最多试 **5** 次，同一邮箱 **60 秒**才能重发、
+  一小时最多 **5** 封。四条一起才是防线（只在库里存 `sha256`，而 6 位数字的哈希
+  在离线暴力面前挡不住什么，这一点在 `accounts.py` 里写清楚了）。
+- **发信失败就把账号删掉**（`503 MAIL_NOT_CONFIGURED` / `MAIL_FAILED`）：否则那个邮箱
+  会被一个谁也进不去的号占住，用户重试只会看到"邮箱已被注册"，而他什么都没做成。
+- 发信配置（163 / SMTP）见 [`../backend/README.md`](../backend/README.md)；
+  正式服务**不开**"验证码回显"，那个开关只在测试区生效。
+
+### 错误码是接口的一部分
+
+响应统一是 `{"code", "message"}`，客户端按 `code` 决定下一步：
+
+| `code` | 状态 | 客户端该做什么 |
+|---|---|---|
+| `EMAIL_TAKEN` / `USERNAME_TAKEN` | 409 | 换一个（两者的修法不同，所以是两个码） |
+| `EMAIL_INVALID` / `EMAIL_REQUIRED` / `USERNAME_INVALID` / `PASSWORD_INVALID` | 400 | 指出是哪一栏 |
+| `CODE_INVALID` | 400 | 重新输入（**邮箱不存在也是这个码**，不给探测接口） |
+| `CODE_EXPIRED` | 400 | 重发验证码 |
+| `CODE_ATTEMPTS` | 429 | 重发（这条码已经废了） |
+| `RATE_LIMIT` | 429 | 按 `Retry-After` 等（60 秒 / 一小时上限） |
+| `EMAIL_UNVERIFIED` | 403 | 跳到验证码那一屏 |
+| `CREDENTIALS` | 401 | 用户名/邮箱或密码错（**和"账号不存在"同一条**，不给探测接口） |
+| `MAIL_NOT_CONFIGURED` / `MAIL_FAILED` | 503 | 说清"**账号没有注册成功**"，稍后再试 |
+
+### 四个没有变的口径
 
 1. **注册不自动登录。** 自动登录看着省事，但它让"注册"和"登录"两条路都要懂怎么签发
    会话，而且注册接口一旦被脚本刷，自动登录等于顺手帮他建了一堆可用会话。
-2. **用户名错和密码错返回同一个 401**（`Incorrect username or password`）——
-   区分开等于送人一个"这个用户名存在吗"的探测接口。
-3. **`me` 和 `register` / `login` 用同一套字段名**（`userId` / `username`），
-   App 侧只认一套，不用为每个接口各写一个解析。
+2. **邮箱/用户名错和密码错返回同一个 401**——
+   区分开等于送人一个"这个账号存在吗"的探测接口。
+3. **`me` 和 `register` / `login` 用同一套字段名**（`userId` / `username` / `email` /
+   `emailVerified`），App 侧只认一套，不用为每个接口各写一个解析。
+4. **`created < 2026-10-05 00:00 +08` 的老账号**（没有邮箱）**继续用用户名登录**。
+   判据是**建号时间**，不是"email 是不是空"——后者会让任何绕过注册接口塞进来的一行免验证。
 
-账号路由**永远注册**，没有开关（`build_account_router` 无条件 `include_router`）。
+账号路由**永远注册**，没有开关（`build_account_router` 无条件 `include_router`），
+而且和论坛路由**共用 `API_PREFIX = "/api"`**：测试区是 nginx 把公开的 `/test-api/...`
+重写成服务内部的 `/api/...`，所以服务里认的永远是 `/api`（`app.py` 里那段注释写了
+"账号那半边原来用 `public_api_prefix`，结果从外面根本调不到"这个坑）。
 
 ## 论坛与新闻（`/api/forum/*`）
 

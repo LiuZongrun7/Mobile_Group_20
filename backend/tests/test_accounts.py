@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from modelpilot_forum.accounts import (Accounts, TOKEN_PREFIX, hash_password,
                                        verify_password)
 from modelpilot_forum.app import Settings, create_app
+from helpers import RecordingMailer, create_app_for_tests, latest_code
 from modelpilot_forum.store import Store
 
 PASSWORD = "correct horse battery"
@@ -22,32 +23,53 @@ PASSWORD = "correct horse battery"
 
 def make_app(path):
     """一个**不注入 verifier** 的 app——也就是生产形态：用自己的 accounts 表。"""
-    return create_app(Settings(str(path), "https://forum.example"))
+    return create_app_for_tests(Settings(str(path), "https://forum.example"))
 
 
-def register(api, username="alice", password=PASSWORD):
-    return api.post("/api/account/register", json={"username": username, "password": password})
+def email_of(username):
+    return f"{username}@example.com"
 
 
-def login(api, username="alice", password=PASSWORD):
-    return api.post("/api/account/login", json={"username": username, "password": password})
+def register(api, username="alice", password=PASSWORD, email=None):
+    return api.post("/api/account/register",
+                    json={"email": email or email_of(username),
+                          "username": username, "password": password})
+
+
+def login(api, identifier="alice", password=PASSWORD):
+    """`identifier` 是邮箱或用户名——两个都认（老用户不用改习惯）。"""
+    return api.post("/api/account/login",
+                    json={"identifier": identifier, "password": password})
+
+
+def verify(api, email, code=None):
+    return api.post("/api/account/verify",
+                    json={"email": email, "code": code or latest_code(email)})
 
 
 def auth(token):
     return {"Authorization": "Bearer " + token}
 
 
-def session(api, username="alice", password=PASSWORD):
+def verified(api, username="alice", password=PASSWORD):
+    """建号 + 验证邮箱。**注册之后不验证是登不进去的**，所以要先做这一步。"""
+    email = email_of(username)
     register(api, username, password)
-    return login(api, username, password).json()["token"]
+    assert verify(api, email).status_code == 200
+    return email
+
+
+def session(api, username="alice", password=PASSWORD):
+    email = verified(api, username, password)
+    return login(api, email, password).json()["token"]
 
 
 # ---- 密码怎么存 ---------------------------------------------------------
 
 def test_password_is_never_stored_in_plaintext(tmp_path):
     store = Store(str(tmp_path), "/api")
-    accounts = Accounts(store)
-    accounts.register("alice", PASSWORD)
+    accounts = Accounts(store, RecordingMailer())
+    accounts.register("alice", PASSWORD, "alice@example.com")
     blob = (tmp_path / "modelpilot.sqlite3").read_bytes()
     assert PASSWORD.encode() not in blob, "plaintext password must never reach the database"
     # 也不该是裸 sha256——那太快了，密码字典一撞就开
@@ -58,9 +80,9 @@ def test_the_same_password_gets_different_hashes(tmp_path):
     """每个用户一份随机盐。不加盐的话，两个用同一个密码的用户哈希一样——
     看到哈希就知道「这两个人密码相同」。"""
     store = Store(str(tmp_path), "/api")
-    accounts = Accounts(store)
-    accounts.register("alice", PASSWORD)
-    accounts.register("bob", PASSWORD)
+    accounts = Accounts(store, RecordingMailer())
+    accounts.register("alice", PASSWORD, "alice@example.com")
+    accounts.register("bob", PASSWORD, "bob@example.com")
     with store.connect() as db:
         hashes = [row[0] for row in db.execute("SELECT password_hash FROM accounts")]
     assert len(set(hashes)) == 2, hashes
@@ -133,7 +155,7 @@ def test_user_ids_are_random_not_sequential(tmp_path):
 
 def test_login_issues_a_session_token(tmp_path):
     with TestClient(make_app(tmp_path)) as api:
-        register(api)
+        verified(api)
         body = login(api).json()
         assert body["token"].startswith(TOKEN_PREFIX)
         assert body["userId"].startswith("u_")
@@ -166,7 +188,7 @@ def test_the_session_token_is_only_stored_hashed(tmp_path):
 
 def test_tokens_are_unique_per_login(tmp_path):
     with TestClient(make_app(tmp_path)) as api:
-        register(api)
+        verified(api)
         first = login(api).json()["token"]
         second = login(api).json()["token"]
     assert first != second
@@ -180,7 +202,7 @@ def test_tokens_are_unique_per_login(tmp_path):
 
 def test_logout_revokes_only_that_session(tmp_path):
     with TestClient(make_app(tmp_path)) as api:
-        register(api)
+        verified(api)
         phone = login(api).json()["token"]
         laptop = login(api).json()["token"]
         assert api.post("/api/account/logout", headers=auth(phone)).status_code == 200
@@ -210,8 +232,8 @@ def test_an_invented_token_is_refused(tmp_path):
 def test_an_expired_session_is_refused(tmp_path):
     """过期的会话要真的失效——不能只看表里有没有这一行。"""
     store = Store(str(tmp_path), "/api")
-    accounts = Accounts(store)
-    created = accounts.register("alice", PASSWORD)
+    accounts = Accounts(store, RecordingMailer())
+    created = accounts.register("alice", PASSWORD, "alice@example.com")
     issued = accounts.issue(created["userId"])
     token_hash = hashlib.sha256(issued["token"].encode()).hexdigest()
     from modelpilot_forum.store import now_ms
@@ -264,10 +286,11 @@ def test_a_relay_key_does_not_work_as_an_account_token(tmp_path):
 # ---- 给别的测试模块用的辅助（relay key 现在必须有账号）-------------------
 
 def make_account(api, username="owner", password=PASSWORD):
-    """注册并登录一个账号，返回它的 token。"""
-    api.post("/api/account/register", json={"username": username, "password": password})
-    body = api.post("/api/account/login", json={"username": username, "password": password}).json()
-    return body["token"]
+    """注册、验证邮箱、登录，返回 token。"""
+    email = email_of(username)
+    register(api, username, password, email)
+    verify(api, email)
+    return login(api, email, password).json()["token"]
 
 
 def account_headers(api, username="owner", password=PASSWORD):

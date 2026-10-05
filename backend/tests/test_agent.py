@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from modelpilot_forum.agent import DEFAULT_MODEL, SYSTEM_PROMPT
 from modelpilot_forum.app import Settings, create_app
 from conftest import verifier
-from helpers import account_login, account_token, bearer, completion, cst_millis
+from helpers import account_login, account_token, bearer, completion, cst_millis, create_app_for_tests
 # 注入给智能体的「今天」。原来从 `test_seasons` 里 import（那个文件随赛季一起删了），
 # 现在就地写死——它的作用是**让提示词里的日期和账的月份可预测**，不是被测对象。
 _TODAY = __import__("datetime").date(2026, 9, 27)
@@ -58,7 +58,7 @@ def make_agent_app(path, fake=None, key=OUR_KEY, seed=True, **overrides):
                         **overrides)
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    app = create_app(settings, verifier())
+    app = create_app_for_tests(settings, verifier())
     if fake is not None:
         # 把假上游装进去：Agent 是在 build_router 里建的，所以直接替换它的 client。
         app.state.store  # 触发一次无副作用的访问，保持可读性
@@ -107,7 +107,7 @@ def agent_app(tmp_path):
         try:
             # 「今天」注入成固定值：提示词里那句日期是**服务端给**的，
             # 不注入的话这条断言就变成「跑测试那天必须正好是 2026-09-27」。
-            app = create_app(settings, verifier(), day_provider=lambda: _TODAY)
+            app = create_app_for_tests(settings, verifier(), day_provider=lambda: _TODAY)
         finally:
             routes.Agent = original
         holder["app"] = app
@@ -214,7 +214,7 @@ def test_without_a_key_the_assistant_says_so(tmp_path):
                         agent_key="")
     client = httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=completion())))
-    with TestClient(create_app(settings, verifier())) as api:
+    with TestClient(create_app_for_tests(settings, verifier())) as api:
         TOKEN = account_token(api)
         response = ask(api)
         assert response.status_code == 503
@@ -325,7 +325,7 @@ def loop_app(tmp_path):
                                 agent_key=OUR_KEY)
             client = httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda request: httpx.Response(200, json=completion())))
-            app = create_app(settings, verifier(), day_provider=lambda: _TODAY)
+            app = create_app_for_tests(settings, verifier(), day_provider=lambda: _TODAY)
         finally:
             routes.Agent = holder
         return app, model

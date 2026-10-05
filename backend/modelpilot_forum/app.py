@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -21,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .account_routes import build_account_router
 from .accounts import Accounts
 from .auth import Identity, TableAuth
+from .mailer import DEFAULT_HOST, DEFAULT_PORT, Mailer
 from .agent_routes import build_agent_router
 from .schema import drop_obsolete_tables
 from .test_sessions import ForumAuth
@@ -48,6 +50,15 @@ class Settings:
     agent_endpoint: str = "https://api.deepseek.com"
     # 智能体每次问答都要花我们的钱，所以限流比别的接口严。
     agent_requests_per_minute: int = 10
+    # 发信（只有注册验证码用得上）。授权码只在 env 里，和 agent_key 一样：
+    # **不进数据库、不进日志、不进响应**；健康检查只报「配没配」。
+    mail_host: str = ""
+    mail_port: int = DEFAULT_PORT
+    mail_user: str = ""
+    mail_password: str = ""
+    mail_from: str = ""
+    # 只回显不真发。**只在测试区生效**，理由见下面 `mailer` 那段的注释。
+    mail_dev_echo: bool = False
 
     @classmethod
     def from_environment(cls):
@@ -63,7 +74,34 @@ class Settings:
                    os.getenv("MODELPILOT_AGENT_KEY", ""),
                    os.getenv("MODELPILOT_AGENT_MODEL", "deepseek-chat"),
                    os.getenv("MODELPILOT_AGENT_ENDPOINT", "https://api.deepseek.com"),
-                   int(os.getenv("MODELPILOT_AGENT_REQUESTS_PER_MINUTE", "10")))
+                   int(os.getenv("MODELPILOT_AGENT_REQUESTS_PER_MINUTE", "10")),
+                   os.getenv("MODELPILOT_SMTP_HOST", ""),
+                   int(os.getenv("MODELPILOT_SMTP_PORT", str(DEFAULT_PORT))),
+                   os.getenv("MODELPILOT_SMTP_USER", ""),
+                   os.getenv("MODELPILOT_SMTP_PASS", ""),
+                   os.getenv("MODELPILOT_SMTP_FROM", ""),
+                   os.getenv("MODELPILOT_MAIL_DEV_ECHO", "0") == "1")
+
+    @property
+    def mailer(self):
+        """发信口。**`dev_echo` 的判据在这里，不在业务代码里。**
+
+        `MODELPILOT_MAIL_DEV_ECHO=1` 的含义是"验证码不真发、直接在响应里回给客户端"
+        ——那等于没有邮箱验证。所以它只在**隔离的测试区服务**上生效
+        （`MODELPILOT_ENABLE_TEST_SESSIONS=1`）；正式服务上写了也按掉，并记一条警告，
+        免得有人以为自己开的是"调试模式"，实际上是把正式站的邮箱验证关了。
+        """
+        echo = self.mail_dev_echo and self.test_sessions_enabled
+        if self.mail_dev_echo and not self.test_sessions_enabled:
+            warnings.warn("MODELPILOT_MAIL_DEV_ECHO is ignored outside the test area",
+                          RuntimeWarning, stacklevel=2)
+        if not self.mail_host and self.mail_user:
+            # 半配状态（给了账号没给服务器）：按默认的 163 走，别静默变成"没配"。
+            host = DEFAULT_HOST
+        else:
+            host = self.mail_host
+        return Mailer(host=host, port=self.mail_port, user=self.mail_user,
+                      password=self.mail_password, sender=self.mail_from, dev_echo=echo)
 
     @property
     def agent_prefix(self):
@@ -123,6 +161,12 @@ class BoundedBody:
         await self.app(scope, bounded_receive, send)
 
 
+# 服务内部认的 API 前缀。**它不是"公开地址"**：公开地址是 `public_api_prefix`
+# （测试区是 `/test-api`），两者的差由 nginx 的重写补齐。论坛、账号这些路由挂在
+# 这个常量下，测试区的公开路径因此也是通的。
+API_PREFIX = "/api"
+
+
 def identifier():
     return uuid.uuid4().hex
 
@@ -151,7 +195,22 @@ def since_timestamp(value):
 
 
 
-def create_app(settings=None, verifier=None, day_provider=None):
+def create_app(settings=None, verifier=None, day_provider=None, mailer=None):
+    # **让 `modelpilot.*` 的日志真的出现在 journal 里。**
+    #
+    # uvicorn 只给它自己的那几个 logger 装了 handler，root 上没有；而 Python 的
+    # "最后手段" handler 只打 WARNING 以上。结果是 `mailer` 里那句
+    # `log.info("[mail] 验证码已发往 …")` 在 journal 里一个字都看不到——
+    # 部署完第一次真发信就是这么发现"日志里什么都没有"的。发信失败是 error、
+    # 回显是 warning，那些本来就能看见；看不见的恰恰是"发出去了没有"这条日常线索。
+    app_logger = logging.getLogger("modelpilot")
+    if not app_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        app_logger.addHandler(handler)
+    app_logger.setLevel(logging.INFO)
+
     settings = settings or Settings.from_environment()
     origin = settings.public_origin.rstrip("/")
     parsed = urlsplit(origin)
@@ -183,8 +242,15 @@ def create_app(settings=None, verifier=None, day_provider=None):
 
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
-        return JSONResponse({"code": f"HTTP_{exc.status_code}", "message": str(exc.detail)},
-                            exc.status_code, headers=exc.headers)
+        # 两种 detail 都认：
+        #   字符串       → `HTTP_<状态码>`（老写法，论坛那边一直在用）；
+        #   {"code",...} → 原样透出（账号那边用，客户端按 code 决定下一步做什么）。
+        # 没有这一层的话，`EMAIL_UNVERIFIED` 和"参数不合法"在客户端看来是一样的。
+        if isinstance(exc.detail, dict) and "code" in exc.detail:
+            body = {"code": exc.detail["code"], "message": exc.detail.get("message", "")}
+        else:
+            body = {"code": f"HTTP_{exc.status_code}", "message": str(exc.detail)}
+        return JSONResponse(body, exc.status_code, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -202,7 +268,15 @@ def create_app(settings=None, verifier=None, day_provider=None):
     # **账号路由永远注册。** 以前这里还有一条 `/{path:path}` 兜底转发，逼着人
     # 反复交代"必须最后注册"；那条路删掉之后，路由表只剩两个具体前缀，
     # 顺序不再是个坑。
-    app.include_router(build_account_router(settings, store), prefix=settings.public_api_prefix)
+    # **账号路由和论坛路由挂同一个前缀**：硬编码的 `/api`，不是 `public_api_prefix`。
+    #
+    # 原因是测试区（8011）走的是 nginx 的重写：公开的 `/test-api/...` 会被转成
+    # 服务内部的 `/api/...`（见 `deploy/nginx-https.conf` 的 `location /test-api/`），
+    # 而论坛路由本来就是硬编码 `/api`。账号这半边原来用的是 `public_api_prefix`，
+    # 于是它在测试区变成了 `/test-api/account/*`——**从外面根本调不到**（404），
+    # 而本机 `curl 127.0.0.1:8011` 又是通的，查起来很容易看错方向。
+    # 两边现在用同一个常量，改前缀时不会只剩一边。
+    app.include_router(build_account_router(settings, store, mailer=mailer), prefix=API_PREFIX)
 
     if settings.agent_enabled:
         app.include_router(build_agent_router(settings, store, day_provider=day_provider),
@@ -220,7 +294,12 @@ def create_app(settings=None, verifier=None, day_provider=None):
                 "testSessionsEnabled": settings.test_sessions_enabled,
                 # 只报「配没配」，**永远不报 key 本身**。
                 "agentConfigured": bool(settings.agent_key),
-                "agentModel": settings.agent_model}
+                "agentModel": settings.agent_model,
+                # 同样只报「配没配」。`mailDevEcho` 在正式服务上永远是 false
+                # （判据见 `Settings.mailer`）——它要是在正式站变成 true，
+                # 那"邮箱验证"就名存实亡了，所以这个字段值得放在健康检查里盯着。
+                "mailConfigured": settings.mailer.configured,
+                "mailDevEcho": settings.mailer.dev_echo}
 
     @app.post("/api/forum/test-session", status_code=201)
     def test_session(request: Request):

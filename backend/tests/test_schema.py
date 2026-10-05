@@ -17,7 +17,7 @@ from modelpilot_forum.schema import OBSOLETE_TABLES, day_millis_range, month_bou
 from modelpilot_forum.store import Store
 from modelpilot_forum.usage import split_usage
 from conftest import verifier
-from helpers import account_token, bearer
+from helpers import account_token, bearer, create_app_for_tests
 
 
 def test_split_usage_handles_both_field_shapes():
@@ -107,7 +107,7 @@ def test_starting_the_app_cleans_an_old_database(tmp_path):
              upstream_secret TEXT NOT NULL, created INTEGER NOT NULL);
         """)
     settings = Settings(str(tmp_path), "https://forum.example")
-    with TestClient(create_app(settings, verifier())) as api:
+    with TestClient(create_app_for_tests(settings, verifier())) as api:
         token = account_token(api)
         assert api.get("/health", headers=bearer(token)).status_code == 200
     with sqlite3.connect(path) as db:

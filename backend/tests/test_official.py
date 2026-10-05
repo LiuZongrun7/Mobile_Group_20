@@ -21,7 +21,7 @@ from modelpilot_forum.news_job import import_articles
 from modelpilot_forum.store import OFFICIAL_AUTHOR_NAME, OFFICIAL_AUTHOR_UID, Store
 from conftest import verifier
 from test_forum import png
-from helpers import account_login, account_token, bearer, completion
+from helpers import account_login, account_token, bearer, completion, create_app_for_tests
 from helpers import account_token, bearer
 
 TODAY_MS = 1_790_500_000_000
@@ -42,7 +42,7 @@ SESSION = {"Authorization": "Bearer account-a"}
 def make_app_with_news(path, items):
     """一个论坛 app，里面先灌几条新闻。"""
     settings = Settings(str(path), "https://forum.example")
-    app = create_app(settings, verifier())
+    app = create_app_for_tests(settings, verifier())
     store = app.state.store
     if items:
         import_articles(store, {"items": items, "collectedAtEpochMillis": TODAY_MS,

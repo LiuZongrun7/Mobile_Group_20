@@ -5,6 +5,7 @@ from PIL import Image
 import pytest
 
 from modelpilot_forum.app import Settings, create_app
+from helpers import create_app_for_tests
 from modelpilot_forum.store import Store, now_ms
 from modelpilot_forum.news_job import import_articles, export_news
 from conftest import verifier
@@ -12,7 +13,7 @@ from test_forum import png
 
 
 def make_test_app(path, news_database=""):
-    return create_app(Settings(str(path), "https://forum.example", test_sessions_enabled=True,
+    return create_app_for_tests(Settings(str(path), "https://forum.example", test_sessions_enabled=True,
                                public_api_prefix="/test-api", news_database=news_database), verifier())
 
 
@@ -46,11 +47,11 @@ def test_temporary_identities_need_no_team_account_and_can_interact(tmp_path):
 def test_production_service_rejects_test_tokens_and_cannot_issue_them(tmp_path):
     with TestClient(make_test_app(tmp_path / "test")) as api:
         authorization, session = enter(api)
-    with TestClient(create_app(Settings(str(tmp_path / "main"), "https://forum.example"), verifier())) as main:
+    with TestClient(create_app_for_tests(Settings(str(tmp_path / "main"), "https://forum.example"), verifier())) as main:
         assert main.post("/api/forum/test-session").status_code == 404
         assert main.get("/api/forum/posts", headers=authorization).status_code == 401
     with pytest.raises(ValueError, match="isolated"):
-        create_app(Settings(str(tmp_path), "https://forum.example", test_sessions_enabled=True), verifier())
+        create_app_for_tests(Settings(str(tmp_path), "https://forum.example", test_sessions_enabled=True), verifier())
 
 
 def test_expiry_revocation_and_restart(tmp_path):

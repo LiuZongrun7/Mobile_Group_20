@@ -47,23 +47,68 @@
     <string name="forum_discard">Discard</string>
     <string name="forum_keep_editing">Keep editing</string>
     <string name="forum_uploading">Uploading photo %1$d of %2$d…</string>
-    <string name="account_title">Account</string>
-    <string name="account_sign_in">Sign in</string>
-    <string name="account_sign_out">Sign out</string>
-    <string name="account_username">Username</string>
-    <string name="account_password">Password</string>
-    <string name="account_existing">用你的 ModelPilot 账号登录（论坛、用量、游戏结算共用这一个账号）。</string>
+    <!--
+      账号：邮箱注册 + 验证码验证。文案全部是中文（2026-10-05 加邮箱注册时统一过）。
+      写文案的规矩：**每一种失败都要说清是哪一种**，尤其这两条——
+        · MAIL_NOT_CONFIGURED（account_mail_not_configured）：账号根本没建成，不能说成"注册成功"；
+        · CODE_INVALID（account_code_invalid）：服务端有意不区分"码错"和"邮箱不存在"，本地也不许猜。
+    -->
+    <string name="account_title">账号</string>
+    <string name="account_sign_in">登录</string>
+    <string name="account_sign_out">退出</string>
+    <string name="account_username">用户名（论坛昵称）</string>
+    <string name="account_password">密码</string>
+    <string name="account_email">邮箱</string>
+    <!-- 账号现在只服务论坛：用量/预算/账本全在本机（key 也不出手机），跟账号无关。 -->
+    <string name="account_existing">用邮箱或用户名登录。账号只用于论坛（用量和账本都在本机，不需要登录）。</string>
     <string name="account_register">注册</string>
-    <string name="account_new">还没有账号？用户名至少 2 个字符，密码至少 8 位。</string>
+    <string name="account_new">注册要填三样：邮箱（用来收验证码）、用户名（论坛里显示的昵称）、至少 8 位的密码。</string>
     <string name="account_username_long">用户名最多 64 个字符。</string>
+    <string name="account_username_invalid">用户名不合法：换一个昵称再试（尽量只用字母、数字、下划线，别太长）。</string>
     <string name="account_password_short">密码至少 8 位。</string>
+    <string name="account_password_empty">请填写密码。</string>
     <string name="account_taken">这个用户名已经被占用了，换一个试试。</string>
+    <string name="account_email_taken">这个邮箱已经注册过了：直接用邮箱登录，或者换一个邮箱注册。</string>
+    <string name="account_email_empty">请填写邮箱。</string>
+    <string name="account_email_invalid">邮箱格式不对（比如少写了 @ 或者域名），检查一下再试。</string>
+    <string name="account_username_empty">请填写用户名（论坛里的昵称）。</string>
     <string name="account_registering">正在注册…</string>
-    <string name="account_signed_in">Signed in as %1$s</string>
-    <string name="account_signing_in">Signing in…</string>
-    <string name="account_empty">Enter your username and password.</string>
-    <string name="account_credentials_error">Incorrect username or password, or account unavailable.</string>
-    <string name="account_rate_limit">Too many attempts. Please wait and try again.</string>
+    <string name="account_registered">注册成功，但账号还没验证：输入邮件里的 6 位验证码，验证过才能登录。</string>
+    <string name="account_code">6 位验证码</string>
+    <string name="account_code_sent_to">验证码已发往 %1$s</string>
+    <string name="account_code_sent_unknown">验证码已发往你的注册邮箱</string>
+    <string name="account_code_hint">到邮箱里找 6 位验证码填在下面（也看看垃圾邮件）。没收到就点「重发验证码」。</string>
+    <string name="account_code_empty">请填写邮件里的 6 位验证码。</string>
+    <string name="account_code_format">验证码是 6 位数字，只把数字部分填进来就行。</string>
+    <string name="account_code_invalid">验证码不对。核对一下邮件里的 6 位数字；如果你用的邮箱并不是注册时那个，也会是这个提示。</string>
+    <string name="account_code_expired">验证码过期了，点「重发验证码」要一个新的。</string>
+    <string name="account_code_attempts">验证码试错次数太多了，得重发一个新的才能继续。</string>
+    <string name="account_verify">验证</string>
+    <string name="account_verifying">正在验证…</string>
+    <string name="account_verified">邮箱验证成功，正在用刚才的密码登录…</string>
+    <string name="account_verified_manually">邮箱验证成功，但自动登录没成功。请用刚才的密码登录一次。</string>
+    <string name="account_verified_manually_reason">邮箱验证成功，但自动登录没成功：%1$s 请用刚才的密码手动登录一次。</string>
+    <string name="account_verify_unconfirmed">服务器没有确认验证成功，请重新输入一次验证码。</string>
+    <string name="account_resend">重发验证码</string>
+    <string name="account_resend_in">重发验证码（%1$d 秒）</string>
+    <string name="account_resend_done">验证码已重新发送（同一邮箱 60 秒内只能发一次）。</string>
+    <string name="account_resend_failed">服务器没能发出验证码，请稍后再试。</string>
+    <string name="account_back_to_form">邮箱写错了？返回修改</string>
+    <string name="account_unverified">这个邮箱还没验证过，所以登录被拒了。输入邮件里的验证码完成验证。</string>
+    <string name="account_unverified_ask_email">这个账号的邮箱还没验证过，登录被拒了。请在「邮箱」那一栏填上注册时用的邮箱，再点一次「登录」——我们会带你到验证码页面。</string>
+    <!-- 503 MAIL_NOT_CONFIGURED：服务端没配发信服务，**账号根本没有被创建**。
+         这句话必须把「没注册成功」说出来，否则用户会去邮箱干等一封永远不会来的验证码。 -->
+    <string name="account_mail_not_configured">服务器还没配好发信服务，账号没有注册成功（邮箱和用户名都没被占用）。可以过一会儿再试，或联系管理员。</string>
+    <!-- 503 MAIL_FAILED：发信服务配了、但这一封没发出去（网络抖、授权码过期）。
+         和上一条一样，**账号已经被回滚**，所以必须说"没注册成功"。 -->
+    <string name="account_mail_failed">验证邮件没能发出去，账号没有注册成功（邮箱和用户名都没被占用）。稍后再试一次。</string>
+    <string name="account_request_rejected">服务器没有接受这次请求，也没说明原因。检查一下填的内容再试。</string>
+    <string name="account_signed_in">已登录：%1$s</string>
+    <string name="account_signing_in">正在登录…</string>
+    <string name="account_empty">请填写邮箱（或用户名）和密码。</string>
+    <string name="account_credentials_error">邮箱/用户名或密码不对。</string>
+    <string name="account_rate_limit">操作太频繁了，请等 1 分钟左右再试。</string>
+    <string name="account_storage_error">本机没能保存登录状态（可能存储空间不足），请重试。</string>
     <string name="forum_test_enter">免账号测试</string>
     <string name="forum_test_badge">测试区 · 帖子不进入正式论坛</string>
     <string name="forum_test_explanation">无需注册或登录。测试身份有效期为 24 小时，可以测试新闻、图文发帖、点赞和评论。</string>

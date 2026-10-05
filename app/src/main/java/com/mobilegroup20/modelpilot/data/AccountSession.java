@@ -22,6 +22,10 @@ import javax.crypto.spec.GCMParameterSpec;
  * 用量、预算、智能体记账全都挂在 `userId` 上。所以这个类叫 `AccountSession`：
  * 账号不依赖任何一条用量通道，换通道不该换一个人。
  *
+ * <p>2026-02 加邮箱注册之后，快照里多了 `email`/`emailVerified`（界面要显示「验证码发往
+ * 哪个邮箱」）。但**身份仍然是 `userId`**：邮箱是可以换的，换邮箱不该换一个人。
+ * 这两个字段只是顺路存下来的账号属性，缺了（老快照）也不影响登录状态。
+ *
  * <p><b>它同时管「论坛测试身份」那一支。</b>测试身份走的是后端的
  * `/test-api/forum/test-session`（仅 Debug），拿到的是 `tt_test_` 前缀的 token，
  * 和真账号的 `tt_app_` 前缀一眼能分开。**两支共用一个存储、一个
@@ -51,10 +55,20 @@ public final class AccountSession implements SessionProvider {
 
     private static final class Snapshot {
         final String token, id, name;
+        /**
+         * 注册用的邮箱。测试身份没有邮箱，老版本存下来的快照里也没有这个字段，
+         * 两种情况都读成空串——**不能因为它缺失就让整份会话解不开**（那等于把
+         * 用户莫名其妙地登出）。
+         */
+        final String email;
+        /** 邮箱是否已验证。老快照读成 false；服务端才是权威，它会拒掉未验证的登录。 */
+        final boolean emailVerified;
         /** 是不是 Debug 的论坛测试身份。两支共用一个存储，靠这个字段分流。 */
         final boolean forumTest;
-        Snapshot(String token, String id, String name, boolean forumTest) {
-            this.token = token; this.id = id; this.name = name; this.forumTest = forumTest;
+        Snapshot(String token, String id, String name, String email, boolean emailVerified,
+                 boolean forumTest) {
+            this.token = token; this.id = id; this.name = name;
+            this.email = email; this.emailVerified = emailVerified; this.forumTest = forumTest;
         }
     }
 
@@ -79,6 +93,12 @@ public final class AccountSession implements SessionProvider {
                 throw new IllegalStateException("Account endpoint changed");
             String token = value.getString("token"), id = value.getString("id");
             String name = value.optString("name", "");
+            // 这两个字段是加邮箱注册时补上的：**老快照（2026-02 之前存的那份）
+            // 里没有它们**，optXxx 缺省值让那种快照照样能用，只是没有邮箱信息。
+            // 用 getString/getBoolean 会抛 JSONException，被下面那个 catch 吃掉，
+            // 于是升级 App 的所有老用户会被静默登出——这正是要避免的。
+            String email = value.optString("email", "");
+            boolean emailVerified = value.optBoolean("emailVerified", false);
             boolean forumTest = value.optBoolean("forumTest", false);
             // 测试身份只在 Debug 里认，而且必须带 `tt_test_` 前缀——
             // 一份 Release 包里混进测试身份就等于绕过了登录。
@@ -87,7 +107,7 @@ public final class AccountSession implements SessionProvider {
             if (!forumTest && !token.startsWith(TOKEN_PREFIX))
                 throw new IllegalStateException("Not an app account session");
             if (id.isEmpty()) throw new IllegalStateException("Empty account id");
-            current = new Snapshot(token, id, name, forumTest);
+            current = new Snapshot(token, id, name, email, emailVerified, forumTest);
         } catch (Exception ignored) {
             // 解不开（换设备、恢复备份、或者数据坏了）就当作没登录过。
             // 用户重新登一次即可——他有密码。
@@ -106,15 +126,24 @@ public final class AccountSession implements SessionProvider {
         return generator.generateKey();
     }
 
-    /** 登录成功后存下来。传进来的必须是完整的服务端响应，缺字段直接拒绝。 */
-    public synchronized void save(String token, String userId, String username) throws Exception {
+    /**
+     * 登录成功后存下来。传进来的必须是完整的服务端响应，缺字段直接拒绝。
+     *
+     * <p>`email`/`emailVerified` 一起存：界面要显示「验证码发往哪个邮箱」，而且下次启动时
+     * 不用再问服务端就能知道这个账号验证到哪一步了。传 null 邮箱会被写成空串（不知道），
+     * **不要在这里编一个假的**——不知道就是不知道。
+     */
+    public synchronized void save(String token, String userId, String username,
+                                  String email, boolean emailVerified) throws Exception {
         if (token == null || !token.startsWith(TOKEN_PREFIX))
             throw new IllegalArgumentException("Invalid account token");
         if (userId == null || userId.isEmpty())
             throw new IllegalArgumentException("Account response is incomplete");
+        String storedEmail = email == null ? "" : email;
         JSONObject value = new JSONObject().put("origin", BuildConfig.FORUM_BASE_URL)
                 .put("token", token).put("id", userId)
-                .put("name", username == null ? "" : username);
+                .put("name", username == null ? "" : username)
+                .put("email", storedEmail).put("emailVerified", emailVerified);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key());
         byte[] encrypted = cipher.doFinal(value.toString().getBytes(StandardCharsets.UTF_8));
@@ -122,7 +151,19 @@ public final class AccountSession implements SessionProvider {
                 + Base64.encodeToString(encrypted, Base64.NO_WRAP);
         if (!preferences.edit().putString("encrypted", stored).commit())
             throw new IllegalStateException("Could not save account session");
-        current = new Snapshot(token, userId, username == null ? "" : username, false);
+        current = new Snapshot(token, userId, username == null ? "" : username,
+                storedEmail, emailVerified, false);
+    }
+
+    /**
+     * 不带邮箱的重载：把邮箱当成「不知道」。
+     *
+     * <p>留给仪器测试（`AccountSessionTest` 用的就是这个签名）和只要 token 的调用方。
+     * 存下来的就是空邮箱 + `emailVerified=false`，所以读取方**要靠空邮箱**判断
+     * 「这是不知道」：光看 `emailVerified` 分不出「没验证」和「老快照没有这个字段」。
+     */
+    public synchronized void save(String token, String userId, String username) throws Exception {
+        save(token, userId, username, null, false);
     }
 
     /**
@@ -145,7 +186,8 @@ public final class AccountSession implements SessionProvider {
                 + Base64.encodeToString(encrypted, Base64.NO_WRAP);
         if (!preferences.edit().putString("encrypted", stored).commit())
             throw new IllegalStateException("Could not save test session");
-        current = new Snapshot(token, userId, displayName == null ? "" : displayName, true);
+        current = new Snapshot(token, userId, displayName == null ? "" : displayName,
+                "", false, true);
     }
 
     public synchronized void clear() {
@@ -158,6 +200,17 @@ public final class AccountSession implements SessionProvider {
     @Override public String accountId() { Snapshot value = current; return value == null ? null : value.id; }
 
     public String accountName() { Snapshot value = current; return value == null ? null : value.name; }
+
+    /**
+     * 账号邮箱。没登录、或者是一份没有这个字段的老快照，都返回空串。
+     *
+     * <p>返回空串而不是 null：调用方基本都要拿它拼「验证码已发往 %s」，null 会在
+     * 拼接时变成字面量 "null" 显示给用户。
+     */
+    public String accountEmail() { Snapshot value = current; return value == null ? "" : value.email; }
+
+    /** 邮箱是否已验证。没登录或老快照都是 false（服务端才是权威）。 */
+    public boolean emailVerified() { Snapshot value = current; return value != null && value.emailVerified; }
 
     public boolean signedIn() { return current != null; }
 

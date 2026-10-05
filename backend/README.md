@@ -30,6 +30,7 @@ App 现在同时提供登录和注册入口。）
 | `agent_routes.py` | 智能体两个接口 `/api/agent/ask|status`（**服务端唯一一组业务路由**） |
 | `agent_tools.py` | 只读工具的定义、分发、执行（现在**只剩两个**：`getForumHighlights` / `getMyThreads`） |
 | `schema.py` | 库的形状：`drop_obsolete_tables`（启动时删老库里的废弃表，幂等）+ 「一天」的口径（`today_in_financial_timezone` / `day_millis_range` / `month_bounds`） |
+| `mailer.py` | 发信（只有注册验证码用）：标准库 `smtplib`，没配就**明确报 503**、不假装成功 |
 | `store.py` | 论坛存储：帖子 / 回复 / 点赞 / 图片 / 游标分页 / 限流 / 新闻只读连接 |
 | `news_job.py` | RSS 新闻采集任务 |
 | `test_sessions.py` | 免账号测试身份（`tt_test_`，只在隔离的 `/test-api` 服务里开） |
@@ -123,7 +124,10 @@ nginx 需要一条独立的 `/api/agent/` location，配置见 `deploy/nginx-htt
 
 调试 APK 的论坛页面提供“免账号测试”按钮，不需要账号模块、用户名或密码。每台设备获得一个随机临时身份，有效期 24 小时，支持新闻、图文发布、点赞和评论；退出测试模式会撤销该临时身份。临时会话加密保存在手机上，重启 App 后仍进入测试区。身份到期后再次点击入口即可获得新测试身份。
 
-测试接口为 `https://43.140.212.47/test-api/`，由 `modelpilot-forum-test.service` 在 `127.0.0.1:8011` 提供。数据位于 `/var/lib/modelpilot-forum-test`，配置为 `/etc/modelpilot-forum-test.env`，与正式帖子、图片、点赞和评论分开。两台设备的测试帖子在同一个测试池中。正式 `/api/` 接口拒绝测试 token，测试身份不会写入团队账号库。Release APK 隐藏免账号入口并拒绝恢复测试身份。
+测试接口为 `https://43.140.212.47/test-api/`，由 `modelpilot-forum-test.service` 在 `127.0.0.1:8011` 提供。
+测试区默认**不真发信**：`MODELPILOT_MAIL_DEV_ECHO=1` 让注册/重发的响应里直接带
+`devCode`（联调不用等邮件）。这个开关**只在测试区生效**——判据是
+`MODELPILOT_ENABLE_TEST_SESSIONS=1`，正式服务上写了也会被按掉并记一条警告。数据位于 `/var/lib/modelpilot-forum-test`，配置为 `/etc/modelpilot-forum-test.env`，与正式帖子、图片、点赞和评论分开。两台设备的测试帖子在同一个测试池中。正式 `/api/` 接口拒绝测试 token，测试身份不会写入团队账号库。Release APK 隐藏免账号入口并拒绝恢复测试身份。
 
 新闻采集任务将仅含新闻和采集状态的 SQLite 快照原子导出到 `/var/lib/modelpilot-forum/news-readonly.sqlite3`，测试服务只读该快照；它不读取正式帖子表。测试区不在正式数据备份中。关闭测试服务可运行 `sudo systemctl disable --now modelpilot-forum-test`，正式论坛继续运行。
 
@@ -151,6 +155,40 @@ nginx 需要一条独立的 `/api/agent/` location，配置见 `deploy/nginx-htt
 > `forum.sqlite3` → `modelpilot.sqlite3`，`/etc/tokentrail-forum.env` →
 > `/etc/modelpilot-forum.env`、`/etc/tokentrail-forum-relay.env` → `/etc/modelpilot-agent.env`。
 > **系统用户仍然叫 `tokentrail`**（没跟着改，改它要动属主和一大堆文件权限）。
+
+## 发信（注册验证码，2026-10-05 加）
+
+只有一个用途：把注册验证码送到用户邮箱。用的是标准库 `smtplib`（不引第三方），
+**没配就明确返回 503 并且不创建账号**（不假装发成功，也不留下一个收不到码却占着
+那个邮箱的死号）。
+
+```bash
+# /etc/modelpilot-forum.env 里这五行（授权码只放这里，不进仓库、不进日志）
+MODELPILOT_SMTP_HOST=smtp.163.com
+MODELPILOT_SMTP_PORT=994          # ⚠️ 不是 465：这台机器 465 在 TLS 握手阶段被断开
+MODELPILOT_SMTP_USER=xxx@163.com  # 授权码，不是登录密码
+MODELPILOT_SMTP_PASS=...
+MODELPILOT_SMTP_FROM=xxx@163.com  # 可省，默认等于 SMTP_USER
+```
+
+配好之后：`curl https://43.140.212.47/forum-health` 里 `mailConfigured` 会变成 `true`
+（**它只报"配没配"，永远不报凭据**），`mailDevEcho` 在正式服务上必须永远是 `false`。
+排障看这一行（正常发送时每次注册都会打一条）：
+
+```bash
+sudo journalctl -u modelpilot-forum -n 50 --no-pager | grep '\[mail\]'
+# [mail] 验证码已发往 13***@163.com     ← 成功（邮箱做了打码）
+# [mail] 发送失败 → 13***@163.com：...  ← 失败，后面跟邮件服务商的原始报错
+```
+
+> **日志这件事踩过一次**：`mailer` 里那句 INFO 一开始在 journal 里看不见——
+> uvicorn 只给自己的 logger 装了 handler，而 Python 的"最后手段" handler 只打
+> WARNING 以上。所以 `create_app` 里给 `modelpilot` 这个 logger 挂了 handler，
+> 否则"发出去了没有"这条日常线索一条都没有（`app.py` 里有注释）。
+
+> **这台机器上的两个 163 账号**：`pokeragent` 那个项目也在用同一个 163 邮箱发信，
+> 配置在同机 `/home/ubuntu/pokeragent/.env`。论坛这边是从那里抄过来的，
+> 换授权码时**两边都要改**。
 
 ## 定时任务
 
