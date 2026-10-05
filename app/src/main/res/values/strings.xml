@@ -371,6 +371,20 @@
     <!-- 这家认不认 `stream_options.include_usage`：认了才有 usage 可记账；
          带了而它不认会 400。所以是开关，默认关。 -->
     <string name="keys_stream_usage">This endpoint supports stream_options.include_usage</string>
+    <!-- ===== 价格（选填）：中转站没有官方定价页，用户自己知道他付了多少 ===== -->
+    <string name="keys_price_title">Prices (optional)</string>
+    <!-- 单位必须写清楚是"每 100 万 token 多少美元"，并且说清留空的后果。
+         这个单位不是随便定的：内部价目表就是这个口径（PricingRate），
+         让用户填人民币再换算，就得拿一个没核实过的汇率去乘（Money 里那个常量
+         自己标着"占位，未核实"）——那正是我们一直避免的"看不出错的数字"。 -->
+    <string name="keys_price_note">USD per 1M tokens, copied from your provider\'s pricing page. Leave blank and this endpoint stays "price unknown" — we never borrow another provider\'s prices. Input and output are needed to compute anything; cache read/write default to 0.</string>
+    <string name="keys_price_input">Input $ / 1M</string>
+    <string name="keys_price_output">Output $ / 1M</string>
+    <string name="keys_price_cache_read">Cache read $ / 1M</string>
+    <string name="keys_price_cache_write">Cache write $ / 1M</string>
+    <string name="keys_price_source">Pricing page URL (optional)</string>
+    <!-- 只填了输入或只填了输出时的那句：两条都要有才敢算钱。 -->
+    <string name="keys_price_partial">Fill both input and output price, or leave all prices blank.</string>
     <string name="keys_add_title">Add %1$s</string>
     <string name="keys_edit_title">Edit %1$s</string>
     <!-- 校验失败的那几句：**说清楚是哪个框、该怎么填**，别只说"保存失败"。 -->

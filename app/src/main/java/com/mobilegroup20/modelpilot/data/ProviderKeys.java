@@ -259,6 +259,52 @@ public final class ProviderKeys {
         write(context, id, value);
     }
 
+    /**
+     * 给某个自定义端点补上**用户自己填的价格**（选填）。
+     *
+     * <p>为什么要有它：中转站/自建反代没有我们能核对的官方定价页，于是账本里
+     * 每一行都是"价格未知"——诚实的，但用户自己知道他付了多少钱一 token。
+     * 让他填进来，我们就能算钱；**留空就还是"未知"，绝不用别家的价顶替**
+     * （那会得到一个看不出错的金额，`CONTRACTS.md` §4 那条底线）。
+     *
+     * <p>单位是**微美元 / 100 万 token**（和内部价目表同一口径，见 {@code PricingRate}），
+     * 所以界面上是按"每 1M token 多少美元"填的。四条里**输入与输出必须有**，
+     * 缓存读/写没有就按 0 计（很多家根本不计缓存写入）。
+     */
+    public static void saveCustomPrices(Context context, String providerId,
+                                        long inputMicrosPer1M, long cacheReadMicrosPer1M,
+                                        long cacheWriteMicrosPer1M, long outputMicrosPer1M,
+                                        String priceSource) throws Exception {
+        Entry entry = read(context, providerId);
+        if (entry == null) {
+            throw new IllegalStateException("This provider has no key yet");
+        }
+        JSONObject value = new JSONObject()
+                .put("provider", providerId)
+                .put("key", entry.apiKey)                 // 原样写回，不改 key
+                .put("baseUrl", entry.baseUrl)
+                .put("displayName", entry.displayName)
+                .put("adapter", entry.adapter.name())
+                .put("models", joinModels(modelIdsOf(entry.models)))
+                .put("contextLimit", entry.contextLimit)
+                .put("streamUsage", entry.streamUsage)
+                .put("inputMicros", inputMicrosPer1M)
+                .put("cacheReadMicros", cacheReadMicrosPer1M)
+                .put("cacheWriteMicros", cacheWriteMicrosPer1M)
+                .put("outputMicros", outputMicrosPer1M)
+                .put("priceSource", priceSource == null ? "" : priceSource.trim());
+        write(context, providerId, value);
+    }
+
+    /** 从解出来的模型清单里取回 id（写回时用；`Entry` 存的是 `ModelSpec`）。 */
+    private static List<String> modelIdsOf(List<ModelSpec> models) {
+        List<String> ids = new ArrayList<>();
+        for (ModelSpec model : models) {
+            ids.add(model.modelId);
+        }
+        return ids;
+    }
+
     /** 一行存储：加密 + `commit`（要那个"到底写进去没有"的答案），两个保存方法共用。 */
     private static void write(Context context, String id, JSONObject value) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -320,14 +366,22 @@ public final class ProviderKeys {
         final List<ModelSpec> models;
         final int contextLimit;
         final boolean streamUsage;
+        /** 用户自己填的价格（微美元/1M）；没填就是 null = 价格未知。 */
+        final Long inputMicros;
+        final Long cacheReadMicros;
+        final Long cacheWriteMicros;
+        final Long outputMicros;
+        final String priceSource;
 
         Entry(String apiKey, String baseUrl) {
             this(apiKey, baseUrl, "", ProviderSpec.Adapter.OPENAI_COMPATIBLE,
-                    Collections.<ModelSpec>emptyList(), 0, false);
+                    Collections.<ModelSpec>emptyList(), 0, false, null, null, null, null, "");
         }
 
         Entry(String apiKey, String baseUrl, String displayName, ProviderSpec.Adapter adapter,
-              List<ModelSpec> models, int contextLimit, boolean streamUsage) {
+              List<ModelSpec> models, int contextLimit, boolean streamUsage,
+              Long inputMicros, Long cacheReadMicros, Long cacheWriteMicros, Long outputMicros,
+              String priceSource) {
             this.apiKey = apiKey;
             this.baseUrl = baseUrl;
             this.displayName = displayName;
@@ -335,6 +389,11 @@ public final class ProviderKeys {
             this.models = models;
             this.contextLimit = contextLimit;
             this.streamUsage = streamUsage;
+            this.inputMicros = inputMicros;
+            this.cacheReadMicros = cacheReadMicros;
+            this.cacheWriteMicros = cacheWriteMicros;
+            this.outputMicros = outputMicros;
+            this.priceSource = priceSource;
         }
 
         @Override public String toString() {
@@ -375,6 +434,15 @@ public final class ProviderKeys {
             // 会让 Auto 在图片任务上挑一个根本发不出去的家。
             if (com.mobilegroup20.modelpilot.chat.CallLedger.isCustom(id)) {
                 int contextLimit = value.optInt("contextLimit", 0);
+                // 价格是**选填**的：没填就留 null（账本照实显示"价格未知"），
+                // 不拿别家的价顶替——那会得到一个看不出错的金额（CONTRACTS.md §4）。
+                Long inputMicros = value.has("inputMicros") ? value.optLong("inputMicros") : null;
+                Long outputMicros = value.has("outputMicros") ? value.optLong("outputMicros") : null;
+                Long cacheReadMicros = value.has("cacheReadMicros")
+                        ? value.optLong("cacheReadMicros") : null;
+                Long cacheWriteMicros = value.has("cacheWriteMicros")
+                        ? value.optLong("cacheWriteMicros") : null;
+                String priceSource = value.optString("priceSource", "");
                 List<ModelSpec> models = new ArrayList<>();
                 for (String modelId : value.optString("models", "").split(",")) {
                     String clean = modelId.trim();
@@ -383,7 +451,9 @@ public final class ProviderKeys {
                     }
                     models.add(new ModelSpec(id, clean, clean, contextLimit,
                             /* text= */ true, /* vision= */ false, /* pdf= */ false,
-                            /* tools= */ false, null, null, null, null, null));
+                            /* tools= */ false,
+                            inputMicros, cacheReadMicros, cacheWriteMicros, outputMicros,
+                            priceSource.isEmpty() ? null : priceSource));
                 }
                 ProviderSpec.Adapter adapter;
                 try {
@@ -393,7 +463,9 @@ public final class ProviderKeys {
                     adapter = ProviderSpec.Adapter.OPENAI_COMPATIBLE;
                 }
                 return new Entry(key, baseUrl, value.optString("displayName", ""), adapter, models,
-                        contextLimit, value.optBoolean("streamUsage", false));
+                        contextLimit, value.optBoolean("streamUsage", false),
+                        inputMicros, cacheReadMicros, cacheWriteMicros, outputMicros,
+                        priceSource);
             }
             return new Entry(key, baseUrl);
         } catch (Exception ignored) {

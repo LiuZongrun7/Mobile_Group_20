@@ -29,6 +29,24 @@ public class ProviderEditorInputTest {
         assertTrue(ProviderEditorDialog.splitModels(null).isEmpty());
     }
 
+    @Test public void a_price_field_is_null_when_blank_never_zero() {
+        // **留空 = 不知道，不是 0**：0 是"免费"，null 是"价格未知"。界面上这两句话不一样，
+        // 账本里也不一样（costMicros = null 会显示"价格未知"，0 会显示"花了 0 元"）。
+        assertNull(ProviderEditorDialog.usdMicros(""));
+        assertNull(ProviderEditorDialog.usdMicros(null));
+        assertNull("不是数字就当没填", ProviderEditorDialog.usdMicros("abc"));
+        assertNull("负数不是价格", ProviderEditorDialog.usdMicros("-1"));
+    }
+
+    @Test public void a_typed_price_becomes_micros_per_million() {
+        // 界面上填的是"每 1M token 多少美元"，内部价目表的口径是微美元/1M。
+        assertEquals(Long.valueOf(140_845L), ProviderEditorDialog.usdMicros("0.140845"));
+        assertEquals(Long.valueOf(563_380L), ProviderEditorDialog.usdMicros("0.56338"));
+        assertEquals(Long.valueOf(1_000_000L), ProviderEditorDialog.usdMicros("1"));
+        assertEquals("0 是合法的（免费/不计费），和留空不是一回事",
+                Long.valueOf(0L), ProviderEditorDialog.usdMicros("0"));
+    }
+
     @Test public void context_limit_must_be_a_positive_number() {
         assertEquals(Integer.valueOf(128000), ProviderEditorDialog.parsePositive("128000"));
         assertEquals(Integer.valueOf(128000), ProviderEditorDialog.parsePositive(" 128000 "));

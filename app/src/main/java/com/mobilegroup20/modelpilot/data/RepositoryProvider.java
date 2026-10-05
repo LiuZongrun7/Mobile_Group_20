@@ -114,7 +114,10 @@ public final class RepositoryProvider {
      */
     private static synchronized PricingSource pricing() {
         if (pricing == null) {
-            pricing = new BundledPricingSource();
+            // 两层：**用户自己填的价**（自定义端点）优先，其次才是打包的官方价目。
+            // 顺序不能反：用户填的价是他实际付的钱，官方价目是我们查到的参考价。
+            pricing = new com.mobilegroup20.modelpilot.data.local.UserPricingSource(
+                    appContext, new BundledPricingSource());
         }
         return pricing;
     }

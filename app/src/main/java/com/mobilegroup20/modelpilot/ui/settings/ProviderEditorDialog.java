@@ -106,6 +106,14 @@ public final class ProviderEditorDialog extends DialogFragment {
         toggle(binding.editorModelsBox, custom);
         toggle(binding.editorContextBox, custom);
         toggle(binding.editorStreamUsage, custom);
+        // 价格那一组也只在自定义端点出现（内置六家的价是我们从官方定价页抄的，
+        // 不该让用户改——改了就对不上我们记的 priceSource 了）。
+        for (View priceView : new View[] {binding.editorPriceLabel, binding.editorPriceNote,
+                binding.editorPriceInputBox, binding.editorPriceOutputBox,
+                binding.editorPriceCacheReadBox, binding.editorPriceCacheWriteBox,
+                binding.editorPriceSourceBox}) {
+            toggle(priceView, custom);
+        }
         if (!custom && existing != null) {
             // 请求地址预填（那不是秘密，用户通常只改域名那一段）；**key 永远不预填**。
             binding.editorUrl.setText(existing.baseUrl);
@@ -238,6 +246,21 @@ public final class ProviderEditorDialog extends DialogFragment {
                 }
                 ProviderKeys.saveCustom(requireContext(), providerId, name, url, key, adapter,
                         models, contextLimit, binding.editorStreamUsage.isChecked());
+                // 价格是**选填**的：填了才写（写进去账本就能算钱），留空就一直是"价格未知"。
+                // 计价单位是"每 100 万 token 多少美元"，和内部价目表同口径（见 PricingRate）。
+                Long inputPrice = usdMicros(text(binding.editorPriceInput));
+                Long outputPrice = usdMicros(text(binding.editorPriceOutput));
+                if ((inputPrice == null) != (outputPrice == null)) {
+                    // 只填一半：乘出来的数会离谱，宁可不收。
+                    warn(R.string.keys_price_partial);
+                    return;
+                }
+                if (inputPrice != null) {
+                    ProviderKeys.saveCustomPrices(requireContext(), providerId,
+                            inputPrice, orZero(usdMicros(text(binding.editorPriceCacheRead))),
+                            orZero(usdMicros(text(binding.editorPriceCacheWrite))),
+                            outputPrice, text(binding.editorPriceSource));
+                }
             }
         } catch (Exception failed) {
             // 地址不合法之类：把原因照实说出来，而不是一句"保存失败"。
@@ -281,6 +304,31 @@ public final class ProviderEditorDialog extends DialogFragment {
             }
         }
         return models;
+    }
+
+    /**
+     * "多少钱 1M token"（美元，可以带小数）→ 微美元/1M。
+     *
+     * <p>留空返回 null = 用户没填（**不是 0**：0 是"免费"，null 是"不知道"）。
+     * 这是 `CONTRACTS.md` §4 那条底线在本表单里的样子。
+     */
+    static Long usdMicros(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            double usd = Double.parseDouble(raw.trim());
+            if (usd < 0 || Double.isNaN(usd) || Double.isInfinite(usd)) {
+                return null;
+            }
+            return Math.round(usd * 1_000_000.0);
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
+    }
+
+    private static long orZero(Long value) {
+        return value == null ? 0L : value;
     }
 
     /** 正整数字符串 → 数字；不是正数就返回 null（由调用方提示"必填"）。 */
