@@ -147,14 +147,9 @@ public final class AccountDialog extends DialogFragment {
         currentPassword = passwordInput(changeGroup.group, R.string.account_current_password);
         newPassword = passwordInput(changeGroup.group, R.string.account_new_password);
         confirmPassword = passwordInput(changeGroup.group, R.string.account_new_password_confirm);
-        TextView changeBack = new TextView(context); changeBack.setText(R.string.account_change_back);
-        changeBack.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
-        // 同上：退出这一屏就把三个密码框清掉，别让下次进来的人对着上一次的残留按保存。
-        changeBack.setOnClickListener(v -> {
-            currentPassword.setText(""); newPassword.setText(""); confirmPassword.setText("");
-            model.backToForm(); render();
-        });
-        changeGroup.group.addView(changeBack);
+        // **这一屏不放"返回账号"**：下面那个 `changeLink` 在改密码段位里本来就会
+        // 变成「返回账号」（见 `layout()`），两处都放的话用户会看到两条一模一样的链接
+        // （2026-10-05 真机上就是这么显示的）。返回时清空三个密码框的活也在那边做。
         content.addView(changeGroup.group);
         // 「修改密码」入口。它只在已登录时出现，放在所有面板之后——已登录时露出来的
         // 面板只有身份那两块，所以它实际就落在账号信息下面，一眼能看到。
@@ -301,6 +296,12 @@ public final class AccountDialog extends DialogFragment {
         layout(messageFor(), resetStage);
         if (resetStage) resetHeader.setText(codeSentHeader());
         boolean busy = "BUSY".equals(state);
+        if ("CHANGED".equals(state)) {
+            // 改成功了就把三个密码框清掉。留着的话用户再点一次「保存新密码」，
+            // 服务端会拿**已经作废的**当前密码去核对，回一句"当前密码不对"——
+            // 而他刚刚才看到"修改成功"，只会以为改坏了。
+            currentPassword.setText(""); newPassword.setText(""); confirmPassword.setText("");
+        }
         Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         Button neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
         if (model.changeStage()) {
@@ -455,17 +456,15 @@ public final class AccountDialog extends DialogFragment {
             case "CODE_SENT":
             case "FAILED":
             case "CHANGED": {
-                int notice = noticeOr(0);
                 // 忘记密码那屏发码成功时 notice 是「如果这个邮箱注册过…」，它和本段的通用
                 // 说明说的是同一件事，所以有它就不再说通用那句（两句话叠在一起像复读）。
-                return getString(notice == 0 ? defaultMessage(state) : notice);
+                return noticeOr(defaultMessage(state));
             }
             case "REQUIRED": {
                 // 忘记密码那屏的「没邮箱」：这一句由 ViewModel 挑好放在 notice 里——
                 // 它是**唯一一件用户没法在这一屏修好的事**（要回上一层填邮箱），
                 // 所以必须原样显示，不能被下面那句通用说明盖掉。
-                int notice = noticeOr(0);
-                return getString(notice == 0 ? R.string.account_reset_hint : notice);
+                return noticeOr(getString(R.string.account_reset_hint));
             }
             case "VERIFIED": {
                 // 验证成功（或密码重设成功），正在自动登录。理由放在 autoSignInReason 里——
@@ -483,9 +482,8 @@ public final class AccountDialog extends DialogFragment {
             }
             case "RESET_SIGN_IN_REQUIRED": {
                 // 重设/改密码之后自动登录失败：密码**已经改好了**，所以第一句必须是这个事实。
-                int notice = noticeOr(0);
-                return notice == 0 ? getString(R.string.account_reset_sign_in_required)
-                        : getString(R.string.account_reset_sign_in_required_reason, getString(notice));
+                return getString(R.string.account_reset_sign_in_required_reason,
+                        noticeOr(getString(R.string.account_reset_sign_in_required)));
             }
             // 本地校验拦下来的：具体理由在 `invalidReason` 里，比「格式不对」有用。
             case "INVALID": {
@@ -500,30 +498,45 @@ public final class AccountDialog extends DialogFragment {
             case "SERVER": return getString(R.string.forum_request_error);
             default: break; // IDLE：还没发生任何事，显示当前段位/身份的说明
         }
-        return getString(defaultMessage(state));
+        return defaultMessage(state);
     }
-    /** 状态里没话可说时，这一段自己的说明（每个身份/段位各有一句）。 */
-    private int defaultMessage(String state) {
+    /**
+     * 状态里没话可说时，这一段自己的说明（每个身份/段位各有一句）。
+     *
+     * <p>**返回的是已经格式化好的文字，不是资源 id。** 原来返回 int、由调用方
+     * `getString(id)`，于是带 `%1$s` 的那句「已登录：%1$s」把占位符原样印在了屏幕上
+     * （2026-10-05 真机上看到就是这个）。`setText(资源 id)` / `getString(资源 id)`
+     * **不做格式化**，参数必须在这里给——所以格式化也就只能在这里做。
+     */
+    private CharSequence defaultMessage(String state) {
         // 改密码成功之后**停在原地**（不 dismiss、不退出登录）：用户多半想确认一下
         // 「别的设备真的被踢了吗」，那句话就在这条提示里。而失败提示也必须留着——
         // 用户要能看着它决定下一步做什么。
         if ("CHANGED".equals(state)) {
-            int notice = noticeOr(0);
-            return notice == 0 ? R.string.account_change_done : notice;
-        }        if (testOnly) return R.string.forum_test_explanation;
-        if (model.changeStage()) return R.string.account_change_hint;
-        if (model.signedIn()) return model.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in;
+            return noticeOr(getString(R.string.account_change_done));
+        }
+        if (testOnly) return getString(R.string.forum_test_explanation);
+        if (model.changeStage()) return getString(R.string.account_change_hint);
+        if (model.signedIn()) {
+            // 这两句都带参数：**参数必须在这里给**（见上面的注释）。测试身份那句带的是
+            // 测试号的名字（`Tester xxxx`），账号那句带的是用户名。
+            String who = model.name() == null ? "" : model.name();
+            return model.forumTest()
+                    ? getString(R.string.forum_test_identity, who)
+                    : getString(R.string.account_signed_in, who);
+        }
         if (model.resetStage()) {
             // CODE_SENT 时上面已经用 notice 显示过「如果这个邮箱注册过…」了，
             // 走到这儿的是 IDLE/REQUIRED 那几种，说这一段的通用说明。
-            return R.string.account_reset_hint;
+            return getString(R.string.account_reset_hint);
         }
-        if (model.verifyStage()) return R.string.account_code_hint;
-        return model.registerMode() ? R.string.account_new : R.string.account_existing;
+        if (model.verifyStage()) return getString(R.string.account_code_hint);
+        return getString(model.registerMode() ? R.string.account_new : R.string.account_existing);
     }
-    private int noticeOr(int fallback) {
-        Integer notice = model.notice.getValue();
-        return notice == null || notice == 0 ? fallback : notice;
+    /** 状态里那句话（已经是文字了，见 `AccountViewModel.notice` 的注释）；没有就返回 fallback。 */
+    private CharSequence noticeOr(CharSequence fallback) {
+        CharSequence notice = model.notice.getValue();
+        return notice == null || notice.length() == 0 ? fallback : notice;
     }
     /**
      * 一块面板：一个容器 + 一个可选的小标题。

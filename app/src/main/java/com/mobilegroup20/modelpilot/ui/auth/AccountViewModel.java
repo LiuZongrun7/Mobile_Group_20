@@ -72,10 +72,17 @@ public final class AccountViewModel extends AndroidViewModel {
     /** `INVALID` 时要显示哪一条本地校验的理由（字符串资源 id）。 */
     public final MutableLiveData<Integer> invalidReason = new MutableLiveData<>(0);
     /**
-     * 服务端失败翻译出来的那句话（字符串资源 id）。用 {@link AccountInput#failure} 生成，
-     * **不在界面里散着写**：同一句「邮箱已被占用」有注册和登录两条路径会用到。
+     * 要显示给用户的那句话（**已经格式化好的文字**，空串 = 没什么好说的）。
+     * 用 {@link AccountInput#failure} 生成，**不在界面里散着写**：
+     * 同一句「邮箱已被占用」有注册和登录两条路径会用到。
+     *
+     * <p><b>为什么放的是文字而不是字符串资源 id：</b>带参数的那几句
+     * （"其他设备上的 %1$d 个登录已失效"、"已登录：%1$s"）如果只传 id，
+     * 界面那边 `getString(id)` **不会做格式化**，屏幕上就会原样印出 `%1$d`
+     * ——2026-10-05 真机上两处都是这么挂的。文案的参数只有产生它的地方知道，
+     * 所以格式化必须发生在产生它的地方（这里）。
      */
-    public final MutableLiveData<Integer> notice = new MutableLiveData<>(0);
+    public final MutableLiveData<CharSequence> notice = new MutableLiveData<>("");
     /** 失败之后界面该做什么，取 {@link AccountInput#ACTION_NONE} 等常量。 */
     public final MutableLiveData<String> action = new MutableLiveData<>(AccountInput.ACTION_NONE);
     /**
@@ -206,7 +213,7 @@ public final class AccountViewModel extends AndroidViewModel {
      */
     public void backToForm() {
         saved.set("stage", STAGE_FORM);
-        notice.setValue(0);
+        notice.setValue("");
         action.setValue(AccountInput.ACTION_NONE);
         autoSignInReason.setValue(0);
         state.setValue("IDLE");
@@ -221,7 +228,7 @@ public final class AccountViewModel extends AndroidViewModel {
     public void changePasswordStage() {
         if (!signedIn()) return;
         saved.set("stage", STAGE_CHANGE);
-        notice.setValue(0);
+        notice.setValue("");
         action.setValue(AccountInput.ACTION_NONE);
         autoSignInReason.setValue(0);
         state.setValue("IDLE");
@@ -245,7 +252,7 @@ public final class AccountViewModel extends AndroidViewModel {
         // （新密码框不用清：它在对话框里被 setSaveEnabled(false)，转屏回去本来就是空的。）
         resetCode("");
         saved.set("stage", STAGE_RESET);
-        notice.setValue(0);
+        notice.setValue("");
         action.setValue(AccountInput.ACTION_NONE);
         autoSignInReason.setValue(0);
         String address = resetEmail();
@@ -253,7 +260,7 @@ public final class AccountViewModel extends AndroidViewModel {
         if (address.isEmpty()) {
             // 界面上这句话显示在「验证码已发往 …」那个位置旁边，所以它得说清**去哪儿填邮箱**。
             invalidReason.setValue(R.string.account_reset_need_email);
-            notice.setValue(R.string.account_reset_need_email);
+            notice.setValue(getApplication().getString(R.string.account_reset_need_email));
             state.setValue("REQUIRED");
             return;
         }
@@ -275,7 +282,7 @@ public final class AccountViewModel extends AndroidViewModel {
         if (problem != 0) {
             // 本地就能看出这个地址发不出去（空/少个 @）。**不吞掉**：说清是哪一种，
             // 用户才知道是回上一层填邮箱，还是把地址改对。
-            notice.setValue(problem);
+            notice.setValue(getApplication().getString(problem));
             action.setValue(AccountInput.ACTION_NONE);
             state.setValue("FAILED");
             return;
@@ -300,7 +307,7 @@ public final class AccountViewModel extends AndroidViewModel {
                     if (response.isSuccessful()) {
                         // 200 但没说发出去了：当成失败说出来。当成成功的话，用户会去
                         // 一个永远不会来新邮件的收件箱里翻。
-                        notice.setValue(R.string.account_reset_failed);
+                        notice.setValue(getApplication().getString(R.string.account_reset_failed));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else failFor(request, response, AccountInput.Failure.OP_FORGOT_PASSWORD);
@@ -310,7 +317,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 // 响应（防枚举）。所以这里能确定的只有「如果是注册过的邮箱，码已经发了」，
                 // 界面文案也必须这么说（account_reset_code_sent）。
                 resendReadyAt.setValue(SystemClock.elapsedRealtime() + RESEND_COOLDOWN_MILLIS);
-                notice.setValue(R.string.account_reset_code_sent);
+                notice.setValue(getApplication().getString(R.string.account_reset_code_sent));
                 action.setValue(AccountInput.ACTION_NONE);
                 state.setValue("CODE_SENT");
             }
@@ -346,13 +353,13 @@ public final class AccountViewModel extends AndroidViewModel {
             // 用 REQUIRED 让界面把这句话和「验证码发往哪儿」一起摆正。
             state.setValue(problem.askEmail ? "REQUIRED" : "INVALID");
             invalidReason.setValue(problem.message);
-            notice.setValue(problem.message);
+            notice.setValue(getApplication().getString(problem.message));
             return;
         }
         // 新密码先拿在手里：重设成功之后要拿它自动登录，而那时候用户已经不在这一屏了。
         // **只放内存**，理由见 pendingPassword 的注释。
         pendingPassword = newPassword;
-        notice.setValue(0);
+        notice.setValue("");
         action.setValue(AccountInput.ACTION_NONE);
         int request = ++generation;
         state.setValue("BUSY");
@@ -368,7 +375,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 // 时不能当成改成功了——那会让用户以为密码换了，然后拿着新密码登不进来。
                 if (!response.isSuccessful() || body == null || !body.passwordChanged) {
                     if (response.isSuccessful()) {
-                        notice.setValue(R.string.account_reset_failed);
+                        notice.setValue(getApplication().getString(R.string.account_reset_failed));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else {
@@ -409,14 +416,14 @@ public final class AccountViewModel extends AndroidViewModel {
         if (!signedIn()) {
             // 会话在我们看这一屏的时候过期/被清了。**照实说**，别让用户对着一个
             // 一定失败的按钮反复点：告诉他登录已经失效，重新登一次再来改。
-            notice.setValue(R.string.account_change_failed);
+            notice.setValue(getApplication().getString(R.string.account_change_failed));
             action.setValue(AccountInput.ACTION_NONE);
             state.setValue("FAILED");
             return;
         }
         int problem = AccountInput.passwordChangeProblem(current, newPassword, confirm);
         if (problem != 0) { state.setValue("INVALID"); invalidReason.setValue(problem); return; }
-        notice.setValue(0);
+        notice.setValue("");
         action.setValue(AccountInput.ACTION_NONE);
         int request = ++generation;
         state.setValue("BUSY");
@@ -430,7 +437,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 AccountApi.PasswordChanged body = response.body();
                 if (!response.isSuccessful() || body == null || !body.passwordChanged) {
                     if (response.isSuccessful()) {
-                        notice.setValue(R.string.account_change_failed);
+                        notice.setValue(getApplication().getString(R.string.account_change_failed));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else if (isSessionLost(response)) {
@@ -440,7 +447,7 @@ public final class AccountViewModel extends AndroidViewModel {
                         // 完全正确的密码。
                         session.clear();
                         RepositoryProvider.configureForum(session.forumBaseUrl(), session);
-                        notice.setValue(R.string.account_change_session_expired);
+                        notice.setValue(getApplication().getString(R.string.account_change_session_expired));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else {
@@ -451,8 +458,10 @@ public final class AccountViewModel extends AndroidViewModel {
                 // 成功。`otherSessionsRevoked` 是服务端踢掉了几台别的设备——把它说出来，
                 // 否则用户在平板上会以为是自己掉线了（那不是 bug，是这次改密码的后果）。
                 int revoked = body.otherSessionsRevoked;
+                // **带数字的那句在这里就把参数填好**（见 notice 的注释）。
                 notice.setValue(revoked > 0
-                        ? R.string.account_change_done_count : R.string.account_change_done);
+                        ? getApplication().getString(R.string.account_change_done_count, revoked)
+                        : getApplication().getString(R.string.account_change_done));
                 action.setValue(AccountInput.ACTION_NONE);
                 state.setValue("CHANGED");
             }
@@ -610,7 +619,7 @@ public final class AccountViewModel extends AndroidViewModel {
         if (email.isEmpty()) {
             // 到不了这里（进验证段一定带着邮箱），但真有这种情况也只能让用户回去填——
             // 没有邮箱，服务端不知道这个码是谁的。
-            notice.setValue(R.string.account_email_empty);
+            notice.setValue(getApplication().getString(R.string.account_email_empty));
             action.setValue(AccountInput.ACTION_NONE);
             state.setValue("FAILED");
             return;
@@ -629,7 +638,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 // 必然 403，用户看到的是「验证成功」和「登录被拒」两句自相矛盾的话。
                 if (!response.isSuccessful() || body == null || !body.emailVerified) {
                     if (response.isSuccessful()) {
-                        notice.setValue(R.string.account_verify_unconfirmed);
+                        notice.setValue(getApplication().getString(R.string.account_verify_unconfirmed));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else fail(request, response, email);
@@ -641,7 +650,7 @@ public final class AccountViewModel extends AndroidViewModel {
                     // 退回登录段，让用户用密码进来（服务端那边这个邮箱已经是已验证的了）。
                     saved.set("stage", STAGE_FORM);
                     saved.set("registerMode", false);
-                    notice.setValue(0);
+                    notice.setValue("");
                     state.setValue("VERIFIED_SIGN_IN_REQUIRED");
                     return;
                 }
@@ -684,14 +693,14 @@ public final class AccountViewModel extends AndroidViewModel {
                         resendReadyAt.setValue(SystemClock.elapsedRealtime() + wait);
                     }
                     if (response.isSuccessful()) {
-                        notice.setValue(R.string.account_resend_failed);
+                        notice.setValue(getApplication().getString(R.string.account_resend_failed));
                         action.setValue(AccountInput.ACTION_NONE);
                         state.setValue("FAILED");
                     } else fail(request, response, email);
                     return;
                 }
                 resendReadyAt.setValue(SystemClock.elapsedRealtime() + RESEND_COOLDOWN_MILLIS);
-                notice.setValue(R.string.account_resend_done);
+                notice.setValue(getApplication().getString(R.string.account_resend_done));
                 action.setValue(AccountInput.ACTION_NONE);
                 state.setValue("CODE_SENT");
             }
@@ -742,7 +751,7 @@ public final class AccountViewModel extends AndroidViewModel {
                     // 那个码已经用掉了，用户再填多少次都只会得到 CODE_INVALID。
                     AccountInput.Failure failure = AccountInput.failure(response.code(),
                             AccountApi.errorCode(response));
-                    notice.setValue(failure.message);
+                    notice.setValue(getApplication().getString(failure.message));
                     action.setValue(failure.action);
                     saved.set("stage", STAGE_FORM);
                     saved.set("registerMode", false);
@@ -754,7 +763,7 @@ public final class AccountViewModel extends AndroidViewModel {
             @Override public void onFailure(@NonNull Call<AccountApi.Account> call, @NonNull Throwable error) {
                 if (request != generation) return;
                 AccountInput.Failure failure = AccountInput.failure(0, null);
-                notice.setValue(failure.message);
+                notice.setValue(getApplication().getString(failure.message));
                 action.setValue(AccountInput.ACTION_NONE);
                 saved.set("stage", STAGE_FORM);
                 saved.set("registerMode", false);
@@ -818,7 +827,7 @@ public final class AccountViewModel extends AndroidViewModel {
         AccountInput.Failure failure = response == null
                 ? AccountInput.failure(0, null)
                 : AccountInput.failure(response.code(), AccountApi.errorCode(response));
-        notice.setValue(failure.message);
+        notice.setValue(getApplication().getString(failure.message));
         action.setValue(failure.action);
         // 「这个码已经废了」的两条路：过期（服务端那边早过了 60 秒窗口，可以立刻重发）和
         // 试错次数用尽（多半还在窗口里，保留冷却，等它走完再让点）。
@@ -829,7 +838,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 // 用户是用**用户名**登录的，返回体里没有邮箱（错误体只有 code/message），
                 // 我们不知道验证码该发到哪儿。这时候不能装作能验证：让他在邮箱栏填上
                 // 注册时用的邮箱再点一次登录，下一次我们就带着邮箱进验证段了。
-                notice.setValue(R.string.account_unverified_ask_email);
+                notice.setValue(getApplication().getString(R.string.account_unverified_ask_email));
                 action.setValue(AccountInput.ACTION_NONE);
             } else {
                 enterVerifyStage(email, true);
@@ -862,7 +871,7 @@ public final class AccountViewModel extends AndroidViewModel {
                 : AccountInput.Failure.OP_FORGOT_PASSWORD.equals(operation)
                 ? AccountInput.Failure.forgotPassword(status, code)
                 : AccountInput.Failure.signIn(status, code);
-        notice.setValue(failure.message);
+        notice.setValue(getApplication().getString(failure.message));
         action.setValue(failure.action);
         autoSignInReason.setValue(0);
         state.setValue("FAILED");
