@@ -99,4 +99,22 @@ public interface ChatDao {
 
     @Query("DELETE FROM memory WHERE id = :id")
     void deleteMemory(String id);
+
+    /** 改对话标题（对话页 `⋮ → Rename`）。 */
+    @Query("UPDATE chat SET title = :title, updated_at_epoch_millis = :at WHERE id = :id")
+    void renameChat(String id, String title, long at);
+
+    /**
+     * 删掉一条对话的**全部消息与记忆**。
+     *
+     * <p>为什么写在这里而不是靠数据库的级联：这几张表之间没有建外键
+     * （Room 里我们只加了索引），所以"删对话"必须显式把三张表都清掉。
+     * 漏掉 `memory` 的后果是：下次新建一条同 id 的对话（uuid，理论上不会撞）
+     * 或导出时，会看到一条指向已经不存在的消息的摘要。删就删干净。
+     */
+    @Query("DELETE FROM message WHERE chat_id = :chatId")
+    void deleteMessages(String chatId);
+
+    @Query("DELETE FROM memory WHERE chat_id = :chatId")
+    void deleteMemories(String chatId);
 }

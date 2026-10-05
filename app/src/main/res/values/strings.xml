@@ -316,6 +316,31 @@
     <string name="insights_bucket_detail">%1$d calls · %2$s tokens · %3$s</string>
     <string name="insights_bucket_partial">%1$d without a price</string>
     <string name="insights_empty">Nothing recorded on this device this month. Numbers appear here after you send a message.</string>
+    <!-- ============ 对话记忆（大纲 §4 inspect/correct the retained memory） ============ -->
+    <string name="memory_title">Conversation memory</string>
+    <!-- 先说清它是什么：用户第一次看到"记忆"会以为是某种隐藏开关。 -->
+    <string name="memory_explainer">When a conversation gets long, earlier messages are summarised and only that summary is sent to the model. Edit it if it got something wrong, or drop it to send the original messages again.</string>
+    <string name="memory_empty">No memory yet. It appears here after a long conversation is compacted to stay under the model\'s context limit.</string>
+    <string name="memory_edited_by_you">Edited by you</string>
+    <string name="memory_edit">Edit</string>
+    <string name="memory_drop">Drop</string>
+    <string name="memory_edit_title">Edit summary</string>
+    <string name="memory_drop_title">Drop this memory?</string>
+    <!-- 删掉之后的行为要说清楚：**不是删历史**，是让原文重新进上下文（更费 token）。 -->
+    <string name="memory_drop_body">The original messages are still stored. Dropping the summary sends them to the model again, which costs more tokens.</string>
+    <!-- 1 覆盖范围 2 哪个模型压的 3 时间。**不要写成条数**：库里只有压缩边界
+         那两条消息的 id，条数得另查，而查出来的数字在用户删过消息之后会对不上。 -->
+    <string name="memory_meta">%1$s · summarised by %2$s · %3$s</string>
+    <string name="memory_covers_earlier">Covers an earlier part of this conversation</string>
+    <string name="memory_meta_unknown_model">an unknown model</string>
+    <!-- 对话页 `⋮` 菜单。 -->
+    <string name="chat_menu_memory">Conversation memory</string>
+    <string name="chat_menu_rename">Rename conversation</string>
+    <string name="chat_menu_delete">Delete conversation</string>
+    <string name="chat_delete_title">Delete this conversation?</string>
+    <string name="chat_delete_body">Messages, memory and its call records on this device are removed. This cannot be undone.</string>
+    <string name="chat_delete_confirm">Delete</string>
+    <string name="chat_rename_title">Rename conversation</string>
     <string name="insights_footnote">Recorded on this phone from calls you made with your own keys. Amounts are estimates from each provider\'s published prices, not invoices.</string>
     <string name="keys_configured">Configured</string>
     <string name="keys_edit">Edit</string>

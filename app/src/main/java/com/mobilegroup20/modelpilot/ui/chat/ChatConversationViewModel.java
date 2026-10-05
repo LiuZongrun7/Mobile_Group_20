@@ -193,6 +193,52 @@ public final class ChatConversationViewModel extends ViewModel {
         return send;
     }
 
+    /**
+     * 这条对话的记忆（压缩产物），按时间升序。
+     *
+     * <p>大纲 §4 要的 "inspect/correct the retained memory"：用户得能看见
+     * "更早的那些轮被压成了什么"，并且能改——摘要写错了（比如把 7pm 记成 8pm）
+     * 会一直影响后面每一轮，而他现在连看都看不到。
+     */
+    public LiveData<List<MemoryEntity>> memories() {
+        return dao.memoriesLive(chatId);
+    }
+
+    /** 用户改了摘要。**下一次发送会重新从库里读**，所以缓存自然失效（见 loadEngine）。 */
+    public void editMemory(String memoryId, String text) {
+        io.execute(() -> dao.editMemory(memoryId, text == null ? "" : text.trim()));
+    }
+
+    /**
+     * 删掉一条记忆。
+     *
+     * <p>删掉之后那一段历史**重新回到上下文里**（`activeMessages()` 不再排除它们）——
+     * 这就是大纲说的 "reset"：用户觉得摘要丢了他的东西时，宁可多花 token 也要拿回原文。
+     */
+    public void dropMemory(String memoryId) {
+        io.execute(() -> dao.deleteMemory(memoryId));
+    }
+
+    /** 改标题（对话页 `⋮ → Rename`）。 */
+    public void rename(String title) {
+        String clean = title == null ? "" : title.trim();
+        io.execute(() -> dao.renameChat(chatId, clean, System.currentTimeMillis()));
+    }
+
+    /**
+     * 删掉这条对话（消息与记忆一起删）。
+     *
+     * <p>调用方负责在删完之后离开这一页：删完还停在这里的话，界面会开始显示
+     * 一条已经不存在的对话（消息列表变空、标题还在），看起来像坏了。
+     */
+    public void deleteChat() {
+        io.execute(() -> {
+            dao.deleteMessages(chatId);
+            dao.deleteMemories(chatId);
+            dao.deleteChat(chatId);
+        });
+    }
+
     public String chatId() {
         return chatId;
     }

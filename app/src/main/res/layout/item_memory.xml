@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一条记忆：覆盖范围 + 谁压的 + 摘要正文 + 改 / 删。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_dashboard_card"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/memory_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#7A8699"
+        android:textSize="11sp"
+        tools:text="Covers 8 earlier messages · summarised by DeepSeek V3.2 · 10月4日 14:07" />
+
+    <TextView
+        android:id="@+id/memory_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#0B1B33"
+        android:textSize="14sp"
+        android:lineSpacingExtra="2dp"
+        tools:text="The user is preparing a campus event poster; event facts: Friday 7 pm, student ID entry…" />
+
+    <!-- 用户改过的标出来：不然下次看到会以为这是模型写的。 -->
+    <TextView
+        android:id="@+id/memory_edited"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_chat_pill_grey"
+        android:paddingStart="8dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="2dp"
+        android:text="@string/memory_edited_by_you"
+        android:textColor="#3A4A61"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/memory_edit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp"
+            android:text="@string/memory_edit"
+            android:textColor="#1E7BF6"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/memory_drop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="8dp"
+            android:text="@string/memory_drop"
+            android:textColor="#B3261E"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

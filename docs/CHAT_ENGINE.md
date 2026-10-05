@@ -176,11 +176,12 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 | §6「save the selected route, **policy version and reason**」 | **做了**：`usage_call` 加 `reason` / `policy`（迁移 v6），`AutoRouter.POLICY_VERSION` = `capability-then-price-v1` |
 | §6「message-level token fields are not wired」 | **做了**：上游报的 usage 回填到那条回答上（`MessageEntity.tokensIn/Out`） |
 | §4-5 / §5 / §8 W10–12「Connect Insights to local call records」+ local budget | **做了**：第 4 屏改成读本机账本（`ui/insights/`）。旧统计页读 `daily_usage`（只滚导入记录）且开着桩数据，显示的数字和真实花费无关，已从导航上摘掉 |
-| §4-3 §5 记忆的查看/编辑/重置界面 | 还没做（引擎与 DAO 都有了） |
+| §4-3 §5 记忆的查看/编辑/重置界面 | **做了**：对话页 `⋮ → Conversation memory`（`ui/chat/MemorySheetFragment`），可看、可改、可丢；丢 = 原文重新进上下文 |
 | §4-4 §7.2 文件选择 + PDFBox 抽取 + source links | 还没做 |
 | §4-6 §8 W10–12 导出 | 还没做 |
+| 对话页 `⋮`（记忆 / 改名 / 删除） | **做了**：改名复用"问一个名字"的对话框；删除会连消息、记忆、本机调用记录一起删，且删完自动退回列表 |
 | §4-2 §7.1 其余六家的实测 | 还没做（只有 DeepSeek 端到端跑过） |
-| §4-1 §5 草稿恢复 | 还没做（消息是留着的，输入框内容不保留） |
+| §4-1 §5 草稿恢复 | **做了**：`data/Drafts` 按对话各存一份，`onPause` 存、进页面恢复、发出去就清（转屏本来就由 Android 保，这份管的是进程被杀） |
 
 **Insights 的口径**（`ui/insights/Insights.java`，纯函数、有单测）：
 token 按四桶加；算不出价的调用**单独计数并显示**（"其中 N 次还没有价格"）；

@@ -93,6 +93,10 @@ public final class ChatConversationFragment extends Fragment {
         binding.conversationModelChip.setOnClickListener(v -> openModelSheet());
         binding.conversationSend.setOnClickListener(v -> onSendClicked());
         // 监听只注册一次（转屏后仍然在）：注册在点击里的话，每次点开弹层都会再注册一遍。
+        // 改名复用"项目名对话框"（同样是"问一个名字"），结果落到这条对话的标题上。
+        getChildFragmentManager().setFragmentResultListener(ProjectNameDialog.RESULT_KEY,
+                getViewLifecycleOwner(), (key, result) -> model.rename(
+                        result.getString(ProjectNameDialog.BUNDLE_NAME, "")));
         getChildFragmentManager().setFragmentResultListener(ModelSheetFragment.RESULT_KEY,
                 getViewLifecycleOwner(), (key, result) -> {
                     manualProviderId = result.getString(ModelSheetFragment.BUNDLE_PROVIDER);
@@ -100,6 +104,9 @@ public final class ChatConversationFragment extends Fragment {
                     renderChip();
                 });
 
+        // 草稿恢复（大纲 §4-1）：转屏由 Android 自己保，这里管的是"进程被杀掉之后"。
+        binding.conversationInput.setText(
+                com.mobilegroup20.modelpilot.data.Drafts.get(requireContext(), chatId));
         model.chat().observe(getViewLifecycleOwner(), this::renderHeader);
         model.projectName().observe(getViewLifecycleOwner(), this::renderProject);
         model.messages().observe(getViewLifecycleOwner(), messages -> {
@@ -110,6 +117,20 @@ public final class ChatConversationFragment extends Fragment {
                     state == null ? "" : state.streaming);
         });
         model.sendState().observe(getViewLifecycleOwner(), this::renderSendState);
+    }
+
+    /**
+     * 离开页面时把没发出去的字存下来（`onPause` 而不是 `onDestroyView`：
+     * 进程随时可能在这一页还活着的时候被杀，onPause 是最后一个稳的时机）。
+     */
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (binding != null) {
+            com.mobilegroup20.modelpilot.data.Drafts.save(requireContext(),
+                    requireArguments().getString(ARG_CHAT_ID),
+                    binding.conversationInput.getText().toString());
+        }
     }
 
     @Override
@@ -258,6 +279,9 @@ public final class ChatConversationFragment extends Fragment {
             return;                        // 空消息不发（各家都会 400）
         }
         binding.conversationInput.setText("");
+        // **发出去了就清草稿**：留着的话下次进来框里又出现刚发过的那句话。
+        com.mobilegroup20.modelpilot.data.Drafts.clear(requireContext(),
+                requireArguments().getString(ARG_CHAT_ID));
         model.send(text, manualProviderId, manualModelId);
     }
 
@@ -334,10 +358,59 @@ public final class ChatConversationFragment extends Fragment {
         }
     }
 
+    /**
+     * 对话页的 `⋮`：记忆 / 改名 / 删除。
+     *
+     * <p>三件事都是"这条对话整体上"的动作，所以放在一起；**每一项都真的能用**——
+     * 一个点了没反应的菜单比没有菜单更让人怀疑是不是坏了。
+     */
     private void showMore() {
-        // 「重命名 / 删除」还没做（它们要动对话表，属于"项目管理"那一步）。
-        // 说清楚，别给一个点了没反应的菜单。
-        pending(getString(R.string.chat_more));
+        String[] items = {
+                getString(R.string.chat_menu_memory),
+                getString(R.string.chat_menu_rename),
+                getString(R.string.chat_menu_delete),
+        };
+        new AlertDialog.Builder(requireContext())
+                .setItems(items, (dialog, which) -> {
+                    switch (which) {
+                        case 0:
+                            MemorySheetFragment.open(getChildFragmentManager(), model.chatId());
+                            break;
+                        case 1:
+                            ProjectNameDialog.show(getChildFragmentManager(),
+                                    R.string.chat_rename_title, currentTitle());
+                            break;
+                        default:
+                            confirmDelete();
+                            break;
+                    }
+                })
+                .show();
+    }
+
+    private String currentTitle() {
+        com.mobilegroup20.modelpilot.chat.local.ChatEntity chat = model.chat().getValue();
+        return chat == null ? "" : chat.title;
+    }
+
+    /**
+     * 删对话前先问一次，并**说清楚删掉的是什么**（消息 + 记忆 + 本机调用记录）。
+     *
+     * <p>这里没有"撤销"：删完就没了，所以文案里要写明不可恢复，而不是只问一句
+     * "确定吗"——用户对"确定吗"是没有判断依据的。
+     */
+    private void confirmDelete() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.chat_delete_title)
+                .setMessage(R.string.chat_delete_body)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.chat_delete_confirm, (dialog, which) -> {
+                    model.deleteChat();
+                    // 删完必须离开这一页：停在这里会显示一条已经不存在的对话
+                    // （消息空了、标题还在），看起来像坏了。
+                    requireActivity().getOnBackPressedDispatcher().onBackPressed();
+                })
+                .show();
     }
 
     private void goBack() {

@@ -129,7 +129,22 @@ public final class ChatHomeFragment extends Fragment {
             this.chats = chats;
             renderLists();
         });
+        // 首页的草稿单独一份（key = "home"）：它和任何一条对话都不是同一条输入。
+        binding.chatInput.setText(
+                com.mobilegroup20.modelpilot.data.Drafts.get(requireContext(), HOME_DRAFT));
         renderInputChips();
+    }
+
+    /** 首页输入框那份草稿的键（`Drafts` 是按 key 分条存的）。 */
+    private static final String HOME_DRAFT = "home";
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (binding != null) {
+            com.mobilegroup20.modelpilot.data.Drafts.save(requireContext(), HOME_DRAFT,
+                    binding.chatInput.getText().toString());
+        }
     }
 
     @Override
@@ -361,6 +376,7 @@ public final class ChatHomeFragment extends Fragment {
             return;
         }
         binding.chatInput.setText("");
+        com.mobilegroup20.modelpilot.data.Drafts.clear(requireContext(), HOME_DRAFT);
         model.startChat(text, model.projectId(), chatId -> openChat(chatId));
     }
 
