@@ -130,6 +130,9 @@
     <!-- 发出去之后的诚实说明。服务端**不告诉我们这个邮箱注册过没有**（防枚举），
          所以只能说「如果你注册过」——说成「已发往你的账号」会把没注册过的用户骗去干等。 -->
     <string name="account_reset_code_sent">如果 %1$s 注册过，验证码已经在路上了：去收件箱找 6 位数字（也看看垃圾邮件）。收不到就点下面「重发验证码」。</string>
+    <!-- 邮箱为空时（只填了用户名登录的用户）不能把空串填进上面那个 %1$s，
+         那会变成一句读不通的话。这一句两边都成立。 -->
+    <string name="account_reset_code_sent_unknown">如果这个邮箱注册过，验证码已经在路上了：去收件箱找 6 位数字（也看看垃圾邮件）。收不到就点下面「重发验证码」。</string>
     <string name="account_reset_hint">验证码会发到你的注册邮箱。填邮件里的 6 位验证码，再设一个新密码——重设成功后所有设备都要用新密码重新登录。</string>
     <string name="account_reset_code">邮件里的 6 位验证码</string>
     <string name="account_new_password">新密码（至少 8 位）</string>

@@ -366,6 +366,17 @@ public final class AccountInput {
         public static Failure passwordChange(int httpStatus, String code) {
             return failureFor(OP_PASSWORD_CHANGE, httpStatus, code);
         }
+
+        /**
+         * 忘记密码（`password/forgot` 发码、`password/reset` 重设）失败的翻译。
+         *
+         * <p>和 {@link #signIn} 的差别只在 503 那两句：注册失败必须说「账号没注册成功」
+         * （服务端确实回滚了账号），忘记密码失败时**没有任何账号被动过**——对一个
+         * 只是忘了密码的人来说，「没注册成功」等于告诉他账号没了。
+         */
+        public static Failure forgotPassword(int httpStatus, String code) {
+            return failureFor(OP_FORGOT_PASSWORD, httpStatus, code);
+        }
     }
 
     /**

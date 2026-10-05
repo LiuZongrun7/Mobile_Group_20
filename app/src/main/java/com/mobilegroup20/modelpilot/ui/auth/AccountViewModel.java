@@ -850,10 +850,12 @@ public final class AccountViewModel extends AndroidViewModel {
         if (request != generation) return;
         int status = response == null ? 0 : response.code();
         String code = response == null ? null : AccountApi.errorCode(response);
-        // 只有改密码那一路需要换语境（`CREDENTIALS` / 401 的文案不一样）；
-        // 忘记密码那一路用通用表就够——它在契约里根本不会收到 `CREDENTIALS`。
+        // 三个语境各一条入口，调用点一眼能看出自己走的是哪条路：同一句
+        // 「没注册成功 / 密码没被动过」在两个语境下是**不同的两句话**。
         AccountInput.Failure failure = AccountInput.Failure.OP_PASSWORD_CHANGE.equals(operation)
                 ? AccountInput.Failure.passwordChange(status, code)
+                : AccountInput.Failure.OP_FORGOT_PASSWORD.equals(operation)
+                ? AccountInput.Failure.forgotPassword(status, code)
                 : AccountInput.Failure.signIn(status, code);
         notice.setValue(failure.message);
         action.setValue(failure.action);

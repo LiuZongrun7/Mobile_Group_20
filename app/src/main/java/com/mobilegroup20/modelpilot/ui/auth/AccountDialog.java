@@ -424,6 +424,12 @@ public final class AccountDialog extends DialogFragment {
      *
      * <p>优先级：忙 → 本条状态自带的说明 → 本状态没话可说时用那一段的通用说明。
      * 忙必须排在最前：请求进行中却显示上一句失败提示，用户会以为这次又失败了。
+     *
+     * <p>为什么每条都过 {@link #notice} 而不是直接 `getString(资源id)`：忘记密码那条路上
+     * 有好几句话里要嵌**邮箱地址**（「如果 %1$s 注册过，验证码已经在路上了…」），
+     * 而邮箱是运行时才知道的。`String.format` 对没有占位符的字符串会原样返回，
+     * 所以这里统一带上参数——省得为「哪几条要带邮箱」维护一张名单（漏一条就是一个
+     * 字面量 `%1$s` 显示给用户）。
      */
     private CharSequence messageFor() {
         String state = model.state.getValue() == null ? "IDLE" : model.state.getValue();
@@ -440,14 +446,11 @@ public final class AccountDialog extends DialogFragment {
             // （邮箱被占 / 用户名被占 / 码错了 / 码过期了 …各是一句话）。
             case "CODE_SENT":
             case "FAILED":
-            case "CHANGED": {
-                int notice = noticeOr(0);
-                return getString(notice == 0 ? defaultMessage(state) : notice);
-            }
+            case "CHANGED":
             case "REQUIRED": {
-                // 忘记密码那屏的「没邮箱」：这句话由 AccountInput 挑好放在 notice 里。
+                // 忘记密码那屏的「没邮箱」也走这里：那句话由 AccountInput 挑好放在 notice 里。
                 int notice = noticeOr(0);
-                return notice == 0 ? getString(defaultMessage(state)) : getString(notice);
+                return notice(notice == 0 ? defaultMessage(state) : notice);
             }
             case "VERIFIED": {
                 // 验证成功（或密码重设成功），正在自动登录。理由放在 autoSignInReason 里——
@@ -472,7 +475,7 @@ public final class AccountDialog extends DialogFragment {
             // 本地校验拦下来的：具体理由在 `invalidReason` 里，比「格式不对」有用。
             case "INVALID": {
                 Integer reason = model.invalidReason.getValue();
-                return getString(reason == null || reason == 0 ? R.string.account_empty : reason);
+                return notice(reason == null || reason == 0 ? R.string.account_empty : reason);
             }
             case "NETWORK": return getString(R.string.forum_network_error);
             case "RATE_LIMIT": return getString(R.string.account_rate_limit);
@@ -482,7 +485,21 @@ public final class AccountDialog extends DialogFragment {
             case "SERVER": return getString(R.string.forum_request_error);
             default: break; // IDLE：还没发生任何事，显示当前段位/身份的说明
         }
-        return getString(defaultMessage(state));
+        return notice(defaultMessage(state));
+    }
+
+    /**
+     * 把一句话渲染出来，必要时把**找回密码用的邮箱**填进占位符。
+     *
+     * <p>参数是清空过的邮箱（还没填/填错时为空）：那时把空串填进「如果 %1$s 注册过」
+     * 会变成一句读不通的话，所以空邮箱时改用不带地址的那一句
+     * （{@link R.string#account_reset_code_sent_unknown}）。
+     */
+    private CharSequence notice(int message) {
+        String address = model.resetAddress().trim();
+        if (message == R.string.account_reset_code_sent && address.isEmpty())
+            return getString(R.string.account_reset_code_sent_unknown);
+        return address.isEmpty() ? getString(message) : getString(message, address);
     }
     /** 状态里没话可说时，这一段自己的说明（每个身份/段位各有一句）。 */
     private int defaultMessage(String state) {
@@ -492,8 +509,7 @@ public final class AccountDialog extends DialogFragment {
         if ("CHANGED".equals(state)) {
             int notice = noticeOr(0);
             return notice == 0 ? R.string.account_change_done : notice;
-        }
-        if (testOnly) return R.string.forum_test_explanation;
+        }        if (testOnly) return R.string.forum_test_explanation;
         if (model.changeStage()) return R.string.account_change_hint;
         if (model.signedIn()) return model.forumTest() ? R.string.forum_test_identity : R.string.account_signed_in;
         if (model.resetStage()) {

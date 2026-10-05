@@ -256,6 +256,27 @@ def test_at_most_five_codes_an_hour(tmp_path):
         assert error_code(capped) == "RATE_LIMIT"
 
 
+def test_there_is_a_global_cap_on_code_emails(tmp_path):
+    """每邮箱限流挡不住"拿很多个邮箱各要一封"——那会烧掉共享发信账号的日配额，
+    于是真正要注册的人一封也收不到。见 `GLOBAL_CODES_PER_HOUR`。"""
+    from modelpilot_forum.accounts import GLOBAL_CODES_PER_HOUR
+    mailer = SilentMailer()
+    with TestClient(app_for(tmp_path, mailer=mailer)) as api:
+        sent = 0
+        for index in range(GLOBAL_CODES_PER_HOUR + 5):
+            response = api.post("/api/account/password/forgot",
+                                json={"email": f"many-{index}@example.invalid"})
+            if response.status_code == 200:
+                sent += 1
+                continue
+            assert response.status_code == 429, response.text
+            assert response.json()["code"] == "RATE_LIMIT"
+            break
+        assert sent == GLOBAL_CODES_PER_HOUR, sent
+        # 刹住之后，**一封都没真发出去**（这就是这条上限存在的理由）
+        assert len(mailer.calls) == 0, "没注册过的邮箱本来就不该真发信"
+
+
 # ---- 不许泄露"这个邮箱注册过没有" ----------------------------------------
 
 def test_resend_looks_the_same_for_a_known_and_an_unknown_email(tmp_path):

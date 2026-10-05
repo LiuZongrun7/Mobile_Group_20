@@ -121,9 +121,7 @@ public class AccountApiContractTest {
         }
     }
 
-    @Test public void error_bodies_keep_their_code_and_become_the_right_sentence() throws Exception {
-        try (MockWebServer server = new MockWebServer()) {
-            AccountApi api = api(server);
+    @Test public void error_bodies_keep_their_code_and_become_the_right_sentence() throws Exception {        try (MockWebServer server = new MockWebServer()) {            AccountApi api = api(server);
             // 邮箱被占：409 + EMAIL_TAKEN。这个 code 丢了的话界面只会说「出错了」，
             // 而用户完全不知道该换邮箱还是换用户名。
             server.enqueue(new MockResponse().setResponseCode(409)

@@ -1,6 +1,7 @@
 package com.mobilegroup20.modelpilot.ui.auth;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -83,6 +84,63 @@ public class AccountInputTest {
         assertEquals(0, AccountInput.registrationProblem("a@b.co", "nick", "password1"));
         assertEquals(R.string.account_username_long,
                 AccountInput.registrationProblem("a@b.co", "n".repeat(65), "password1"));
+    }
+
+    @Test public void an_over_long_password_says_the_upper_limit_not_the_lower_one() {
+        // 服务端的规则是 8~200 位（契约里钉死的）。超长时必须说**上限**：
+        // 说「密码至少 8 位」会把一个填了 201 位的用户指向完全相反的方向。
+        assertEquals(R.string.account_password_short, AccountInput.passwordProblem("short"));
+        assertEquals(0, AccountInput.passwordProblem("p".repeat(AccountInput.PASSWORD_MAX_LENGTH)));
+        assertEquals(R.string.account_password_long,
+                AccountInput.passwordProblem("p".repeat(AccountInput.PASSWORD_MAX_LENGTH + 1)));
+        // 8 位和 200 位都是合法的边界，别把边界本身拦掉。
+        assertEquals(0, AccountInput.passwordProblem("12345678"));
+    }
+
+    // ------------------------------------------------------------ 改密码 / 忘记密码的表单
+    @Test public void change_password_form_needs_the_current_password_first() {
+        // 当前密码空：先说它（用户是从上往下填的），不能笼统说「请填写密码」。
+        assertEquals(R.string.account_current_password_empty,
+                AccountInput.passwordChangeProblem("", "password1", "password1"));
+        // 新密码不合规：用的还是注册那套规则（8~200）。
+        assertEquals(R.string.account_password_empty,
+                AccountInput.passwordChangeProblem("old-one", "", ""));
+        assertEquals(R.string.account_password_short,
+                AccountInput.passwordChangeProblem("old-one", "short", "short"));
+        // 两次不一致。
+        assertEquals(R.string.account_password_mismatch,
+                AccountInput.passwordChangeProblem("old-one", "password1", "password2"));
+        assertEquals(0, AccountInput.passwordChangeProblem("old-one", "password1", "password1"));
+        // **当前密码不查长度**：它是个老密码，服务端说了算（对了就是对了）。
+        // 本地拿「至少 8 位」去拦它，会把一个早年设的 6 位密码的用户挡在门外，
+        // 而他看到的是「密码至少 8 位」——指错方向。
+        assertEquals(0, AccountInput.passwordChangeProblem("123456", "password1", "password1"));
+    }
+
+    @Test public void reset_password_form_reports_each_local_problem() {
+        // 没邮箱：这是**唯一一件用户没法在这一屏修好的事**（他得回上一层填），
+        // 所以 askEmail 要为 true，界面据此把「验证码发往哪儿」那句话换掉。
+        AccountInput.ResetProblem noEmail = AccountInput.resetPasswordProblem("", "123456", "password1", "password1");
+        assertEquals(R.string.account_email_empty, noEmail.message);
+        assertTrue(noEmail.askEmail);
+        // 有邮箱但码是空的：那只是没填，不是「没有邮箱」。
+        AccountInput.ResetProblem noCode = AccountInput.resetPasswordProblem("a@b.co", "", "password1", "password1");
+        assertEquals(R.string.account_code_empty, noCode.message);
+        assertFalse(noCode.askEmail);
+        assertEquals(R.string.account_code_format,
+                AccountInput.resetPasswordProblem("a@b.co", "12345", "password1", "password1").message);
+        assertEquals(R.string.account_password_short,
+                AccountInput.resetPasswordProblem("a@b.co", "123456", "short", "short").message);
+        // 两次不一致：**这是唯一一个能在本地判出来的重设失败**，其余都要问服务端
+        // （码对不对、邮箱存不存在，服务端有意不区分）。
+        assertEquals(R.string.account_password_mismatch,
+                AccountInput.resetPasswordProblem("a@b.co", "123456", "password1", "password2").message);
+        AccountInput.ResetProblem ok = AccountInput.resetPasswordProblem("a@b.co", " 123 456 ", "password1", "password1");
+        assertEquals(0, ok.message);
+        assertFalse(ok.askEmail);
+        // 忘了密码的人更容易把两次密码打错，而这一条判在本地就不用吃一次 429。
+        assertEquals(R.string.account_password_mismatch,
+                AccountInput.resetPasswordProblem("a@b.co", "123456", "password1", "").message);
     }
 
     @Test public void login_accepts_email_or_username_but_always_needs_a_password() {
@@ -193,6 +251,73 @@ public class AccountInputTest {
         for (int status : statuses)
             assertTrue("status " + status + " 必须有一句话",
                     AccountInput.failure(status, null).message != 0);
+    }
+
+    // ------------------------------------------------------------ 改密码语境
+    @Test public void the_two_credentials_sentences_are_never_the_same_one() {
+        // 同一个 code（CREDENTIALS）、同一个 401，在两个语境下要做的事完全不同：
+        // 登录时用户可能连账号都打错了；改密码时账号一定是对的（他正登录着），
+        // 只有「当前密码」那栏错了。
+        AccountInput.Failure signIn = AccountInput.Failure.signIn(401, "CREDENTIALS");
+        AccountInput.Failure change = AccountInput.Failure.passwordChange(401, "CREDENTIALS");
+        assertEquals(R.string.account_credentials_error, signIn.message);
+        assertEquals(R.string.account_current_password_wrong, change.message);
+        assertNotEquals(signIn.message, change.message);
+        // 老的两参入口按登录语境翻——现有调用点行为不变。
+        assertEquals(signIn.message, AccountInput.failure(401, "CREDENTIALS").message);
+        // 光秃秃的 401（错误体没解析出来）也要分开：改密码那条路上说「账号或密码不对」
+        // 会让用户以为自己的账号出了问题。
+        assertEquals(R.string.account_current_password_wrong,
+                AccountInput.Failure.passwordChange(401, null).message);
+        assertNotEquals(AccountInput.Failure.signIn(401, null).message,
+                AccountInput.Failure.passwordChange(401, null).message);
+        // 连接根本没到服务端时两句都是网络文案：那不是凭证问题，改密码那边同理。
+        assertEquals(R.string.forum_network_error, AccountInput.Failure.passwordChange(0, null).message);
+        // 改密码路上别的 code 不受语境影响，走的是同一张表。
+        assertEquals(R.string.account_password_short,
+                AccountInput.Failure.passwordChange(400, "PASSWORD_INVALID").message);
+        assertEquals(R.string.account_rate_limit,
+                AccountInput.Failure.passwordChange(429, "RATE_LIMIT").message);
+    }
+
+    // ------------------------------------------------------------ 忘记密码语境
+    @Test public void a_failed_reset_mail_says_the_password_was_not_touched() {
+        // 503 在**忘记密码**这条路上和注册那条是两件事：注册时服务端回滚了账号，
+        // 必须说「没注册成功」；忘记密码时没有任何账号被动过，说「没注册成功」
+        // 会让一个只是忘了密码的用户以为账号没了。
+        AccountInput.Failure notConfigured =
+                AccountInput.Failure.signIn(503, "MAIL_NOT_CONFIGURED");
+        AccountInput.Failure resetNotConfigured =
+                AccountInput.Failure.forgotPassword(503, "MAIL_NOT_CONFIGURED");
+        assertEquals(R.string.account_mail_not_configured, notConfigured.message);
+        assertEquals(R.string.account_reset_mail_not_configured, resetNotConfigured.message);
+        assertNotEquals(notConfigured.message, resetNotConfigured.message);
+
+        AccountInput.Failure resetFailed = AccountInput.Failure.forgotPassword(503, "MAIL_FAILED");
+        assertEquals(R.string.account_reset_mail_failed, resetFailed.message);
+        assertNotEquals(R.string.account_mail_failed, resetFailed.message);
+        assertNotEquals(resetNotConfigured.message, resetFailed.message);
+        assertEquals(AccountInput.ACTION_NONE, resetFailed.action);
+    }
+
+    @Test public void reset_failures_keep_their_own_sentences_and_next_steps() {
+        // 码错/邮箱不存在：服务端有意不区分，留在原地重填。
+        assertEquals(R.string.account_code_invalid,
+                AccountInput.Failure.forgotPassword(400, "CODE_INVALID").message);
+        // 过期：立刻可以重发。
+        assertEquals(AccountInput.ACTION_RESEND_NOW,
+                AccountInput.Failure.forgotPassword(400, "CODE_EXPIRED").action);
+        // 试错太多：要重发，但冷却还在。
+        assertEquals(AccountInput.ACTION_RESEND_WAIT,
+                AccountInput.Failure.forgotPassword(429, "CODE_ATTEMPTS").action);
+        // 新密码不合规：说的是规则本身，和「码错了」不是一句话。
+        assertEquals(R.string.account_password_short,
+                AccountInput.Failure.forgotPassword(400, "PASSWORD_INVALID").message);
+        // 限流照旧。
+        assertEquals(AccountInput.ACTION_WAIT,
+                AccountInput.Failure.forgotPassword(429, "RATE_LIMIT").action);
+        // **忘记密码这条路上不会有 EMAIL_UNVERIFIED**：它走的是 `password/forgot`，
+        // 服务端不会拿「邮箱没验证」拒它（用户根本登不进去，谈不上验证邮箱）。
     }
 
     // ------------------------------------------------------------ Retry-After

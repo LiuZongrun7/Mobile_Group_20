@@ -124,6 +124,17 @@ CODE_RESEND_SECONDS = 60
 CODE_MAX_PER_HOUR = 5
 CODE_MAX_ATTEMPTS = 5
 
+# **全局**每小时最多发几封验证码邮件（所有邮箱加起来）。
+#
+# 为什么需要它：每邮箱的限流挡不住"拿一万个邮箱各要一封"——那不会让我们被刷爆，
+# 但会**烧掉发信账号的日配额**（163 免费邮箱一天就那么几十上百封），
+# 于是真正要注册的人一封也收不到。这是把"共享的一个发信通道"当成稀缺资源来护。
+#
+# 60 这个数是估的：正常使用一天也到不了，被刷时能在烧完配额之前刹住。
+# 代价是极端情况下可能短暂挡住正常用户——比起"所有人都收不到信"，这个代价更小。
+# （**不是**按 IP 限流：那要加一列、还要信任 `x-real-ip`，而这里的目的只是保配额。）
+GLOBAL_CODES_PER_HOUR = 60
+
 # 邮箱验证上线的时间点（2026-10-05 00:00 UTC+8）。
 # 比它早的账号是"历史账号"：那时还没有 email 这一列，允许继续用用户名登录。
 EMAIL_EPOCH_MILLIS = 1_791_129_600_000
@@ -362,6 +373,15 @@ class Accounts:
                 # 换个说法防刷：每小时 5 封是上限，不是"再等等就好了"。
                 raise problem(429, "RATE_LIMIT", "Too many codes requested for this email",
                               headers={"Retry-After": "3600"})
+            # 全局上限：见 GLOBAL_CODES_PER_HOUR 的注释（护的是发信账号的日配额）。
+            # 数的是**这张表的行数**，包含"没注册过所以没真发"的那些——它们同样说明
+            # 有人在批量请求，而这时候刹住正是我们想要的。
+            sent_globally = db.execute("SELECT COUNT(*) FROM email_codes WHERE created>?",
+                                       (current - 3_600_000,)).fetchone()[0]
+            if sent_globally >= GLOBAL_CODES_PER_HOUR:
+                raise problem(429, "RATE_LIMIT",
+                              "Too many codes requested right now, please try again later",
+                              headers={"Retry-After": "600"})
             code = "".join(secrets.choice("0123456789") for _ in range(CODE_DIGITS))
             db.execute("""INSERT INTO email_codes(email, purpose, code_hash, user_id,
                           created, expires, attempts, consumed) VALUES(?,?,?,?,?,?,0,NULL)""",
