@@ -52,6 +52,20 @@ public final class CallLedger {
                             String chatId, String taskId, UsageRecorder.Kind kind,
                             com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens,
                             long startedAtEpochMillis) {
+        return record(providerId, modelId, route, chatId, taskId, kind, tokens,
+                startedAtEpochMillis, null);
+    }
+
+    /**
+     * 同上，并带上 Auto 的理由与规则版本（手动选的传 null）。
+     *
+     * <p>存理由是大纲 §6 点名要的："save the selected route, policy version and reason"。
+     * 只在界面上闪一下的话，重启之后就没人能回答"当时为什么挑了它"。
+     */
+    public UsageCall record(String providerId, String modelId, UsageRecorder.Route route,
+                            String chatId, String taskId, UsageRecorder.Kind kind,
+                            com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens,
+                            long startedAtEpochMillis, String reason) {
         if (tokens == null) {
             return null;
         }
@@ -63,7 +77,8 @@ public final class CallLedger {
         String ledgerProviderId = isCustom(providerId)
                 ? com.mobilegroup20.modelpilot.contract.model.Provider.CUSTOM.name() : providerId;
         UsageCall call = recorder.record(callId(providerId, startedAtEpochMillis), ledgerProviderId,
-                modelId, route, chatId, taskId, kind, null, tokens, startedAtEpochMillis, day);
+                modelId, route, chatId, taskId, kind, null, tokens, startedAtEpochMillis, day,
+                reason, reason == null ? null : AutoRouter.POLICY_VERSION);
         if (call == null) {
             return null;
         }

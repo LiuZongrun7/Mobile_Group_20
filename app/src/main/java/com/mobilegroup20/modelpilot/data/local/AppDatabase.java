@@ -37,7 +37,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
                 MessageEntity.class,
                 MemoryEntity.class
         },
-        version = 5,
+        version = 6,
         exportSchema = true)
 @TypeConverters(LocalConverters.class)
 public abstract class AppDatabase extends RoomDatabase {
@@ -160,6 +160,21 @@ public abstract class AppDatabase extends RoomDatabase {
         public void migrate(@NonNull SupportSQLiteDatabase db) {
             db.execSQL("ALTER TABLE usage_call ADD COLUMN task_id TEXT");
             db.execSQL("ALTER TABLE usage_call ADD COLUMN kind TEXT");
+        }
+    };
+
+    /**
+     * v5 → v6：账本再记两列——**Auto 挑模型的那句理由**与**当时用的路由规则版本**。
+     *
+     * <p>大纲 §6 要的是 "save the selected route, policy version and reason"。
+     * 理由原来只在对话页那行 `Details` 里显示一次，重启就没了；事后没人能回答
+     * "当时为什么挑了它"。两列都可空（手动选的、导入的记录没有理由）。
+     */
+    public static final Migration MIGRATION_5_6 = new Migration(5, 6) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase db) {
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN reason TEXT");
+            db.execSQL("ALTER TABLE usage_call ADD COLUMN policy TEXT");
         }
     };
 

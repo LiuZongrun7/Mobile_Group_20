@@ -140,6 +140,10 @@ public final class ChatConversationViewModel extends ViewModel {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
+    /** 上游为这一次回答报的真实用量（onUsage 填、saveAnswer 读；都在 io 线程上，天然有序）。 */
+    private volatile long lastInputTokens;
+    private volatile long lastOutputTokens;
+
     /** 正在跑的那次流式调用；用户离开页面时取消它（取消之后不再有回调，也不花钱）。 */
     private final AtomicReference<Call> inflight = new AtomicReference<>();
     private final AtomicBoolean busy = new AtomicBoolean();
@@ -303,15 +307,21 @@ public final class ChatConversationViewModel extends ViewModel {
 
                         @Override public void onUsage(
                                 com.mobilegroup20.modelpilot.contract.model.TokenBundle tokens) {
+                            // usage 先到、onDone 后到，而两者都排在同一个 io 线程上，
+                            // 所以这里的赋值一定发生在 saveAnswer 读它之前。
+                            lastInputTokens = tokens.input + tokens.cacheRead + tokens.cacheWrite;
+                            lastOutputTokens = tokens.output;
                             // 记账要写库，所以在 io 线程上做。金额算不出来时那一行留 null
                             // （界面显示"价格未知"），**不填 0**。
+                            // 带上 reason：大纲 §6 要的是"route + policy version + reason"都留下，
+                            // 只在界面上闪一下的理由，重启之后没人能回答"当时为什么挑它"。
                             io.execute(() -> ledger.record(providerId, modelId, route, chatId,
-                                    taskId, UsageRecorder.Kind.ANSWER, tokens, startedAt));
+                                    taskId, UsageRecorder.Kind.ANSWER, tokens, startedAt, reason));
                         }
 
                         @Override public void onDone() {
                             io.execute(() -> saveAnswer(assistantId, answer.toString(), providerId,
-                                    modelId, route));
+                                    modelId, route, taskId));
                             main.post(() -> {
                                 SendState value = send.getValue();
                                 // settled() 而不是 idle()：留住 compressed / 路由信息，
@@ -326,7 +336,7 @@ public final class ChatConversationViewModel extends ViewModel {
                         @Override public void onError(Throwable failure) {
                             // **已经吐出来的字不撤回**（用户看到的字是真的），但要落库并标成不完整。
                             io.execute(() -> saveAnswer(assistantId, answer.toString(), providerId,
-                                    modelId, route));
+                                    modelId, route, taskId));
                             main.post(() -> {
                                 String message = message(failure);
                                 withCurrent(providerId, modelId, reason, route, compressed,
@@ -359,7 +369,7 @@ public final class ChatConversationViewModel extends ViewModel {
      * 但 `touchChat` 照做——它记的是"最后一次是谁答的"，这跟回答长短无关。
      */
     private void saveAnswer(String assistantId, String text, String providerId, String modelId,
-                            UsageRecorder.Route route) {
+                            UsageRecorder.Route route, String taskId) {
         if (!text.isEmpty()) {
             MessageEntity answer = new MessageEntity();
             answer.id = assistantId;
@@ -369,6 +379,11 @@ public final class ChatConversationViewModel extends ViewModel {
             answer.providerId = providerId;
             answer.modelId = modelId;
             answer.route = route.name();
+            // **真实用量回填到这条回答上**（大纲 §6 那条 "message-level token fields"）。
+            // 上游没报 usage 时保持 0 = 不知道，**不按估算填**——估算是用来判断阈值的，
+            // 拿它冒充账单数字是这个项目一直避免的那类错。
+            answer.tokensIn = lastInputTokens;
+            answer.tokensOut = lastOutputTokens;
             answer.createdAtEpochMillis = System.currentTimeMillis();
             dao.upsertMessage(answer);
         }

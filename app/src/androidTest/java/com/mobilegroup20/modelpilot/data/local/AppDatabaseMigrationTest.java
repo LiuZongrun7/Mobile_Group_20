@@ -207,4 +207,32 @@ public class AppDatabaseMigrationTest {
             assertEquals("AUTO", cursor.getString(3));
         }
     }
+
+    /**
+     * v5 → v6：账本再记两列——Auto 的理由与当时的路由规则版本。
+     *
+     * <p>大纲 §6 点名要 "save the selected route, policy version and reason"：
+     * 理由原来只在对话页那行 Details 里显示一次，重启就没了。可空（手动选/导入没有理由）。
+     */
+    @Test
+    public void v5ToV6AddsReasonAndPolicyAndKeepsOldUsageRows() throws IOException {
+        SupportSQLiteDatabase db = helper.createDatabase(TEST_DB, 5);
+        db.execSQL("INSERT INTO usage_call(id, uid, provider, model, startedAtEpochMillis, day,"
+                + " input, cacheRead, cacheWrite, output, source, route, task_id, kind)"
+                + " VALUES('call:v5', 'local', 'DEEPSEEK', 'deepseek-chat', 2, '2026-10-04',"
+                + " 50, 0, 0, 10, 'APP', 'AUTO', 'task:old', 'ANSWER')");
+        db.close();
+
+        db = helper.runMigrationsAndValidate(TEST_DB, 6, true, AppDatabase.MIGRATION_5_6);
+
+        try (android.database.Cursor cursor = db.query(
+                "SELECT reason, policy, task_id, kind, input FROM usage_call WHERE id='call:v5'")) {
+            assertTrue(cursor.moveToFirst());
+            assertTrue("reason 必须是 NULL（老行没有理由）", cursor.isNull(0));
+            assertTrue("policy 必须是 NULL", cursor.isNull(1));
+            assertEquals("task:old", cursor.getString(2));
+            assertEquals("ANSWER", cursor.getString(3));
+            assertEquals(50, cursor.getInt(4));
+        }
+    }
 }

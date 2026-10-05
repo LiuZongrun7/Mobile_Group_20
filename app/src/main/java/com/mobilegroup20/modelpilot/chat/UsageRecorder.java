@@ -74,6 +74,14 @@ public final class UsageRecorder {
                 startedAtEpochMillis, day);
     }
 
+    /** 同上，但不带理由/规则版本（压缩、工具这类"没有选型"的调用用这个）。 */
+    public UsageCall record(String callId, String providerId, String modelId, Route route,
+                            String chatId, String taskId, Kind kind, List<String> toolCalls,
+                            TokenBundle tokens, long startedAtEpochMillis, String day) {
+        return record(callId, providerId, modelId, route, chatId, taskId, kind, toolCalls, tokens,
+                startedAtEpochMillis, day, null, null);
+    }
+
     /**
      * 记一行（带任务号与角色）。
      *
@@ -82,7 +90,8 @@ public final class UsageRecorder {
      */
     public UsageCall record(String callId, String providerId, String modelId, Route route,
                             String chatId, String taskId, Kind kind, List<String> toolCalls,
-                            TokenBundle tokens, long startedAtEpochMillis, String day) {
+                            TokenBundle tokens, long startedAtEpochMillis, String day,
+                            String reason, String policy) {
         Provider provider = providerOf(providerId);
         if (provider == null) {
             return null;                        // 认不出的 provider：不猜、不记
@@ -105,6 +114,8 @@ public final class UsageRecorder {
         call.toolCalls = toolCalls == null ? null : join(toolCalls);
         call.taskId = taskId;
         call.kind = kind == null ? null : kind.name();
+        call.reason = reason;
+        call.policy = policy;
 
         PricingRate rate = pricing.rateFor(provider, modelId, day);
         if (rate == null) {

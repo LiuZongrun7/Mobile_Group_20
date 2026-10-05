@@ -115,6 +115,14 @@ public class UsageCallEntity {
     @ColumnInfo(name = "kind")
     public String kind;
 
+    /** Auto 挑这次模型的那句理由（手动选的、导入的记录是 null）。 */
+    @ColumnInfo(name = "reason")
+    public String reason;
+
+    /** 当时用的是哪一版路由规则（见 `AutoRouter.POLICY_VERSION`）。 */
+    @ColumnInfo(name = "policy")
+    public String policy;
+
     /** Room 要一个无参构造。 */
     public UsageCallEntity() {
     }
@@ -170,6 +178,8 @@ public class UsageCallEntity {
         e.rateVersion = call.rateVersion;
         e.taskId = call.taskId;
         e.kind = call.kind;
+        e.reason = call.reason;
+        e.policy = call.policy;
         return e;
     }
 
@@ -195,6 +205,8 @@ public class UsageCallEntity {
         call.rateVersion = rateVersion;
         call.taskId = taskId;
         call.kind = kind;
+        call.reason = reason;
+        call.policy = policy;
         return call;
     }
 }

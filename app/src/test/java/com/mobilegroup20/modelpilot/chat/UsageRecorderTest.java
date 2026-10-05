@@ -125,6 +125,23 @@ public class UsageRecorderTest {
         assertEquals("COMPRESS", compress.kind);
     }
 
+    @Test public void the_reason_and_policy_are_kept_for_auto_decisions() {
+        UsageCall auto = new UsageRecorder(RATES).record("call:r", "DEEPSEEK", "deepseek-chat",
+                UsageRecorder.Route.AUTO, "chat-1", "task:x", UsageRecorder.Kind.ANSWER, null,
+                tokens(1, 1), 1L, DAY, "Auto 选了 DeepSeek V3.2：文本任务、已配置的模型里最便宜",
+                AutoRouter.POLICY_VERSION);
+        UsageCall manual = new UsageRecorder(RATES).record("call:m", "DEEPSEEK", "deepseek-chat",
+                UsageRecorder.Route.MANUAL, "chat-1", "task:x", UsageRecorder.Kind.ANSWER, null,
+                tokens(1, 1), 1L, DAY);
+
+        // 理由与规则版本要留下来：只显示一次的话，重启之后没人能回答"当时为什么挑它"。
+        assertTrue(auto.reason.contains("DeepSeek"));
+        assertEquals(AutoRouter.POLICY_VERSION, auto.policy);
+        // 手动选的没有"为什么"可言，**不编一句**。
+        assertNull(manual.reason);
+        assertNull(manual.policy);
+    }
+
     @Test public void imported_rows_leave_task_and_kind_unknown() {
         UsageCall imported = new UsageRecorder(RATES).record("call:c", "DEEPSEEK", "deepseek-chat",
                 null, null, null, tokens(1, 1), 1L, DAY);

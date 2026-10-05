@@ -38,6 +38,14 @@ public final class AutoRouter {
         }
     }
 
+    /**
+     * 这一版路由规则的版本号，写进账本。
+     *
+     * <p>规则一改（比如以后把延迟、预算、用户偏好也算进去），老记录必须能看出
+     * "当时是按哪版选的"——否则"Auto 怎么挑了这么个模型"只能靠猜。
+     */
+    public static final String POLICY_VERSION = "capability-then-price-v1";
+
     private final ProviderRegistry registry;
 
     public AutoRouter(ProviderRegistry registry) {

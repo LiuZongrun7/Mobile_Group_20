@@ -39,7 +39,51 @@ public class BundledPricingSource implements PricingSource {
     /** 按 (提供方, 模型) 分组前先排序，查的时候才能用「最后一版」这个说法。 */
     private final List<PricingRate> rates = new ArrayList<>();
 
+    /**
+     * 出厂价目表：**目前只录了 DeepSeek 的两个模型**，数字与链接都来自官方定价页。
+     *
+     * <p>{@code ProviderRegistry} 里那四个参考价（给 Auto 排序、给界面显示用）和这里是
+     * **同一份数字、两个用途**：那边只比大小，这边真的拿去乘 token 算钱。
+     * 一处改了另一处也要改——所以两边的 {@code priceSource} 都留了同一个链接。
+     *
+     * <p><b>为什么现在才填</b>：以前这张表空着，于是账本里每一行的 {@code costMicros}
+     * 都是 null（"价格未知"），Insights 也就没有任何金额可算。空表本身没错
+     * （不知道就是不知道），但一直空着等于"花了多少钱"这个问题永远答不了。
+     *
+     * <p>其余五家**故意留空**：没实测过官方定价页就不能写（写了就是一个看不出错的
+     * 金额，然后整个面板都不可信）。它们的界面会照实显示"价格未知"。
+     */
     public BundledPricingSource() {
+        // DeepSeek 官方定价页（人民币标价，这里按官网给出的美元口径记微美元/1M）：
+        // 输入（缓存未命中）$0.140845/1M、缓存命中 $0.002816/1M、输出 $0.563380/1M，
+        // 缓存写不计费（0）。生效日期取核价那天，改了价就再加一条更晚的。
+        add(rate(Provider.DEEPSEEK, "deepseek-chat", DEEPSEEK_EFFECTIVE, DEEPSEEK_VERSION,
+                140_845L, 2_816L, 0L, 563_380L, DEEPSEEK_PRICE_URL));
+        add(rate(Provider.DEEPSEEK, "deepseek-reasoner", DEEPSEEK_EFFECTIVE, DEEPSEEK_VERSION,
+                140_845L, 2_816L, 0L, 563_380L, DEEPSEEK_PRICE_URL));
+    }
+
+    /** 这一版 DeepSeek 价目的生效日（含当天）与版本名，两处只写一遍。 */
+    private static final String DEEPSEEK_EFFECTIVE = "2026-09-05";
+    private static final String DEEPSEEK_VERSION = "2026-09-deepseek";
+    private static final String DEEPSEEK_PRICE_URL =
+            "https://api-docs.deepseek.com/quick_start/pricing/";
+
+    /** 造一条价目，字段顺序就是 {@link PricingRate} 的顺序。 */
+    private static PricingRate rate(Provider provider, String model, String effectiveFrom,
+                                    String rateVersion, long input, long cacheRead,
+                                    long cacheWrite, long output, String sourceUrl) {
+        PricingRate rate = new PricingRate();
+        rate.provider = provider;
+        rate.model = model;
+        rate.effectiveFrom = effectiveFrom;
+        rate.rateVersion = rateVersion;
+        rate.inputMicrosPer1M = input;
+        rate.cacheReadMicrosPer1M = cacheRead;
+        rate.cacheWriteMicrosPer1M = cacheWrite;
+        rate.outputMicrosPer1M = output;
+        rate.sourceUrl = sourceUrl;
+        return rate;
     }
 
     public BundledPricingSource(List<PricingRate> initial) {

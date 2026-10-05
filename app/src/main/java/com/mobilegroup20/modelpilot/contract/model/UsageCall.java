@@ -113,6 +113,23 @@ public class UsageCall {
     public String taskId;
 
     /**
+     * Auto 挑这次模型时给出的那句理由（原样存下来）。
+     *
+     * <p>大纲 §6 要求"save the selected route, policy version and reason"：
+     * 只在界面上闪一下的理由，重启就没了，事后没人能回答"当时为什么挑了它"。
+     * 手动选的、导入的记录都是 null（没有理由可言）。
+     */
+    public String reason;
+
+    /**
+     * 做这次选择用的是哪一版路由规则（例如 `"capability-then-price-v1"`）。
+     *
+     * <p>规则改了之后，老记录要能看出"当时是按哪版规则选的"——否则
+     * "Auto 怎么挑了这么个模型"这个问题永远只能靠猜。
+     */
+    public String policy;
+
+    /**
      * 这次调用是干什么的（`"ANSWER"` / `"COMPRESS"` / `"TOOL"`）。
      *
      * <p>**和 {@link #route} 是两件事**：route 说的是"模型是谁挑的"，
