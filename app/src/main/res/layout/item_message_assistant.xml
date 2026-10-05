@@ -1,12 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 模型的一条回答：**不带气泡的正文**（理由见 bg_chat_user_bubble 的注释）。 -->
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  模型的一条回答：**不带气泡的正文**（理由见 bg_chat_user_bubble 的注释）。
+
+  上面那块 `message_thinking` 是**等待期**的样子（2026-10-05 加）：从按下发送到第一个字
+  回来，中间要经过落库、装上下文、压缩、选模型、建连接、等首字，慢的时候十几秒。
+  这期间原来只放了一个空 TextView —— 屏幕上什么都没有，用户没法判断
+  "发出去了吗、是不是卡了"。现在这一行显示"正在……（等了 Ns）"，
+  第一个字一到就把它藏起来、换成下面的正文。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/message_text"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="12dp"
-    android:textColor="#0B1B33"
-    android:textSize="15sp"
-    android:lineSpacingExtra="3dp"
-    tools:text="Updated the background to blue." />
+    android:orientation="vertical">
+
+    <!-- 只有"在等"的时候可见；文案、点动画和秒数都由 ChatConversationFragment 更新。 -->
+    <LinearLayout
+        android:id="@+id/message_thinking"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:id="@+id/message_thinking_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#7A8699"
+            android:textSize="14sp"
+            tools:text="Waiting for the model" />
+
+        <!-- 点动画：每 500ms 变成 . / .. / ...，**跟在文字右边**，读起来就是"还在动"。 -->
+        <TextView
+            android:id="@+id/message_thinking_dots"
+            android:layout_width="24dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:textColor="#7A8699"
+            android:textSize="14sp"
+            tools:text="..." />
+
+        <!-- 等了多久。**必须显示秒数**：动画只说明它还在动，秒数才说明等了多久。 -->
+        <TextView
+            android:id="@+id/message_thinking_elapsed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#9AA5B6"
+            android:textSize="12sp"
+            tools:text="7s" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/message_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="#0B1B33"
+        android:textSize="15sp"
+        android:lineSpacingExtra="3dp"
+        tools:text="Updated the background to blue." />
+</LinearLayout>

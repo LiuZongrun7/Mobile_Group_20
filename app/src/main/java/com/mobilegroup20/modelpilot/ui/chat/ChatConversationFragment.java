@@ -98,6 +98,10 @@ public final class ChatConversationFragment extends Fragment {
     /** 流式重渲染的节流（毫秒）：Markdown + 公式排版不便宜，见 renderSendState。 */
     private static final long STREAM_RENDER_INTERVAL_MS = 120;
     private long lastStreamRenderAt;
+    /** "正在思考"那个计时器是不是已经排上了（别重复 post，否则点会越跳越快）。 */
+    private boolean thinkingTicking;
+    /** 上一次量到的内容高度，用来判断"内容变高了没有"（见 followTailIfGrew）。 */
+    private int lastContentHeight;
 
     @Nullable
     @Override
@@ -152,9 +156,7 @@ public final class ChatConversationFragment extends Fragment {
         model.messages().observe(getViewLifecycleOwner(), messages -> {
             // 库里的消息变了（新消息落库）：这时候必须整块重建——
             // 正在流式回来的那一行由 renderSendState 自己维护，见它的注释。
-            ChatConversationViewModel.SendState state = model.sendState().getValue();
-            renderMessages(messages, state != null && state.sending,
-                    state == null ? "" : state.streaming);
+            renderMessages(messages, model.sendState().getValue());
         });
         model.sendState().observe(getViewLifecycleOwner(), this::renderSendState);
     }
@@ -175,6 +177,7 @@ public final class ChatConversationFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        stopThinkingTicker();
         super.onDestroyView();
         streamingRow = null;
         binding = null;
@@ -209,10 +212,13 @@ public final class ChatConversationFragment extends Fragment {
      * （几十到几百），而差量更新的 bug（漏了一行、顺序错位）在界面上很难看出来。
      * 等实测卡了再换成 RecyclerView + DiffUtil。
      */
-    private void renderMessages(List<MessageEntity> messages, boolean sending, String streaming) {
+    private void renderMessages(List<MessageEntity> messages,
+                                ChatConversationViewModel.SendState state) {
         if (binding == null) {
             return;
         }
+        boolean sending = state != null && state.sending();
+        String streaming = state == null ? "" : state.streaming;
         binding.conversationMessages.removeAllViews();
         streamingRow = null;
         LayoutInflater inflater = getLayoutInflater();
@@ -234,11 +240,14 @@ public final class ChatConversationFragment extends Fragment {
             // 那就是每个字都重新 inflate 上百个 View，界面会卡成幻灯片。
             streamingRow = ItemMessageAssistantBinding.inflate(inflater,
                     binding.conversationMessages, false);
-            Markdown.render(streamingRow.messageText, streaming == null ? "" : streaming);
+            // 这一行有两种样子：**等的时候是"正在思考（等了 Ns）"**，第一个字一到就换成正文。
+            // 两种都在同一个 item 里，切换只改可见性——重建 View 会把滚动位置也带偏。
+            renderAssistantRow(streamingRow, state);
             lastStreamRenderAt = android.os.SystemClock.uptimeMillis();
             binding.conversationMessages.addView(streamingRow.getRoot());
         }
         int count = binding.conversationMessages.getChildCount();
+        lastContentHeight = binding.conversationMessages.getHeight();
         binding.conversationEmpty.setVisibility(count == 0 ? View.VISIBLE : View.GONE);
         // **总是跟到底部**：数据只在"刚发出一条"或"回答正在逐字回来"时变，
         // 那两种情况下用户就是在等最后一行。不做"用户翻历史时不打扰"的判断，
@@ -571,7 +580,7 @@ public final class ChatConversationFragment extends Fragment {
 
     private void onSendClicked() {
         ChatConversationViewModel.SendState state = model.sendState().getValue();
-        if (state != null && state.sending) {
+        if (state != null && state.sending()) {
             model.cancel();
             return;
         }
@@ -595,27 +604,135 @@ public final class ChatConversationFragment extends Fragment {
         if (binding == null) {
             return;
         }
-        boolean sending = state.sending;
+        boolean sending = state.sending();
         binding.conversationSend.setImageResource(sending ? R.drawable.ic_stop : R.drawable.ic_send);
         binding.conversationSend.setContentDescription(
                 getString(sending ? R.string.chat_stop : R.string.chat_send));
 
-        if (sending && streamingRow != null) {
+        // 等待期的动画由这个计时器推着走（点每 500ms 跳一下、秒数每秒变一次）。
+        if (state.thinking() && streamingRow != null) {
+            // 还没吐第一个字：这一行显示"正在……（等了 Ns）"，**不显示正文**——
+            // 没有这一行的话，从按下发送到第一个字之间屏幕上什么都没有。
+            renderAssistantRow(streamingRow, state);
+            followTailIfGrew();
+            startThinkingTicker();
+        } else {
+            stopThinkingTicker();
+        }
+
+        if (sending && streamingRow != null && !state.thinking()) {
             // 高频路径：只重渲染那一行（见 renderMessages 里的注释）。
             // **但要节流**：Markdown 解析 + 公式排版是实打实的开销，每来一个字就重排一次
             // 会让长回答的流式肉眼可见地卡；120ms 一次在人眼里仍然是"逐字出来"。
             long now = android.os.SystemClock.uptimeMillis();
             if (now - lastStreamRenderAt >= STREAM_RENDER_INTERVAL_MS) {
                 lastStreamRenderAt = now;
-                Markdown.render(streamingRow.messageText, state.streaming);
+                renderAssistantRow(streamingRow, state);
                 scrollToTail();
             }
-        } else {
+        } else if (!sending || streamingRow == null) {
             List<MessageEntity> messages = model.messages().getValue();
             renderMessages(messages == null ? Collections.<MessageEntity>emptyList() : messages,
-                    sending, state.streaming);
+                    state);
         }
         renderNotice(state);
+    }
+
+    /**
+     * 画那一行助手气泡：**"正在思考"和"正文"是同一行的两种样子**。
+     *
+     * <p>三个阶段的文案不一样，因为用户能做的事不一样：
+     * 压缩要花钱（说出来他才不会以为卡了）、等首字最久（显示秒数）、正文来了就直接画。
+     */
+    private void renderAssistantRow(ItemMessageAssistantBinding row,
+                                    ChatConversationViewModel.SendState state) {
+        if (state != null && state.thinking()) {
+            row.messageThinking.setVisibility(View.VISIBLE);
+            row.messageText.setVisibility(View.GONE);
+            row.messageThinkingLabel.setText(thinkingLabel(state));
+            long elapsed = state.startedAtUptimeMillis <= 0L ? 0L
+                    : android.os.SystemClock.uptimeMillis() - state.startedAtUptimeMillis;
+            row.messageThinkingDots.setText(Thinking.dots(elapsed));
+            row.messageThinkingElapsed.setText(Thinking.elapsed(elapsed));
+            return;
+        }
+        row.messageThinking.setVisibility(View.GONE);
+        row.messageText.setVisibility(View.VISIBLE);
+        Markdown.render(row.messageText, state == null ? "" : state.streaming);
+    }
+
+    /** 等待期那句文案。**每一句都要说清"现在在干什么"**，不能只写"请稍候"。 */
+    private CharSequence thinkingLabel(ChatConversationViewModel.SendState state) {
+        switch (state.stage) {
+            case COMPRESSING:
+                // 这一拍是一次真实的模型调用（要好几秒、要花钱），所以单独一句。
+                return getString(R.string.chat_thinking_compressing);
+            case CONTEXT:
+                return getString(R.string.chat_thinking_context);
+            default:
+                // 已经知道是谁在答了就把模型名带上——"在等 gpt-5.6-terra"比"在等模型"有用。
+                return state.modelId == null || state.modelId.isEmpty()
+                        ? getString(R.string.chat_thinking_waiting_plain)
+                        : getString(R.string.chat_thinking_waiting, state.modelId);
+        }
+    }
+
+    /**
+     * 点动画和秒数的计时器。**只在"等待期"跑**，第一个字一到就停——
+     * 停了不停是一个纯粹的浪费：回答正在逐字回来的时候，那一行已经没有它了。
+     */
+    private final Runnable thinkingTicker = new Runnable() {
+        @Override
+        public void run() {
+            thinkingTicking = false;
+            if (binding == null || streamingRow == null) {
+                return;
+            }
+            ChatConversationViewModel.SendState state = model.sendState().getValue();
+            if (state == null || !state.thinking()) {
+                return;
+            }
+            renderAssistantRow(streamingRow, state);
+            followTailIfGrew();
+            startThinkingTicker();
+        }
+    };
+
+    /**
+     * 内容变高了就再跟一次底部。
+     *
+     * <p><b>为什么不能只滚一次：</b>"加了新的一行"和"这一行有多高"是两件事——
+     * 高度要等这一轮布局完才知道。`renderMessages` 末尾那次滚动因此总是**差一行**，
+     * 结果就是刚出现的思考行整块被推到屏幕外面，看起来像"按了发送什么都没发生"
+     * （2026-10-05 真机上就是这么被坑的：日志里这一行 vis=VISIBLE、高度 104px、
+     * 文字也在，屏幕上却一个字都看不到）。
+     * 这里改成"每一拍都量一下内容高度，变高了就跟到底"——它自己会收敛，不依赖时序。
+     */
+    private void followTailIfGrew() {
+        if (binding == null) {
+            return;
+        }
+        int height = binding.conversationMessages.getHeight();
+        if (height > lastContentHeight) {
+            lastContentHeight = height;
+            scrollToTail();
+        }
+    }
+
+    private void startThinkingTicker() {
+        if (thinkingTicking || binding == null) {
+            return;
+        }
+        thinkingTicking = true;
+        binding.conversationMessages.postDelayed(thinkingTicker, Thinking.DOT_INTERVAL_MS);
+    }
+
+    private void stopThinkingTicker() {
+        if (binding == null) {
+            return;
+        }
+        binding.conversationMessages.removeCallbacks(thinkingTicker);
+        thinkingTicking = false;
     }
 
     /**

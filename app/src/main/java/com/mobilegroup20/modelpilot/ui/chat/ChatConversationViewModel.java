@@ -67,9 +67,31 @@ import okhttp3.Call;
  */
 public final class ChatConversationViewModel extends ViewModel {
 
-    /** 一轮发送的进行状态。界面照着它画"正在输入"、路由那一行和错误提示。 */
+    /** 一轮发送的进行状态。界面照着它画"正在思考"、路由那一行和错误提示。 */
     public static final class SendState {
-        public final boolean sending;
+
+        /**
+         * 这一轮走到哪一步了。**它存在的理由就是"用户点了发送之后不能什么都不显示"**：
+         * 从按下发送到第一个字回来，中间要经过落库、装上下文、**压缩（一次真实的模型调用！）**、
+         * 选模型、建连接、等首字，慢的时候十几秒。这期间屏幕上如果什么都没有，
+         * 用户只能猜"发出去了吗 / 是不是卡了"——2026-10-05 用户原话就是这么说的。
+         */
+        public enum Stage {
+            /** 什么都没在跑。 */
+            IDLE,
+            /** 落库、装上下文、挑模型（还没发请求）。 */
+            CONTEXT,
+            /** 正在把更早的内容压成记忆（**这是一次会花钱的模型调用**，要单独说）。 */
+            COMPRESSING,
+            /** 请求已经发出去了，等模型吐第一个字。 */
+            WAITING,
+            /** 正在逐字回来。 */
+            STREAMING,
+            /** 这一轮结束了（正常收尾，界面还要留着路由/压缩那些信息）。 */
+            DONE
+        }
+
+        public final Stage stage;
         /** 正在逐字回来的回答（没在发时是空串）。 */
         public final String streaming;
         /** 这次是谁答的：Auto 的结果或手动选的。还没定时是 null。 */
@@ -84,11 +106,20 @@ public final class ChatConversationViewModel extends ViewModel {
         public final boolean incomplete;
         /** 这一轮压过上下文：界面要说明"更早的内容已收进记忆"。 */
         public final boolean compressed;
+        /**
+         * 这一轮**按下发送**的时刻（`SystemClock.uptimeMillis()`），界面用它显示"等了 Ns"。
+         *
+         * <p>放在状态里而不是 Fragment 的字段里，是为了**转屏之后秒数接着走**：
+         * Fragment 会重建，而 ViewModel 活着；秒数从头数的话，转了屏就变成"刚发出去"，
+         * 而那正是用户在盯着看的东西。
+         */
+        public final long startedAtUptimeMillis;
 
-        SendState(boolean sending, String streaming, String providerId, String modelId,
+        SendState(Stage stage, String streaming, String providerId, String modelId,
                   String routeReason, UsageRecorder.Route route, String error,
-                  boolean incomplete, boolean compressed) {
-            this.sending = sending;
+                  boolean incomplete, boolean compressed, long startedAtUptimeMillis) {
+            this.startedAtUptimeMillis = startedAtUptimeMillis;
+            this.stage = stage;
             this.streaming = streaming;
             this.providerId = providerId;
             this.modelId = modelId;
@@ -99,8 +130,24 @@ public final class ChatConversationViewModel extends ViewModel {
             this.compressed = compressed;
         }
 
+        /** 有请求在路上：发送键该显示成"停止"，界面该显示"正在……"。 */
+        public boolean sending() {
+            return stage != Stage.IDLE && stage != Stage.DONE;
+        }
+
+        /** 第一个字还没回来（在准备、在压缩、或在等）——这三种都要画思考动画。 */
+        public boolean thinking() {
+            return sending() && streaming.isEmpty();
+        }
+
         static SendState idle() {
-            return new SendState(false, "", null, null, null, null, null, false, false);
+            return new SendState(Stage.IDLE, "", null, null, null, null, null, false, false, 0L);
+        }
+
+        /** 刚按下发送：先把"在准备"这件事显示出来（**这时候一个请求都还没发**）。 */
+        static SendState preparing() {
+            return new SendState(Stage.CONTEXT, "", null, null, null, null, null, false, false,
+                    android.os.SystemClock.uptimeMillis());
         }
 
         /** 界面上能不能画那一行 `Auto → <模型>`。 */
@@ -108,9 +155,16 @@ public final class ChatConversationViewModel extends ViewModel {
             return providerId != null && modelId != null;
         }
 
+        SendState at(Stage next) {
+            return new SendState(next, streaming, providerId, modelId, routeReason, route, error,
+                    incomplete, compressed, startedAtUptimeMillis);
+        }
+
         SendState streaming(String text) {
-            return new SendState(true, text, providerId, modelId, routeReason, route, error,
-                    incomplete, compressed);
+            // 已经有字回来了：阶段跟着变成 STREAMING（**别的字段一个都不能丢**，
+            // 尤其是 compressed —— 那句话在回答到达那一刻最容易丢，见 settled()）。
+            return new SendState(Stage.STREAMING, text, providerId, modelId, routeReason, route,
+                    error, incomplete, compressed, startedAtUptimeMillis);
         }
 
         /**
@@ -122,13 +176,13 @@ public final class ChatConversationViewModel extends ViewModel {
          * 用户根本读不到，而这件事（历史被压缩了）恰恰是他最该知道的。
          */
         SendState settled() {
-            return new SendState(false, "", providerId, modelId, routeReason, route, error,
-                    incomplete, compressed);
+            return new SendState(Stage.DONE, "", providerId, modelId, routeReason, route, error,
+                    incomplete, compressed, startedAtUptimeMillis);
         }
 
         SendState failed(String message) {
-            return new SendState(false, streaming, providerId, modelId, routeReason, route, message,
-                    !streaming.isEmpty(), compressed);
+            return new SendState(Stage.DONE, streaming, providerId, modelId, routeReason, route,
+                    message, !streaming.isEmpty(), compressed, startedAtUptimeMillis);
         }
     }
 
@@ -266,7 +320,10 @@ public final class ChatConversationViewModel extends ViewModel {
         if (!busy.compareAndSet(false, true)) {
             return;                     // 已经在发：不排队（排队会变成两条并发的回答）
         }
-        send.setValue(SendState.idle().streaming(""));
+        // **先把"在准备"发出去**：这一拍之后才是落库、装上下文、压缩、选模型，
+        // 慢的时候能有好几秒。以前这里发的是 idle（什么都不显示），
+        // 于是用户按下发送后屏幕上一点反应都没有——他没法判断"到底收到没有"。
+        send.setValue(SendState.preparing());
         io.execute(() -> run(body, manualProviderId, manualModelId, files));
     }
 
@@ -290,6 +347,8 @@ public final class ChatConversationViewModel extends ViewModel {
     private void run(String body, @Nullable String manualProviderId, @Nullable String manualModelId,
                      List<CanonicalMessage.Attachment> attachments) {
         long startedAt = System.currentTimeMillis();
+        // 界面显示"等了 Ns"用的时刻（从按下发送算起，见 SendState.startedAtUptimeMillis）。
+        long sentAtMillis = android.os.SystemClock.uptimeMillis();
         // **这一轮提问的任务号**：回答、压缩（将来还有工具）都挂在它下面。
         // 大纲要的"任务级成本"就是这个 id 的聚合——没有它，账本只能回答
         // "这个月花了多少"，回答不了"把这份 PDF 总结完花了多少"。
@@ -356,8 +415,9 @@ public final class ChatConversationViewModel extends ViewModel {
                 fail(R.string.chat_error_context);
                 return;
             }
-            publish(new SendState(true, "", providerId, modelId, reason, route, null, false,
-                    compressed));
+            // 请求马上要发出去了：阶段从"准备"变成"等首字"（思考动画照旧，只是文案变了）。
+            publish(new SendState(SendState.Stage.WAITING, "", providerId, modelId, reason, route,
+                    null, false, compressed, sentAtMillis));
 
             String assistantId = UUID.randomUUID().toString();
             StringBuilder answer = new StringBuilder();
@@ -517,6 +577,10 @@ public final class ChatConversationViewModel extends ViewModel {
         if (provider == null || model == null || apiKey == null || apiKey.trim().isEmpty()) {
             return false;
         }
+        // **压缩是一次真实的模型调用**（要花好几秒、还要花钱），所以界面必须说出来。
+        // 不说的话，用户看到的是"按了发送之后长时间没反应"，而那正是他抱怨的那件事；
+        // 说了之后同一段等待就变成"它在把更早的内容收进记忆"——他反而知道钱花在哪。
+        stage(SendState.Stage.COMPRESSING);
         long at = System.currentTimeMillis();
         ProviderClient.Completion done;
         try {
@@ -596,22 +660,39 @@ public final class ChatConversationViewModel extends ViewModel {
         }
     }
 
+    /**
+     * 只换阶段，别的字段一个都不动。
+     *
+     * <p>用在"压缩"这一拍上：那时候还没选回答用的模型（`providerId` 还是 null），
+     * 所以**不能**借用 {@link #withCurrent}（它会顺手把压缩模型写成"这次是谁答的"，
+     * 界面上就会出现一行 `Auto → deepseek-chat`，而真正回答的根本不是它）。
+     */
+    private void stage(SendState.Stage next) {
+        main.post(() -> {
+            SendState value = send.getValue();
+            publish((value == null ? SendState.preparing() : value).at(next));
+        });
+    }
+
     /** 在"当前这一轮"的基础上改一处。保留 providerId / route / compressed，避免每处都重传。 */
     private void withCurrent(String providerId, String modelId, String reason,
                              UsageRecorder.Route route, boolean compressed,
                              java.util.function.UnaryOperator<SendState> change) {
         SendState value = send.getValue();
         SendState base = value == null || !value.routed()
-                ? new SendState(true, value == null ? "" : value.streaming, providerId, modelId,
-                        reason, route, null, false, compressed)
+                ? new SendState(SendState.Stage.STREAMING,
+                        value == null ? "" : value.streaming, providerId, modelId,
+                        reason, route, null, false, compressed,
+                        value == null ? android.os.SystemClock.uptimeMillis()
+                                : value.startedAtUptimeMillis)
                 : value;
         publish(change.apply(base));
     }
 
     private void fail(int stringRes) {
         main.post(() -> {
-            publish(new SendState(false, "", null, null, null, null, context.getString(stringRes),
-                    false, false));
+            publish(new SendState(SendState.Stage.DONE, "", null, null, null, null,
+                    context.getString(stringRes), false, false, 0L));
             busy.set(false);
         });
     }

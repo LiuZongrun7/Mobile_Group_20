@@ -177,6 +177,15 @@
     <string name="chat_empty">Start a conversation — it stays on this phone.</string>
     <string name="chat_attach">Attach</string>
     <string name="chat_send">Send</string>
+    <!-- 等待期那一行（2026-10-05 加）。**为什么要有**：从按下发送到第一个字回来，
+         中间是落库、装上下文、压缩（一次真实的模型调用）、选模型、等首字，
+         慢的时候十几秒；这期间屏幕上什么都没有的话，用户没法判断"发出去了吗、是不是卡了"。
+         三句文案对应三个阶段，各自说清"现在在干什么"，不写"请稍候"这种等于没说的话。 -->
+    <string name="chat_thinking_context">Preparing the context</string>
+    <!-- 压缩是一次会花钱的模型调用，单独一句：说出来用户才知道这几秒和这笔钱花在哪。 -->
+    <string name="chat_thinking_compressing">Summarising earlier messages into memory</string>
+    <string name="chat_thinking_waiting">Waiting for %1$s</string>
+    <string name="chat_thinking_waiting_plain">Waiting for the model</string>
     <!-- 输入条上那两个胶囊。**Auto 是默认**：用户不指定模型时每次由 AutoRouter 现挑。 -->
     <string name="chat_auto">Auto</string>
     <string name="chat_no_project">No project</string>
