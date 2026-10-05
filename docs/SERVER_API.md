@@ -330,4 +330,6 @@ cd backend && /tmp/modelpilot-forum-venv/bin/python -m pytest -q tests   # 76 �
 **已随中转一起删除**——它验的主链路不存在了。同理，原来覆盖用量/预算/价目/赛季的
 `tests/test_usage.py`、`test_summary.py`、`test_budgets.py`、`test_pricing.py`、
 `test_seasons.py` 也一起删了。现在**唯一的端到端验收**是
-`backend/scripts/check_account_deployment.py`（对着公网跑，见 `backend/README.md`）。
+`backend/scripts/check_account_deployment.py`（对着公网跑；**推荐 `--prefix /test-api`**——
+测试区回显验证码，账号这条链路能自动验完；对正式服务跑要两个能 IMAP 收信的真邮箱，
+见脚本开头和 `backend/README.md`）。
