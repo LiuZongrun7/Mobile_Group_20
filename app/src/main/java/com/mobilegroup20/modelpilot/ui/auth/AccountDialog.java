@@ -92,6 +92,14 @@ public final class AccountDialog extends DialogFragment {
         password = input(formGroup.group, R.string.account_password,
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setSaveEnabled(false); password.setFreezesText(false);
+        // 「忘记密码？」**放在表单段自己的底部**（密码框下面），不是整个对话框的底部：
+        // 这个对话框只切面板、不重建，链接留在公共区的话，用户在验证码段/忘记密码段
+        // 也能点到它——那时候点下去等于把刚填的码丢掉、重新发一封。
+        forgotLink = new TextView(context); forgotLink.setText(R.string.account_forgot_password);
+        forgotLink.setTextColor(context.getColor(R.color.account_link));
+        forgotLink.setPadding(0, Math.round(12 * getResources().getDisplayMetrics().density), 0, 0);
+        forgotLink.setOnClickListener(v -> { model.enterResetStage(); render(); });
+        formGroup.group.addView(forgotLink);
         content.addView(formGroup.group);
         // 第二段：验证码。头一行是「验证码已发往 <邮箱>」——用户据此确认自己没把邮箱写错，
         // 写错了就往下点「返回修改」。
@@ -125,7 +133,13 @@ public final class AccountDialog extends DialogFragment {
         resetGroup.group.addView(resetResend);
         TextView resetBack = new TextView(context); resetBack.setText(R.string.account_back_to_login);
         resetBack.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
-        resetBack.setOnClickListener(v -> { model.backToForm(); render(); });
+        // 返回登录时把这一屏的密码框清空：这个对话框是**看着同一个 Fragment 赖着不走**的
+        // （只切面板、不 dismiss），不清的话下次再进来这两个框里的旧密码还在，
+        // 用户按一次「重设密码」就把一个他以为早就作废的密码又用上了。
+        resetBack.setOnClickListener(v -> {
+            resetNewPassword.setText(""); resetConfirm.setText("");
+            model.backToForm(); render();
+        });
         resetGroup.group.addView(resetBack);
         content.addView(resetGroup.group);
         // 第四段：已登录时改密码。当前密码 / 新密码 / 确认，三个都是密码框。
@@ -135,17 +149,16 @@ public final class AccountDialog extends DialogFragment {
         confirmPassword = passwordInput(changeGroup.group, R.string.account_new_password_confirm);
         TextView changeBack = new TextView(context); changeBack.setText(R.string.account_change_back);
         changeBack.setPadding(0, Math.round(8 * getResources().getDisplayMetrics().density), 0, 0);
-        changeBack.setOnClickListener(v -> { model.backToForm(); render(); });
+        // 同上：退出这一屏就把三个密码框清掉，别让下次进来的人对着上一次的残留按保存。
+        changeBack.setOnClickListener(v -> {
+            currentPassword.setText(""); newPassword.setText(""); confirmPassword.setText("");
+            model.backToForm(); render();
+        });
         changeGroup.group.addView(changeBack);
         content.addView(changeGroup.group);
-        // 两个入口链接。放在**所有面板之后**：它们是「去另一段」的出口，
-        // 而每一段自己的说明在上面，顺序反过来会让用户先看到出口再看到说明。
+        // 「修改密码」入口。它只在已登录时出现，放在所有面板之后——已登录时露出来的
+        // 面板只有身份那两块，所以它实际就落在账号信息下面，一眼能看到。
         // 颜色照 `account_back_to_form` 的路子（蓝色），一眼能认出是能点的。
-        forgotLink = new TextView(context); forgotLink.setText(R.string.account_forgot_password);
-        forgotLink.setTextColor(context.getColor(R.color.account_link));
-        forgotLink.setPadding(0, Math.round(12 * getResources().getDisplayMetrics().density), 0, 0);
-        forgotLink.setOnClickListener(v -> { model.enterResetStage(); render(); });
-        content.addView(forgotLink);
         changeLink = new TextView(context); changeLink.setText(R.string.account_change_password);
         changeLink.setTextColor(context.getColor(R.color.account_link));
         changeLink.setPadding(0, Math.round(12 * getResources().getDisplayMetrics().density), 0, 0);
@@ -160,14 +173,11 @@ public final class AccountDialog extends DialogFragment {
             email.addTextChangedListener(watcher(value -> model.email(value)));
             username.addTextChangedListener(watcher(value -> model.username(value)));
         }
-        // 忘记密码那屏也要回填邮箱，但**用的是另一个键**（`emailReset`）：
-        // 它在已登录时也能用（那时候表单里的邮箱框是只读的、显示的是账号邮箱），
-        // 直接写 `email` 会把只读的展示值改掉，用户下次看到的就是错的邮箱。
-        // 它同样**不是密码**，进 SavedStateHandle 没问题。
+        // 忘记密码那屏的验证码文本框：段位存在 SavedStateHandle 里，转屏之后这一屏会
+        // 重新建出来，所以码得从 ViewModel 回填（**不是密码**，进 SavedStateHandle 没问题）。
+        // 旁边那个新密码框**故意不回填**：它是密码，和登录密码一个待遇，只在内存里。
         resetCode.setText(model.resetCode());
         resetCode.addTextChangedListener(watcher(value -> model.resetCode(value)));
-        resetNewPassword.setText(model.resetNewPassword());
-        resetNewPassword.addTextChangedListener(watcher(value -> model.resetNewPassword(value)));
         // 第二段的按钮是「验证」+「重发验证码」，忘记密码段是「重设密码」+「重发验证码」，
         // 第一段是「注册/登录」+「注册⇄登录」，改密码段是「保存新密码」。
         // 文字在 render() 里按当前段位改写，这里只是先把三个按钮建出来。
@@ -187,7 +197,7 @@ public final class AccountDialog extends DialogFragment {
         if (model.resetStage()) resetHeader.setText(codeSentHeader());
         return builder.create();
     }
-    /** 忘记密码那段的「验证码已发往 <邮箱>」（或「发到你的注册邮箱」）。 */
+    /** 忘记密码那段的「验证码已发往 <邮箱>」（邮箱不知道时换成另一句）。 */
     private CharSequence codeSentHeader() {
         String address = model.resetAddress().trim();
         // 邮箱为空时**不显示一个空地址**（那会变成「验证码已发往 」）：没有邮箱的老快照、
@@ -368,7 +378,11 @@ public final class AccountDialog extends DialogFragment {
         // 进了改密码那一段之后，这个链接就是「返回账号」了：它的动作也要跟着换，
         // 文字和动作对不上的话，用户点「返回账号」会再进一次改密码（看起来像卡住）。
         changeLink.setOnClickListener(v -> {
-            if (model.changeStage()) model.backToForm(); else model.changePasswordStage();
+            if (model.changeStage()) {
+                // 返回时清空三个密码框，理由同「返回账号」那个链接。
+                currentPassword.setText(""); newPassword.setText(""); confirmPassword.setText("");
+                model.backToForm();
+            } else model.changePasswordStage();
             render();
         });
         message.setText(prompt);
@@ -424,12 +438,6 @@ public final class AccountDialog extends DialogFragment {
      *
      * <p>优先级：忙 → 本条状态自带的说明 → 本状态没话可说时用那一段的通用说明。
      * 忙必须排在最前：请求进行中却显示上一句失败提示，用户会以为这次又失败了。
-     *
-     * <p>为什么每条都过 {@link #notice} 而不是直接 `getString(资源id)`：忘记密码那条路上
-     * 有好几句话里要嵌**邮箱地址**（「如果 %1$s 注册过，验证码已经在路上了…」），
-     * 而邮箱是运行时才知道的。`String.format` 对没有占位符的字符串会原样返回，
-     * 所以这里统一带上参数——省得为「哪几条要带邮箱」维护一张名单（漏一条就是一个
-     * 字面量 `%1$s` 显示给用户）。
      */
     private CharSequence messageFor() {
         String state = model.state.getValue() == null ? "IDLE" : model.state.getValue();
@@ -446,11 +454,18 @@ public final class AccountDialog extends DialogFragment {
             // （邮箱被占 / 用户名被占 / 码错了 / 码过期了 …各是一句话）。
             case "CODE_SENT":
             case "FAILED":
-            case "CHANGED":
-            case "REQUIRED": {
-                // 忘记密码那屏的「没邮箱」也走这里：那句话由 AccountInput 挑好放在 notice 里。
+            case "CHANGED": {
                 int notice = noticeOr(0);
-                return notice(notice == 0 ? defaultMessage(state) : notice);
+                // 忘记密码那屏发码成功时 notice 是「如果这个邮箱注册过…」，它和本段的通用
+                // 说明说的是同一件事，所以有它就不再说通用那句（两句话叠在一起像复读）。
+                return getString(notice == 0 ? defaultMessage(state) : notice);
+            }
+            case "REQUIRED": {
+                // 忘记密码那屏的「没邮箱」：这一句由 ViewModel 挑好放在 notice 里——
+                // 它是**唯一一件用户没法在这一屏修好的事**（要回上一层填邮箱），
+                // 所以必须原样显示，不能被下面那句通用说明盖掉。
+                int notice = noticeOr(0);
+                return getString(notice == 0 ? R.string.account_reset_hint : notice);
             }
             case "VERIFIED": {
                 // 验证成功（或密码重设成功），正在自动登录。理由放在 autoSignInReason 里——
@@ -475,7 +490,7 @@ public final class AccountDialog extends DialogFragment {
             // 本地校验拦下来的：具体理由在 `invalidReason` 里，比「格式不对」有用。
             case "INVALID": {
                 Integer reason = model.invalidReason.getValue();
-                return notice(reason == null || reason == 0 ? R.string.account_empty : reason);
+                return getString(reason == null || reason == 0 ? R.string.account_empty : reason);
             }
             case "NETWORK": return getString(R.string.forum_network_error);
             case "RATE_LIMIT": return getString(R.string.account_rate_limit);
@@ -485,21 +500,7 @@ public final class AccountDialog extends DialogFragment {
             case "SERVER": return getString(R.string.forum_request_error);
             default: break; // IDLE：还没发生任何事，显示当前段位/身份的说明
         }
-        return notice(defaultMessage(state));
-    }
-
-    /**
-     * 把一句话渲染出来，必要时把**找回密码用的邮箱**填进占位符。
-     *
-     * <p>参数是清空过的邮箱（还没填/填错时为空）：那时把空串填进「如果 %1$s 注册过」
-     * 会变成一句读不通的话，所以空邮箱时改用不带地址的那一句
-     * （{@link R.string#account_reset_code_sent_unknown}）。
-     */
-    private CharSequence notice(int message) {
-        String address = model.resetAddress().trim();
-        if (message == R.string.account_reset_code_sent && address.isEmpty())
-            return getString(R.string.account_reset_code_sent_unknown);
-        return address.isEmpty() ? getString(message) : getString(message, address);
+        return getString(defaultMessage(state));
     }
     /** 状态里没话可说时，这一段自己的说明（每个身份/段位各有一句）。 */
     private int defaultMessage(String state) {

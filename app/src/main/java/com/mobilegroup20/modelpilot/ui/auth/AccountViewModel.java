@@ -98,13 +98,16 @@ public final class AccountViewModel extends AndroidViewModel {
      */
     public final MutableLiveData<String> resetAddress = new MutableLiveData<>("");
     /**
-     * 忘记密码那屏用户敲的验证码和新密码（**只在内存里**，和密码同理）。
+     * 忘记密码那屏用户敲的验证码（**只在内存里**）。
      *
      * <p>为什么不复用第一段那个 `code` 键：验证码段的码和忘记密码的码是两次不同的发送，
      * 共用一个键的话，用户在验证码段填了一半再去点「忘记密码？」，那个半截的码会跟着
      * 飘过来——而他根本没收到过那个码。而且两个框在不同容器里，本来也没法共用一个控件。
+     *
+     * <p>那一屏的**新密码**不在这里：它是密码，和登录密码一个待遇，
+     * 只在对话框自己的 EditText 里活到提交那一刻（见 `AccountDialog`）。
      */
-    private String resetCode = "", resetNewPassword = "";
+    private String resetCode = "";
     /**
      * 重发验证码的冷却结束时刻（`SystemClock.elapsedRealtime()`，0 = 现在就能重发）。
      *
@@ -166,10 +169,6 @@ public final class AccountViewModel extends AndroidViewModel {
     /** 忘记密码那屏的验证码。**只在内存里**：转屏之后要重敲，理由和密码一样。 */
     public String resetCode() { return resetCode; }
     public void resetCode(String value) { resetCode = value == null ? "" : value; }
-
-    /** 忘记密码那屏的新密码。同上，只在内存里。 */
-    public String resetNewPassword() { return resetNewPassword; }
-    public void resetNewPassword(String value) { resetNewPassword = value == null ? "" : value; }
 
     /** 当前是「注册」还是「登录」。默认登录；切换只改界面，不发请求。 */
     public boolean registerMode() { Boolean value = saved.get("registerMode"); return value != null && value; }
@@ -241,6 +240,10 @@ public final class AccountViewModel extends AndroidViewModel {
      */
     public void enterResetStage() {
         if (signedIn()) return;
+        // 每次进来都从一个空的验证码框开始：上一轮那个码是**另一次**发送的（服务端一次只认
+        // 最新那封），留着它用户会以为"我已经填好了"，点了重设却拿到 CODE_INVALID。
+        // （新密码框不用清：它在对话框里被 setSaveEnabled(false)，转屏回去本来就是空的。）
+        resetCode("");
         saved.set("stage", STAGE_RESET);
         notice.setValue(0);
         action.setValue(AccountInput.ACTION_NONE);
@@ -248,6 +251,8 @@ public final class AccountViewModel extends AndroidViewModel {
         String address = resetEmail();
         resetAddress.setValue(address);
         if (address.isEmpty()) {
+            // 界面上这句话显示在「验证码已发往 …」那个位置旁边，所以它得说清**去哪儿填邮箱**。
+            invalidReason.setValue(R.string.account_reset_need_email);
             notice.setValue(R.string.account_reset_need_email);
             state.setValue("REQUIRED");
             return;

@@ -2,6 +2,7 @@ package com.mobilegroup20.modelpilot.ui.auth;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -121,7 +122,9 @@ public class AccountApiContractTest {
         }
     }
 
-    @Test public void error_bodies_keep_their_code_and_become_the_right_sentence() throws Exception {        try (MockWebServer server = new MockWebServer()) {            AccountApi api = api(server);
+    @Test public void error_bodies_keep_their_code_and_become_the_right_sentence() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            AccountApi api = api(server);
             // 邮箱被占：409 + EMAIL_TAKEN。这个 code 丢了的话界面只会说「出错了」，
             // 而用户完全不知道该换邮箱还是换用户名。
             server.enqueue(new MockResponse().setResponseCode(409)
@@ -162,6 +165,120 @@ public class AccountApiContractTest {
             AccountInput.Failure failure = AccountInput.failure(unverified.code(), AccountApi.errorCode(unverified));
             assertEquals(R.string.account_unverified, failure.message);
             assertEquals(AccountInput.ACTION_VERIFY, failure.action);
+        }
+    }
+
+    // ------------------------------------------------------ 忘记密码 / 改密码（2026-10 加）
+
+    @Test public void forgot_password_reaches_the_frozen_path_with_only_an_email() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            AccountApi api = api(server);
+            server.enqueue(new MockResponse().setBody("{\"sent\":true}"));
+            Response<AccountApi.Sent> sent = api.forgotPassword(
+                    new AccountApi.ForgotPassword("a@b.co")).execute();
+            RecordedRequest request = server.takeRequest();
+            assertEquals("POST", request.getMethod());
+            assertEquals("/api/account/password/forgot", request.getPath());
+            JsonObject body = body(request);
+            assertEquals("a@b.co", field(body, "email"));
+            // 请求里**只有邮箱**。多塞一个 username 之类的字段，等于让服务端去猜
+            // 我们到底想找回谁的密码。
+            assertEquals(1, body.size());
+            assertTrue(sent.body().sent);
+
+            // **没注册过的邮箱返回的是一模一样的 200**（服务端有意不给探测接口）。
+            // 这条断言是给界面看的：`sent=true` 只能说明「请求被受理」，
+            // 所以文案必须写成「如果这个邮箱注册过…」。
+            server.enqueue(new MockResponse().setBody("{\"sent\":true}"));
+            Response<AccountApi.Sent> unknown = api.forgotPassword(
+                    new AccountApi.ForgotPassword("nobody@b.co")).execute();
+            assertEquals(200, unknown.code());
+            assertTrue(unknown.body().sent);
+            assertEquals("/api/account/password/forgot", server.takeRequest().getPath());
+        }
+    }
+
+    @Test public void password_reset_sends_email_code_and_the_new_password() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            AccountApi api = api(server);
+            server.enqueue(new MockResponse().setBody(
+                    "{\"passwordChanged\":true,\"sessionsRevoked\":3}"));
+            Response<AccountApi.PasswordReset> response = api.resetPassword(
+                    new AccountApi.PasswordResetRequest("a@b.co", "123456", "password2")).execute();
+            RecordedRequest request = server.takeRequest();
+            assertEquals("POST", request.getMethod());
+            assertEquals("/api/account/password/reset", request.getPath());
+            JsonObject body = body(request);
+            assertEquals("a@b.co", field(body, "email"));
+            assertEquals("123456", field(body, "code"));
+            // 字段名是 `password`，装的是**新**密码。写错一个字段名不会编译报错，
+            // 只会变成 400，而界面上看起来像「验证码不对」。
+            assertEquals("password2", field(body, "password"));
+            assertTrue(response.body().passwordChanged);
+            // `sessionsRevoked` **包括手上这个会话**：服务端把该账号的会话一把全撤了，
+            // 所以调用方必须紧接着用新密码登一次（契约里写死的后果）。
+            assertEquals(3, response.body().sessionsRevoked);
+        }
+    }
+
+    @Test public void password_change_sends_the_bearer_token_and_reads_the_other_sessions_field()
+            throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            AccountApi api = api(server);
+            server.enqueue(new MockResponse().setBody(
+                    "{\"passwordChanged\":true,\"otherSessionsRevoked\":2}"));
+            Response<AccountApi.PasswordChanged> response = api.changePassword("Bearer tt_app_x",
+                    new AccountApi.PasswordChange("password1", "password2")).execute();
+            RecordedRequest request = server.takeRequest();
+            assertEquals("POST", request.getMethod());
+            assertEquals("/api/account/password/change", request.getPath());
+            // 没有 token 就是 401，而 401 在界面上是一句话（「当前密码不对」或
+            // 「登录可能已失效」）——头漏了的话用户会一直以为是密码打错了。
+            assertEquals("Bearer tt_app_x", request.getHeader("Authorization"));
+            JsonObject body = body(request);
+            assertEquals("password1", field(body, "currentPassword"));
+            assertEquals("password2", field(body, "newPassword"));
+            assertTrue(response.body().passwordChanged);
+            // **字段名是 `otherSessionsRevoked`，不是 `sessionsRevoked`。**
+            // 两个响应体长得像，抄错一个不会编译报错，只会在真机上永远显示
+            // 「其他设备：0 个被登出」。
+            assertEquals(2, response.body().otherSessionsRevoked);
+        }
+    }
+
+    @Test public void reset_and_change_errors_become_the_right_sentence_for_their_context()
+            throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            AccountApi api = api(server);
+            // 码错或邮箱不存在：服务端有意用同一个 code 回答（防枚举），文案也不能猜。
+            server.enqueue(new MockResponse().setResponseCode(400)
+                    .setBody("{\"code\":\"CODE_INVALID\",\"message\":\"invalid code\"}"));
+            Response<AccountApi.PasswordReset> reset = api.resetPassword(
+                    new AccountApi.PasswordResetRequest("a@b.co", "000000", "password2")).execute();
+            assertEquals("CODE_INVALID", AccountApi.errorCode(reset));
+            assertEquals(R.string.account_code_invalid,
+                    AccountInput.Failure.forgotPassword(reset.code(), AccountApi.errorCode(reset)).message);
+
+            // 改密码时当前密码打错：401 **带** CREDENTIALS。它必须变成「当前密码不对」，
+            // 而不是登录失败那句「邮箱/用户名或密码不对」——用户正登录着，账号是对的。
+            server.enqueue(new MockResponse().setResponseCode(401)
+                    .setBody("{\"code\":\"CREDENTIALS\",\"message\":\"wrong password\"}"));
+            Response<AccountApi.PasswordChanged> wrong = api.changePassword("Bearer tt_app_x",
+                    new AccountApi.PasswordChange("nope", "password2")).execute();
+            AccountInput.Failure failure = AccountInput.Failure.passwordChange(
+                    wrong.code(), AccountApi.errorCode(wrong));
+            assertEquals("CREDENTIALS", AccountApi.errorCode(wrong));
+            assertEquals(R.string.account_current_password_wrong, failure.message);
+            assertNotEquals(R.string.account_credentials_error, failure.message);
+
+            // 会话过期：401 **没有** code（框架层拒的，body 通常是空的）。
+            // 这一条只能按「登录失效」说，而且说得留余地——猜错时用户不会被锁死在
+            // 「当前密码不对」那个方向上反复重输一个完全正确的密码。
+            server.enqueue(new MockResponse().setResponseCode(401).setBody("{}"));
+            Response<AccountApi.PasswordChanged> expired = api.changePassword("Bearer tt_app_old",
+                    new AccountApi.PasswordChange("password1", "password2")).execute();
+            assertNull(AccountApi.errorCode(expired));
+            assertEquals(401, expired.code());
         }
     }
 }
