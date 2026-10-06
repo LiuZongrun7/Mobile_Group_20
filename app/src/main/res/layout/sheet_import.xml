@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「导入数据」（`Me → Data & memory`，设计稿第 27/28 张的另一半）。
+
+  这一屏要回答的是「你将要拿到什么」，所以三样东西摆在明面上：
+  ① 这个文件自称是什么（哪一版 App 导的、什么时候导的、导了哪几半）；
+  ② 里面到底有多少条、本机已经有几条；
+  ③ 本机已有的怎么办（只加新的 / 覆盖）。
+
+  **第 ③ 条是这个弹层存在的理由**：它是导入里唯一需要用户拍板的事，
+  而且选错的代价不对称——「只加新的」最坏是少导几条，能再来一次；
+  「覆盖」会真的吃掉手机上刚聊过的东西。所以默认停在「只加新的」上，
+  而「覆盖」那一行的说明里直接写明它什么时候该用（换新手机）。
+
+  和 sheet_export 同一套结构：标题/说明固定，中间滚动，状态行和按钮固定在底下。
+  道理也一样——这一屏比半屏高，AlertDialog 会把按钮挤到屏幕外，
+  而"按钮在不在视线里"直接决定用户会不会以为它坏了。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#FFFFFF"
+    android:orientation="vertical"
+    android:paddingTop="8dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="#E1E5EC" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:text="@string/import_title"
+        android:textColor="#0B1B33"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="20dp"
+        android:text="@string/import_intro"
+        android:textColor="#7A8699"
+        android:textSize="12sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="8dp">
+
+            <!-- ===== 文件 ===== -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/import_section_file" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/import_pick"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="4dp"
+                android:text="@string/import_pick" />
+
+            <TextView
+                android:id="@+id/import_source"
+                style="@style/ExportSubtitle"
+                android:paddingStart="24dp"
+                android:paddingTop="6dp"
+                tools:text="modelpilot-export-20261006-1530.json · JSON · 21.7 KB" />
+
+            <TextView
+                android:id="@+id/import_facts"
+                style="@style/ExportSubtitle"
+                android:paddingStart="24dp"
+                android:paddingTop="4dp"
+                tools:text="Exported by ModelPilot 1.0 · 2026-10-06T15:30:12+08:00 · 1 conversation · 26 messages" />
+
+            <!-- ===== 会发生什么 ===== -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/import_section_what" />
+
+            <TextView
+                android:id="@+id/import_counts"
+                style="@style/ExportSubtitle"
+                android:paddingStart="24dp"
+                tools:text="1 conversation · 26 messages · 13 calls" />
+
+            <TextView
+                android:id="@+id/import_existing"
+                style="@style/ExportSubtitle"
+                android:paddingStart="24dp"
+                android:paddingTop="4dp"
+                tools:text="2 of these conversations are already on this phone." />
+
+            <!-- 本机已有的怎么办。默认停在「只加新的」上：选错的代价不对称。 -->
+            <TextView
+                style="@style/ExportSection"
+                android:text="@string/import_section_policy" />
+
+            <RadioGroup
+                android:id="@+id/import_policy_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="16dp">
+
+                <RadioButton
+                    android:id="@+id/import_policy_add"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/import_policy_add" />
+
+                <RadioButton
+                    android:id="@+id/import_policy_replace"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/import_policy_replace" />
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/import_policy_note"
+                style="@style/ExportSubtitle"
+                android:paddingStart="24dp"
+                tools:text="@string/import_policy_add_note" />
+
+            <!-- ===== 文件自己说的注意事项 / 读不动的地方 =====
+                 两段都**不放进滚动区的末尾以外**：它们是这一屏最该被读到的话，
+                 而"没读到的行"恰恰是用户最容易以为"数据齐了"的地方。 -->
+            <TextView
+                android:id="@+id/import_notes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingTop="14dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="2dp"
+                android:textColor="#7A8699"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:visibility="visible"
+                tools:text="附件只导出类型、文件名、大小和抽取出的文本，不含本机文件路径。" />
+
+            <TextView
+                android:id="@+id/import_problems"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp"
+                android:textColor="#C0392B"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:visibility="visible"
+                tools:text="3 rows could not be read and were skipped." />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 状态行固定在这一段上面：读文件、写库、结果、失败原因都写在这里。
+         **不放进滚动区**：用户按下按钮那一刻它就在视线里，不该还要往下找。 -->
+    <TextView
+        android:id="@+id/import_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="2dp"
+        android:textColor="#1E7BF6"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:text="added 1 conversations · 26 messages restored"
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/import_cancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/import_cancel" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/import_go"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:enabled="false"
+            android:text="@string/import_go" />
+    </LinearLayout>
+</LinearLayout>

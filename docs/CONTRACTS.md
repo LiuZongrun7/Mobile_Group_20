@@ -305,7 +305,7 @@ provider API ──拉取─┐
 | ~~资源余额、`lastSettledDay`、已结算流水~~ | ~~**服务端**~~ | **已删（2026-09-30）**：`season_balances` / `season_settlements` 删了；结算规则本身留在 §7 当历史口径 |
 | ~~结算的**判断**（哪些天该算）~~ | ~~**服务端**~~ | **已删（2026-09-30）** |
 | ~~App 侧读余额的接口~~ | ~~`HttpSeasonRepository`~~ | **已删（2026-09-30）**：类和它的 12 个 HTTP 契约测试一起删了 |
-| 日志**导入**出来的用量（`data/importer/`） | **本机 Room** | ⛔ 仍然是 `USE_STUBS=false` 时的实现（`RoomUsageRepository`）。**它现在是 App 唯一的用量来源**，因为服务端那条路没了 |
+| 本机账本（App 自己记的调用 + **导入的导出文件**） | **本机 Room** | ✅ `RoomUsageRepository` 是 App 唯一的用量来源（服务端那条路 2026-09-30 删了）。**2026-10-06**：`data/importer/` 的含义改成"导入导出的数据文件"，用量那一段走 `data/local/CallImporter`（与仓库同一条写入路径） |
 | ~~`budgets`~~ | ~~**服务端**~~ | **已删（2026-09-30）**：表、接口和 App 侧 `HttpBudgetRepository` 全部删除 |
 | 论坛帖子与评论 | 服务端 | ✅ 一直如此（论坛从来不在本地存） |
 | 智能体自己那本账 | **服务端** `agent_usage` | ✅ 唯一还按账号记数的表（不进任何用户可见的汇总，见 `SERVER_API.md`） |

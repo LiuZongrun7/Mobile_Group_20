@@ -679,6 +679,18 @@
                 android:text="@string/export_entry"
                 android:visibility="gone" />
 
+            <!-- 导入数据（Data & memory 的另一半）。和导出一样**完全本机**：
+                 读的是用户选的那个文件、写的是这台手机的库，和论坛服务端无关。
+                 没有它，"换手机会丢"这件事只补上了一半——能带走，但换不回来。 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/import_button"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/import_entry"
+                android:visibility="gone" />
+
             <!-- **只在 debug 包里出现**的压缩阈值旋钮（`chat/EngineTuning`）。
                  默认阈值约 88K tokens，正常对话触发不到压缩，于是那条路径在真机上
                  从来没跑过一次；答辩前想演示它就得能临时调小。release 包里这个按钮

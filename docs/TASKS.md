@@ -68,7 +68,14 @@
 ### 1.2 放哪
 
 `data/local/`（Room 三张表，见 `CONTRACTS.md` §5）、`data/remote/`（自建服务端的读写）、
-`data/importer/`（日志解析）。实现类写完后在 `RepositoryProvider` 里接上。
+`data/importer/`。
+
+**（2026-10-06 改）`data/importer/` 不再是"日志解析"**：产品改成 ModelPilot 之后，
+用量由 **App 自己记**（`chat/CallLedger` 写本机 `usage_call`），没有任何 provider 日志要解析；
+这个包现在的含义是**导入导出的数据文件**（用户导出的 JSON / CSV zip 读回本机库，
+服务的是"换手机把对话和账本换回来"），实现类是 `ExportFileReader` / `DataImporter` /
+`RoomImportTarget`，**不需要**在 `RepositoryProvider` 里接——入口在
+`ui/settings/ImportSheet`。详见 [`EXPORT.md`](EXPORT.md) §8。
 
 ### 1.3 汇率
 

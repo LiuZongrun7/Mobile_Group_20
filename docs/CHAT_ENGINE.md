@@ -34,7 +34,7 @@
 
 **代价（要认下来）**：① **换手机/重装会丢对话与用量**——导出已经做了（2026-10-06，
 `Me → Data & memory`，见 [`EXPORT.md`](EXPORT.md)），所以"能带走"这一半补上了，
-但**导入还没做**，也就是说带走了还得自己留着，换回来这条路不通；② 用量与费用是**本机统计**，
+而**导入 2026-10-06 晚也做完了**（`data/importer/`），所以"带走 → 换回来"这条路是通的；② 用量与费用是**本机统计**，
 换个设备看到的数不一样；③ 价目表在手机上，所以要能更新（见下）。
 
 ## 2. 上下文引擎（这是这一版的核心）
@@ -160,7 +160,7 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 | 3. 本机账本 | 完成 | `chat/UsageRecorder` + `chat/CallLedger`（每次调用一行，`uid` 固定为 `local`，见 `CallLedger` 的类注释）。**2026-10-04 补上任务级成本**：一轮提问生成一个 `taskId`，回答与压缩共用它；`kind` 区分 ANSWER / COMPRESS。真机上验过：假上游收到 6 次回答 + 2 次压缩，账本 8 行，触发压缩的那两轮各自能看到 `COMPRESS,ANSWER` 两行同一个 task |
 | 4. 四屏 UI | **3/4** | 首页 `ui/chat/ChatHomeFragment`、对话页 `ChatConversationFragment`、模型弹层 `ModelSheetFragment`；**Insights 还没做**（现在点 Insights 看到的是旧的统计页，它读 `daily_usage` 那张表，而那张表目前只滚导入的记录——所以它不会显示 App 自己发出去的调用） |
 | 5. 其余五家 | 未开始 | 注册表里已有六家的 base URL 与模型清单，但只有 DeepSeek 真跑过；其余四家的 `streamUsage` 开关保持 false 等实测 |
-| 6. 导出/导入 | 未开始 | |
+| 6. 导出/导入 | **两边都做完了（2026-10-06）** | 导出见 §4-6 §8 W10–12 那一行；导入在 `data/importer/`（同一份文件的另一半，入口 `Me → Data & memory → Import data`） |
 
 **另外做了两件不在上面的清单里、但不做就没法用的事**：
 
@@ -183,7 +183,7 @@ Auto 第一版：**用户已配置 key 的模型里，选"能力满足且最便�
 | 对话页 `⋮`（记忆 / 改名 / 删除） | **做了**：改名复用"问一个名字"的对话框；删除会连消息、记忆、本机调用记录一起删，且删完自动退回列表 |
 | §4-2 §7.1 其余六家的实测 | 还没做（只有 DeepSeek 端到端跑过） |
 | 4-1 §5 草稿恢复 | **做了**：`data/Drafts` 按对话各存一份，`onPause` 存、进页面恢复、发出去就清（转屏本来就由 Android 保，这份管的是进程被杀） |
-| §4-6 §8 W10–12 导出 | **做了导出这一半（2026-10-06）**：`data/export/`（`DataExporter` + CSV/JSON 写出器，纯 Java、23 个单测钉住「未知留空」「不含 key 与请求地址」「附件不带本机 uri」）+ `Me → Data & memory → Export data`（设计稿第 27/28 张）。产物：JSON 一份文件；CSV 是一个 zip，一张表一个 csv 加一份 `meta.json`。**导入还没做**（`data/importer/` 仍是空的），所以"换手机会丢"这件事目前只补上了"能带走"。文件格式与全部取舍见 [`EXPORT.md`](EXPORT.md) |
+| §4-6 §8 W10–12 导出/导入 | **两边都做完了（2026-10-06）**：导出在 `data/export/`（`DataExporter` + CSV/JSON 写出器，纯 Java）+ `Me → Data & memory → Export data`（设计稿第 27/28 张）；产物是 JSON 一份文件，或一个 zip（一张表一个 csv + `meta.json`）。导入在 `data/importer/`（`ExportFileReader` → 解析器 → `DataImporter` → `RoomImportTarget`），入口 `Me → Data & memory → Import data`：**按 id 认亲、本机优先、坏行绝不静默、从不删东西**，同一个文件导两次第二次一条都不新增。两边的格式与全部取舍见 [`EXPORT.md`](EXPORT.md) |
 
 **用户自己填价（2026-10-05 加）**：自定义端点（中转站/自建反代）没有我们能核对的官方定价页，
 于是设置里的表单多了**选填**的四条价（输入/输出/缓存读/缓存写，单位 **USD / 1M token**，

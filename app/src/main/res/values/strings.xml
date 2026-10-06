@@ -334,6 +334,41 @@
     <string name="export_entry">Data &amp; memory</string>
     <string name="export_memory_hint">Memory is reviewed and edited per conversation: open a chat → ⋮ → Conversation memory.</string>
 
+    <!-- ============ 导入数据（Data & memory 的另一半，2026-10-06 加） ============
+         这一屏要回答的是「你将要拿到什么」，而它最容易出的误会是两件：
+         以为导入会把手机上现有的东西冲掉（默认不会，得自己选"覆盖"），
+         以及以为文件里没有的东西是我们弄丢了（那是导出时就明说的取舍，原样转述）。
+         文案与 export_* 同一套口径：英文、句子短、把"我们故意没做什么"明说出来。 -->
+    <string name="import_entry">Import data</string>
+    <string name="import_title">Import data</string>
+    <string name="import_intro">Pick a file that Export data produced. Everything is read on this phone and written to this phone\'s own database — nothing is uploaded.</string>
+    <string name="import_section_file">FILE</string>
+    <string name="import_pick">Choose file…</string>
+    <string name="import_section_what">WHAT WILL HAPPEN</string>
+    <string name="import_section_policy">IF A CONVERSATION IS ALREADY HERE</string>
+    <string name="import_policy_add">Keep what\'s on this phone</string>
+    <string name="import_policy_add_note">Only conversations that aren\'t here yet are added; nothing already on this phone is changed. Importing the same file twice adds nothing the second time.</string>
+    <string name="import_policy_replace">Replace matching conversations</string>
+    <string name="import_policy_replace_note">Conversations with the same id are overwritten by the file — use this when restoring onto a new phone. Conversations that exist only on this phone are never deleted, and messages already here are kept as they are.</string>
+    <string name="import_go">Import</string>
+    <!-- 同 export_cancel：不借 @android:string/cancel（中文设备上会显示"取消"）。 -->
+    <string name="import_cancel">Cancel</string>
+    <string name="import_source">%1$s · %2$s</string>
+    <string name="import_facts">Exported by %1$s %2$s · %3$s</string>
+    <string name="import_facts_unknown">This file doesn\'t say which version of the app exported it.</string>
+    <string name="import_existing">%1$d of these conversations are already on this phone.</string>
+    <string name="import_existing_none">None of these conversations are on this phone yet.</string>
+    <string name="import_duplicates">This file lists the same conversation id more than once, so it was probably edited by hand.</string>
+    <string name="import_usage_range">Usage records cover %1$s.</string>
+    <string name="import_notes_title">What this file leaves out (as written by the export itself):</string>
+    <string name="import_problems_title">Rows this file couldn\'t give us:</string>
+    <string name="import_problems_more">…and %1$d more.</string>
+    <string name="import_working">Reading the file…</string>
+    <string name="import_writing">Writing to this phone…</string>
+    <string name="import_failed">Import failed: %1$s</string>
+    <string name="import_too_big">That file is larger than %1$s, so it was not read. Export files are normally a few kilobytes.</string>
+    <string name="import_file_unknown">that file</string>
+
     <!-- ============ 设置：API keys（Me → API keys） ============ -->
     <!-- 这一页最需要说清楚的一件事：key 去哪了。写成一句"我们不会上传"没人信，
          所以直接说清数据的走向（存在这台手机的 Keystore 里、请求从这台手机直发）。 -->

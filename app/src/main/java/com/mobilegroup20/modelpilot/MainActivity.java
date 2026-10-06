@@ -261,6 +261,9 @@ public class MainActivity extends AppCompatActivity
         // 导出数据（设计稿第 27/28 张「数据与记忆」）。和 API keys 同理：**完全本机**，
         // 导的是这台手机上的对话与账本，所以不看登录状态、只要在「我的」页就给入口。
         binding.exportButton.setVisibility(me ? View.VISIBLE : View.GONE);
+        // 导入数据：同一件事的另一半（把导出的文件读回来）。同样完全本机、同样只看在不在
+        // 「我的」页——它不需要登录，也不需要网络，所以没有别的可见性条件。
+        binding.importButton.setVisibility(me ? View.VISIBLE : View.GONE);
         if (tuning) {
             binding.debugTuningButton.setText(
                     com.mobilegroup20.modelpilot.chat.EngineTuning.describe(this));
@@ -332,6 +335,10 @@ public class MainActivity extends AppCompatActivity
                     : null);
             binding.exportButton.setOnClickListener(me
                     ? v -> com.mobilegroup20.modelpilot.ui.settings.ExportSheet
+                            .show(getSupportFragmentManager())
+                    : null);
+            binding.importButton.setOnClickListener(me
+                    ? v -> com.mobilegroup20.modelpilot.ui.settings.ImportSheet
                             .show(getSupportFragmentManager())
                     : null);
             binding.debugTuningButton.setOnClickListener(tuning ? v -> pickCompressionKnobs() : null);

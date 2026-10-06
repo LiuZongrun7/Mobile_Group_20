@@ -122,6 +122,30 @@ public final class RepositoryProvider {
         return pricing;
     }
 
+    /**
+     * 价目表，给"不走 {@code UsageRepository} 也要算钱"的那条路用。
+     *
+     * <p>目前只有一个调用方：导入导出文件的用量那一段（{@code data/importer}）。
+     * 它必须和 {@code RoomUsageRepository} 用的是<b>同一份</b>价目表——两处各拿一份的话，
+     * 同一批记录在 Insights 里和重新滚出来的汇总里会算出两个金额，而没人能解释差在哪。
+     * 所以这里返回的就是 {@link #pricing()} 那一个单例，不新建。
+     */
+    public static PricingSource pricingSource() {
+        return pricing();
+    }
+
+    /**
+     * 本地数据库，给"一次要动好几张表、而且必须自己控制事务边界"的那条路用。
+     *
+     * <p>目前只有一个调用方：导入导出文件（{@code data/importer}）——它要往对话那三张表
+     * 逐条写、同时把用量交给 {@code CallImporter} 在同一个事务里落库，只有拿到库本身
+     * 才做得到。**别的地方不要用这个口**：普通读写各有自己的 DAO 与仓库方法，
+     * 从这里绕过去等于把"谁能写哪张表"这件事搞乱。
+     */
+    public static AppDatabase databaseForImport() {
+        return database();
+    }
+
     /** 用量数据。桩 → {@code com.mobilegroup20.modelpilot.data.local.RoomUsageRepository}。 */
     /**
      * 对话库（项目 / 对话 / 消息 / 记忆）。
