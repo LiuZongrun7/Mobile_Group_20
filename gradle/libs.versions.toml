@@ -28,6 +28,11 @@ mockwebserver = "4.12.0"
 
 [libraries]
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+# androidx.core 里的 FileProvider：「打开附件原文件」要把缓存里那张图交给系统查看器，
+# 而 Android 7 起 file:// 的 uri 不能直接发给别的 App（FileUriExposedException）。
+# 它本来就被 appcompat 间接带进来了，但仍然显式声明——间接依赖的版本由别人决定，
+# 哪天 appcompat 换了依赖树，我们会以「编译不过」的形式发现，而不是行为悄悄变了。
+androidx-core = { group = "androidx.core", name = "core", version = "1.17.0" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 # ViewModel/LiveData：Repository 向界面暴露状态用它，大纲 §8 也写的这套
 androidx-lifecycle-livedata = { group = "androidx.lifecycle", name = "lifecycle-livedata", version.ref = "lifecycle" }

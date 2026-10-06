@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 能对外提供哪些文件（AndroidManifest 里那个 provider 的路径表）。
+
+  **只开一个子目录**：`cacheDir/attachments/`。它是「打开附件原文件」这条路上
+  临时写出来的图片（字节本来在对话库里，见 AttachmentOpen 的注释），
+  写完就用完——不会有任何长期文件住在这里。
+
+  为什么不写成 `<cache-path name="all" path="." />`：那会把整个缓存目录都暴露给
+  拿到 uri 的 App，而缓存里还有导出时生成的 `exports/`（**里面有用户的聊天记录**）。
+  只开一个子目录，是让"我们愿意给出去的东西"和"能被我给出去的东西"是同一批。
+-->
+<paths>
+    <cache-path
+        name="attachments"
+        path="attachments/" />
+</paths>

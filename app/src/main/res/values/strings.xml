@@ -271,6 +271,12 @@
     <string name="chat_attach_pdf_failed">Could not read text from that PDF.</string>
     <!-- 1 抽了多少页 2 页数上限。**截断了必须说**，不然用户以为整份都进去了。 -->
     <string name="chat_attach_pdf_truncated">Only the first %1$d pages were extracted (limit %2$d).</string>
+    <!-- 点附件行打开原文件（2026-10-06）。四种结果各说各的：
+         打不开的原因不同，用户能做的事也不同（重新发一次 / 去相册里找 / 装个查看器）。 -->
+    <string name="chat_attach_gone">That original file is no longer available on this phone. The words we extracted are still here.</string>
+    <string name="chat_attach_nothing_to_open">There is no original file saved for this attachment.</string>
+    <string name="chat_attach_no_viewer">No app on this phone can open that file type.</string>
+    <string name="chat_attach_open_failed">Could not open that attachment.</string>
     <!-- 流断了的那句。**必须说出来**：用户看到的字是真的，但这句话不完整。 -->
     <string name="chat_incomplete">This answer was cut off — the connection dropped mid-stream.</string>
     <!-- 这一轮压过上下文。说明"更早的内容没丢，只是收进了记忆"，不然用户会以为历史被删了。 -->

@@ -266,11 +266,26 @@ public final class ChatConversationFragment extends Fragment {
                 || CanonicalMessage.Role.TOOL.name().equals(message.role);
     }
 
+    /**
+     * 用户那条气泡：附件行 + （可点的）正文。
+     *
+     * <p><b>附件行是可点的</b>——点了打开原文件。这条行为什么不是"锦上添花"：
+     * 用户发过一张图或一份 PDF 之后，库里留着的是它的字节或 uri，如果界面上没有任何
+     * 地方能再打开它，那这条附件就成了一段只能看名字的痕迹；而"我发的是哪一版"
+     * 恰恰是他回头看这条对话时最想知道的事。
+     *
+     * <p>能不能点由 {@code AttachmentOpen.canOpen()} 决定（纯逻辑，那边有单测）：
+     * 图片永远能（字节就在库里），PDF 要看系统此刻还给不给我们那个 uri 的权限。
+     * 打不开时点一下会说清楚是"本来就没有"还是"文件已经不在了"——不说的话，
+     * 用户只会收到系统那个"无法打开文件"，然后以为是我们弄坏了。
+     */
     private void addUserBubble(LayoutInflater inflater, String text,
                                java.util.List<com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment> attachments) {
         ItemMessageUserBinding row = ItemMessageUserBinding.inflate(inflater,
                 binding.conversationMessages, false);
         StringBuilder body = new StringBuilder();
+        final java.util.List<com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment> openable =
+                new java.util.ArrayList<>();
         for (com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment attachment : attachments) {
             if (attachment.kind == com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.IMAGE) {
                 // 图片：显示缩略图，**再补一行名字/大小**（用户要能确认自己发的是哪张）。
@@ -287,6 +302,9 @@ public final class ChatConversationFragment extends Fragment {
                     attachment.kind == com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment.Kind.PDF
                             ? (attachment.extractedText == null ? 0 : attachment.extractedText.length())
                             : attachment.bytes / 1024));
+            if (com.mobilegroup20.modelpilot.chat.AttachmentOpen.canOpen(attachment)) {
+                openable.add(attachment);
+            }
         }
         if (text != null && !text.isEmpty()) {
             if (body.length() > 0) {
@@ -295,7 +313,133 @@ public final class ChatConversationFragment extends Fragment {
             body.append(text);
         }
         row.messageText.setText(body.toString());
+        // 有能打开的就让整条气泡可点（附件行与正文在同一个 TextView 里，做不了"只点那一行"）。
+        // 一个附件都不开的对话里**不设监听**：可点但点了没反应的控件比不可点更让人困惑。
+        if (!openable.isEmpty()) {
+            row.messageText.setOnClickListener(v -> openAttachment(openable.get(0)));
+        }
         binding.conversationMessages.addView(row.getRoot());
+    }
+
+    /**
+     * 打开一个附件的原文件。
+     *
+     * <p>两条路，区别在"字节在哪"：
+     * <ul>
+     *   <li><b>图片</b>：字节就在库里的 data URL 中（见 {@code AttachmentOpen} 的注释），
+     *       所以解出来写一份到缓存再交给系统打开——这条路**不依赖任何授权**，
+     *       换手机之后从文件导进来的图片也一样打得开；</li>
+     *   <li><b>PDF</b>：库里只有 {@code content://} 那个 uri，直接交给系统。
+     *       授权过期或文件被删时系统会抛 {@code SecurityException} / 找不到 Activity，
+     *       那时如实说"文件已经不在了"，而不是让用户看到一个没头没尾的错误。</li>
+     * </ul>
+     *
+     * <p>解码与写文件都放到后台线程（一张几 MB 的图解码要几十毫秒，主线程上做会卡一下）；
+     * 界面动作回到主线程。
+     */
+    private void openAttachment(
+            com.mobilegroup20.modelpilot.chat.CanonicalMessage.Attachment attachment) {
+        if (com.mobilegroup20.modelpilot.chat.AttachmentOpen.isEmbeddedImage(attachment)) {
+            final String payload = com.mobilegroup20.modelpilot.chat.AttachmentOpen
+                    .base64Payload(attachment.uri);
+            final String mime = com.mobilegroup20.modelpilot.chat.AttachmentOpen
+                    .openMimeType(com.mobilegroup20.modelpilot.chat.AttachmentOpen
+                            .embeddedType(attachment.uri));
+            final String name = com.mobilegroup20.modelpilot.chat.AttachmentOpen
+                    .cacheFileName(0, attachment.fileName, mime);
+            if (payload == null) {
+                toast(getString(R.string.chat_attach_gone));
+                return;
+            }
+            final android.content.Context app = requireContext().getApplicationContext();
+            new Thread(() -> {
+                java.io.File file;
+                try {
+                    file = writeAttachmentToCache(app, name, payload);
+                } catch (Exception failed) {
+                    android.util.Log.e("ModelPilot", "写缓存附件失败", failed);
+                    file = null;
+                }
+                final java.io.File written = file;
+                if (!isAdded()) {
+                    return;                 // 界面已经走了，不用再管
+                }
+                requireActivity().runOnUiThread(() -> {
+                    if (written == null) {
+                        toast(getString(R.string.chat_attach_open_failed));
+                    } else {
+                        viewFile(android.net.Uri.fromFile(written), mime);
+                    }
+                });
+            }).start();
+            return;
+        }
+
+        if (attachment.uri == null || attachment.uri.trim().isEmpty()) {
+            toast(getString(com.mobilegroup20.modelpilot.chat.AttachmentOpen
+                    .reasonFor(attachment) == com.mobilegroup20.modelpilot.chat.AttachmentOpen.Reason.GONE
+                    ? R.string.chat_attach_gone : R.string.chat_attach_nothing_to_open));
+            return;
+        }
+        viewFile(android.net.Uri.parse(attachment.uri), null);
+    }
+
+    /**
+     * 把内嵌图片写进缓存目录并返回那个文件。
+     *
+     * <p>写在 {@code cacheDir/attachments/} 下：它是**缓存**，系统空间紧张时可以随时清掉，
+     * 而原图永远还在库里的 data URL 里（所以清掉了也不丢东西，大不了再写一份）。
+     * 目录每次打开前不清理：用户可能连着看好几张图，清掉会让后一张把前一张顶掉。
+     */
+    private static java.io.File writeAttachmentToCache(android.content.Context app, String name,
+                                                       String base64) throws Exception {
+        java.io.File dir = new java.io.File(app.getCacheDir(), "attachments");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException("cannot create " + dir);
+        }
+        java.io.File file = new java.io.File(dir, name);
+        byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+        try (java.io.OutputStream out = new java.io.FileOutputStream(file)) {
+            out.write(bytes);
+        }
+        return file;
+    }
+
+    /**
+     * 交给系统打开一个文件。
+     *
+     * <p>{@code file://} 的 uri <b>不能</b>直接发给别的 App：Android 7 起会抛
+     * {@code FileUriExposedException}（那个限制防的是把我们的私有路径漏出去）。
+     * 所以我们写到缓存之后先换成 FileProvider 的 {@code content://}，
+     * 再带上一次性读权限发出去——能给的只有 {@code cacheDir/attachments/} 那一个子目录
+     * （见 {@code res/xml/file_paths.xml}）。
+     *
+     * <p>三种失败各说各的：没有 App 能打开这种文件、授权过期（SAF 的授权活到进程结束，
+     * 重启之后点开一份 PDF 就是这个）、以及其它打不开。
+     */
+    private void viewFile(android.net.Uri uri, @Nullable String mime) {
+        try {
+            android.content.Intent intent = new android.content.Intent(
+                    android.content.Intent.ACTION_VIEW);
+            android.net.Uri target = uri;
+            if ("file".equals(uri.getScheme())) {
+                String path = uri.getPath();
+                target = androidx.core.content.FileProvider.getUriForFile(requireContext(),
+                        requireContext().getPackageName() + ".attachments",
+                        new java.io.File(path == null ? "" : path));
+            }
+            intent.setDataAndType(target, mime == null ? "*/*" : mime);
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch (android.content.ActivityNotFoundException noViewer) {
+            toast(getString(R.string.chat_attach_no_viewer));
+        } catch (SecurityException expiredGrant) {
+            // SAF 的授权活到进程结束；重启之后再点开一份 PDF 就是这个异常。
+            toast(getString(R.string.chat_attach_gone));
+        } catch (Exception failed) {
+            android.util.Log.e("ModelPilot", "打开附件失败", failed);
+            toast(getString(R.string.chat_attach_open_failed));
+        }
     }
 
     private void addAssistantText(LayoutInflater inflater, String text) {

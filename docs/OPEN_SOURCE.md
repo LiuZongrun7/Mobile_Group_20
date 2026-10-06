@@ -16,6 +16,7 @@
 | --- | --- | --- | --- | --- | --- |
 | **Room** | `androidx.room:room-runtime`<br>`androidx.room:room-compiler` | 2.8.5 | Apache-2.0 | 数据侧（`data/local/` 三张表） | 去重那条验收标准就是它的 `@Insert(onConflict = IGNORE)`；`@Query` 能直接返回 `LiveData`，正好是五个接口的返回类型 |
 | **MPAndroidChart** | `com.github.PhilJay:MPAndroidChart` | v3.1.0 | Apache-2.0 | 数据侧（`ui/dashboard/`） | Compare / Sessions 的柱状图和折线图，自己用 Canvas 画工作量大 |
+| **androidx.core** | `androidx.core:core` | 1.17.0 | Apache-2.0 | 对话页「打开附件原文件」 | 用它的 `FileProvider` 把缓存里那张图交给系统查看器——Android 7 起 `file://` 的 uri 不能直接发给别的 App。它本来就被 appcompat 间接带进来，这里显式声明是为了不让版本由别人的依赖树决定 |
 
 ### 论坛首版新增（2026-09-26）
 

@@ -25,6 +25,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 「打开附件原文件」用的出口（`ui/chat/ChatConversationFragment.viewFile`）。
+             图片的字节就存在对话库里（data URL），要交给系统图片查看器就得先写成一个
+             文件；而 Android 7 起 `file://` 的 uri 不能直接发给别的 App
+             （FileUriExposedException，防的是把私有路径漏出去），所以走 FileProvider
+             换成 `content://` + 一次性读权限。
+
+             `authorities` 用包名 + `.attachments`：和 Fragment 里那句
+             `getPackageName() + ".attachments"` 是同一个值，改一处必须改两处。
+             只暴露缓存下的 `attachments/` 一个子目录（见 res/xml/file_paths.xml）。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.attachments"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
