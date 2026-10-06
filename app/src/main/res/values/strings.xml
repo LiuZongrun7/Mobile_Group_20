@@ -248,10 +248,14 @@
     <string name="chat_route_auto">Auto → %1$s</string>
     <!-- 手动选的：写明是用户自己定的（Auto 不许悄悄替换它，见 AutoRouter 的类注释）。 -->
     <string name="chat_route_manual">Manual → %1$s</string>
+    <!-- 不知道是谁挑的（导入的记录、字段没写的旧数据）：**只写模型名**。
+         不许写成 Auto——那是替一条我们不知道来源的消息表态。 -->
+    <string name="chat_route_unknown">%1$s</string>
     <string name="chat_route_details">Details</string>
     <string name="chat_route_details_title">Why this model</string>
-    <!-- 手动选择时 Details 里显示的那句：Auto 没参与，所以没有"为什么"。 -->
-    <string name="chat_route_manual_explain">You picked this model, so Auto did not choose for this message.</string>
+    <!-- 这条记录里没有原因时 Details 里显示的那句。**不猜一个原因**：
+         导入的记录没有理由，手动选的也没有，而"编一段理由"是这一行最坏的失败方式。 -->
+    <string name="chat_route_no_reason">This record doesn\'t say why this model was chosen.</string>
     <string name="chat_stop">Stop</string>
     <!-- ============ 附件（这一版只收图片） ============ -->
     <!-- 1 文件名 2 大小（KB）。点一下取消，所以文案里写了"点一下"。 -->

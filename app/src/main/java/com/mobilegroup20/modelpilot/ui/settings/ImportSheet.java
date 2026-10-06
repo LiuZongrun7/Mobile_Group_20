@@ -217,6 +217,9 @@ public final class ImportSheet extends BottomSheetDialogFragment {
                     loaded = bundle;
                     preview = result;
                     setBusy(false);
+                    // **读完要把「Reading the file…」抹掉**（真机上抓到的）：那一行原本一直
+                    // 挂在预览下面，看起来像还在读——而它下面就是用户要做的那个决定。
+                    setStatus(null);
                     renderPreview(name, bytes.length);
                     renderPolicyNote();
                 });

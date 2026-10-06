@@ -461,21 +461,33 @@ public final class ChatConversationFragment extends Fragment {
         ItemRouteLineBinding row = ItemRouteLineBinding.inflate(inflater,
                 binding.conversationMessages, false);
         String name = modelName(providerId, modelId);
-        boolean auto = route == null || UsageRecorder.Route.AUTO.name().equals(route);
-        row.routeText.setText(auto
-                ? getString(R.string.chat_route_auto, name)
-                : getString(R.string.chat_route_manual, name));
-        row.routeDetails.setOnClickListener(v -> showRouteDetails(reason));
+        // 三种情况，**不能合成两种**（2026-10-06 真机上抓到原来那种写法是错的）：
+        // - route == AUTO：写 "Auto → 模型"（用户要知道下一句可能换人）；
+        // - route == MANUAL：写 "Manual → 模型"；
+        // - **route == null：只写模型名**。导入的记录、以及字段没写的旧数据都是这种，
+        //   而原来那句 `route == null || AUTO.equals(route)` 会把它们全说成 Auto——
+        //   恰好是这一行存在的意义（"这句话是谁挑的"）上撒了谎。上面的注释一直
+        //   声称"不写 Auto 也不写 Manual"，代码却写着相反的东西。
+        if (UsageRecorder.Route.AUTO.name().equals(route)) {
+            row.routeText.setText(getString(R.string.chat_route_auto, name));
+            row.routeDetails.setOnClickListener(v -> showRouteDetails(reason));
+        } else if (UsageRecorder.Route.MANUAL.name().equals(route)) {
+            row.routeText.setText(getString(R.string.chat_route_manual, name));
+            row.routeDetails.setOnClickListener(v -> showRouteDetails(reason));
+        } else {
+            row.routeText.setText(getString(R.string.chat_route_unknown, name));
+            row.routeDetails.setOnClickListener(v -> showRouteDetails(reason));
+        }
         binding.conversationMessages.addView(row.getRoot());
     }
 
     private void showRouteDetails(String reason) {
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.chat_route_details_title)
-                // reason 是 AutoRouter 给的那句话。手动选的、或这次还没算过原因时，
-                // 老实说"这是你自己选的"，而不是编一段理由。
+                // reason 是 AutoRouter 给的那句话。手动选的、导入的、或这次还没算过原因时，
+                // 老实说"这条记录里没有原因"，而不是编一段理由（编的那段看起来最像真的）。
                 .setMessage(reason == null || reason.isEmpty()
-                        ? getString(R.string.chat_route_manual_explain) : reason)
+                        ? getString(R.string.chat_route_no_reason) : reason)
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
     }
