@@ -1,6 +1,30 @@
 <resources>
     <string name="forum_news">News</string>
     <string name="forum_community">Community</string>
+    <string name="forum_trending">Trending</string>
+    <string name="forum_search_hint">Search news, topics or authors</string>
+    <string name="forum_search_action">Search</string>
+    <string name="forum_clear_search">Clear search</string>
+    <string name="forum_search_summary">%2$s results for “%1$s”</string>
+    <string name="forum_search_news">News</string>
+    <string name="forum_search_community">Community</string>
+    <string name="forum_search_empty">No results found. Try another keyword.</string>
+    <string name="forum_trending_news">Trending in the news</string>
+    <string name="forum_trending_news_basis">Past %1$d days · Ranked by headline mentions · Updated %2$s</string>
+    <string name="forum_trending_community">Hot discussions</string>
+    <string name="forum_trending_community_basis">Posts from the past %1$d days · Score = likes + comments × 2</string>
+    <string name="forum_trending_no_topics">No topics mentioned in multiple recent articles yet.</string>
+    <string name="forum_trending_no_posts">No recent discussions have likes or comments yet.</string>
+    <string name="forum_trending_topic_counts">%1$s · %2$s · View news</string>
+    <plurals name="forum_trending_articles">
+        <item quantity="one">%1$d article</item>
+        <item quantity="other">%1$d articles</item>
+    </plurals>
+    <plurals name="forum_trending_sources">
+        <item quantity="one">%1$d source</item>
+        <item quantity="other">%1$d sources</item>
+    </plurals>
+    <string name="forum_trending_score">Score %1$d</string>
     <string name="forum_new_post">Create a post</string>
     <string name="forum_publish">Publish</string>
     <string name="forum_publishing">Publishing…</string>
@@ -40,6 +64,13 @@
     <string name="forum_unknown_author">Community member</string>
     <string name="forum_official">Official</string>
     <string name="forum_read_original">Read original ↗</string>
+    <string name="news_reader_title">News</string>
+    <string name="news_thumbnail_description">Image for %1$s</string>
+    <string name="news_summary_label">Publisher summary</string>
+    <string name="news_no_summary">The publisher did not provide a summary. Try loading the article again.</string>
+    <string name="news_load_failed">The article could not be loaded. Read the publisher summary below or try again.</string>
+    <string name="news_certificate_error">The publisher’s secure connection could not be verified. Loading was stopped. The publisher summary appears below.</string>
+    <string name="news_retry_original">Reload article</string>
     <string name="forum_no_browser">No browser is available to open this link.</string>
     <string name="forum_bad_link">This link is unavailable.</string>
     <string name="forum_discard_title">Discard this draft?</string>
@@ -48,74 +79,74 @@
     <string name="forum_keep_editing">Keep editing</string>
     <string name="forum_uploading">Uploading photo %1$d of %2$d…</string>
     <!--
-      账号：邮箱注册 + 验证码验证。文案全部是中文（2026-10-05 加邮箱注册时统一过）。
+      账号：邮箱注册 + 验证码验证。界面文案统一使用英文（2026-10-07）。
       写文案的规矩：**每一种失败都要说清是哪一种**，尤其这两条——
         · MAIL_NOT_CONFIGURED（account_mail_not_configured）：账号根本没建成，不能说成"注册成功"；
         · CODE_INVALID（account_code_invalid）：服务端有意不区分"码错"和"邮箱不存在"，本地也不许猜。
     -->
-    <string name="account_title">账号</string>
-    <string name="account_sign_in">登录</string>
-    <string name="account_sign_out">退出</string>
-    <string name="account_username">用户名（论坛昵称）</string>
-    <string name="account_password">密码</string>
-    <string name="account_forgot_password">忘记密码？</string>
-    <string name="account_change_password">修改密码</string>
-    <string name="account_email">邮箱</string>
+    <string name="account_title">Account</string>
+    <string name="account_sign_in">Sign in</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_username">Username (forum display name)</string>
+    <string name="account_password">Password</string>
+    <string name="account_forgot_password">Forgot password?</string>
+    <string name="account_change_password">Change password</string>
+    <string name="account_email">Email</string>
     <!-- 账号现在只服务论坛：用量/预算/账本全在本机（key 也不出手机），跟账号无关。 -->
-    <string name="account_existing">用邮箱或用户名登录。账号只用于论坛（用量和账本都在本机，不需要登录）。</string>
-    <string name="account_register">注册</string>
-    <string name="account_new">注册要填三样：邮箱（用来收验证码）、用户名（论坛里显示的昵称）、至少 8 位的密码。</string>
-    <string name="account_username_long">用户名最多 64 个字符。</string>
-    <string name="account_username_invalid">用户名不合法：换一个昵称再试（尽量只用字母、数字、下划线，别太长）。</string>
-    <string name="account_password_short">密码至少 8 位。</string>
-    <string name="account_password_empty">请填写密码。</string>
-    <string name="account_taken">这个用户名已经被占用了，换一个试试。</string>
-    <string name="account_email_taken">这个邮箱已经注册过了：直接用邮箱登录，或者换一个邮箱注册。</string>
-    <string name="account_email_empty">请填写邮箱。</string>
-    <string name="account_email_invalid">邮箱格式不对（比如少写了 @ 或者域名），检查一下再试。</string>
-    <string name="account_username_empty">请填写用户名（论坛里的昵称）。</string>
-    <string name="account_registering">正在注册…</string>
-    <string name="account_registered">注册成功，但账号还没验证：输入邮件里的 6 位验证码，验证过才能登录。</string>
-    <string name="account_code">6 位验证码</string>
-    <string name="account_code_sent_to">验证码已发往 %1$s</string>
-    <string name="account_code_hint">到邮箱里找 6 位验证码填在下面（也看看垃圾邮件）。没收到就点「重发验证码」。</string>
-    <string name="account_code_empty">请填写邮件里的 6 位验证码。</string>
-    <string name="account_code_format">验证码是 6 位数字，只把数字部分填进来就行。</string>
-    <string name="account_code_invalid">验证码不对。核对一下邮件里的 6 位数字；如果你用的邮箱并不是注册时那个，也会是这个提示。</string>
-    <string name="account_code_expired">验证码过期了，点「重发验证码」要一个新的。</string>
-    <string name="account_code_attempts">验证码试错次数太多了，得重发一个新的才能继续。</string>
-    <string name="account_verify">验证</string>
-    <string name="account_verifying">正在验证…</string>
-    <string name="account_verified">邮箱验证成功。</string>
+    <string name="account_existing">Sign in with your email or username. Your account is for the forum; usage and spending records stay on this device.</string>
+    <string name="account_register">Register</string>
+    <string name="account_new">Enter an email for verification, a username for the forum, and a password with at least 8 characters.</string>
+    <string name="account_username_long">Usernames can contain up to 64 characters.</string>
+    <string name="account_username_invalid">Invalid username. Try a shorter name using letters, numbers and underscores.</string>
+    <string name="account_password_short">Use at least 8 characters for your password.</string>
+    <string name="account_password_empty">Enter your password.</string>
+    <string name="account_taken">This username is already taken. Try another one.</string>
+    <string name="account_email_taken">This email is already registered. Sign in with it or use another email.</string>
+    <string name="account_email_empty">Enter your email.</string>
+    <string name="account_email_invalid">Enter a valid email address, including @ and a domain.</string>
+    <string name="account_username_empty">Enter a username for the forum.</string>
+    <string name="account_registering">Registering…</string>
+    <string name="account_registered">Account created. Enter the 6-digit email code to verify it before signing in.</string>
+    <string name="account_code">6-digit verification code</string>
+    <string name="account_code_sent_to">Verification code sent to %1$s</string>
+    <string name="account_code_hint">Enter the 6-digit code from your email. Check spam too. If it has not arrived, tap Resend code.</string>
+    <string name="account_code_empty">Enter the 6-digit code from your email.</string>
+    <string name="account_code_format">The verification code must contain exactly 6 digits.</string>
+    <string name="account_code_invalid">Invalid code. Check the 6 digits and use the same email you registered with.</string>
+    <string name="account_code_expired">This code has expired. Tap Resend code for a new one.</string>
+    <string name="account_code_attempts">Too many incorrect attempts. Request a new code to continue.</string>
+    <string name="account_verify">Verify</string>
+    <string name="account_verifying">Verifying…</string>
+    <string name="account_verified">Email verified.</string>
     <!-- 「上一步成功了，正在自动登录」的**通用外壳**：%1$s 是那一步的结果
          （注册验证那条路是「邮箱验证成功。」，忘记密码那条路是「密码已重设，…」）。
          两条路收尾时做的事一样，但对用户的意义完全不同，所以理由由调用方给。 -->
-    <string name="account_verified_signing_in">%1$s 正在自动登录…</string>
-    <string name="account_verified_manually">邮箱验证成功。但自动登录没成功，请用刚才的密码登录一次。</string>
+    <string name="account_verified_signing_in">%1$s Signing you in…</string>
+    <string name="account_verified_manually">Email verified, but automatic sign-in failed. Sign in with the password you just set.</string>
     <!-- 「上一步成功了，但自动登录失败」。%1$s 同上——不能写死「邮箱验证成功」，
          不然刚把密码重设完的用户会以为自己在验证邮箱。 -->
-    <string name="account_verified_manually_reason">%1$s 但自动登录没成功，请手动登录一次。</string>
-    <string name="account_verify_unconfirmed">服务器没有确认验证成功，请重新输入一次验证码。</string>
-    <string name="account_resend">重发验证码</string>
-    <string name="account_resend_in">重发验证码（%1$d 秒）</string>
-    <string name="account_resend_done">验证码已重新发送（同一邮箱 60 秒内只能发一次）。</string>
-    <string name="account_resend_failed">服务器没能发出验证码，请稍后再试。</string>
-    <string name="account_back_to_form">邮箱写错了？返回修改</string>
-    <string name="account_unverified">这个邮箱还没验证过，所以登录被拒了。输入邮件里的验证码完成验证。</string>
-    <string name="account_unverified_ask_email">这个账号的邮箱还没验证过，登录被拒了。请在「邮箱」那一栏填上注册时用的邮箱，再点一次「登录」——我们会带你到验证码页面。</string>
+    <string name="account_verified_manually_reason">%1$s Automatic sign-in failed. Please sign in manually.</string>
+    <string name="account_verify_unconfirmed">Verification was not confirmed. Enter the code again.</string>
+    <string name="account_resend">Resend code</string>
+    <string name="account_resend_in">Resend code (%1$d s)</string>
+    <string name="account_resend_done">Code resent. You can request another code for this email after 60 seconds.</string>
+    <string name="account_resend_failed">The code could not be sent. Try again later.</string>
+    <string name="account_back_to_form">Wrong email? Go back to edit</string>
+    <string name="account_unverified">Verify your email before signing in. Enter the code from your email to continue.</string>
+    <string name="account_unverified_ask_email">Your email is not verified. Enter your registered email in the Email field and tap Sign in again to open verification.</string>
     <!-- 503 MAIL_NOT_CONFIGURED：服务端没配发信服务，**账号根本没有被创建**。
          这句话必须把「没注册成功」说出来，否则用户会去邮箱干等一封永远不会来的验证码。 -->
-    <string name="account_mail_not_configured">服务器还没配好发信服务，账号没有注册成功（邮箱和用户名都没被占用）。可以过一会儿再试，或联系管理员。</string>
+    <string name="account_mail_not_configured">Email delivery is not configured. Your account was not created; the email and username remain available. Try later or contact an administrator.</string>
     <!-- 503 MAIL_FAILED：发信服务配了、但这一封没发出去（网络抖、授权码过期）。
          和上一条一样，**账号已经被回滚**，所以必须说"没注册成功"。 -->
-    <string name="account_mail_failed">验证邮件没能发出去，账号没有注册成功（邮箱和用户名都没被占用）。稍后再试一次。</string>
-    <string name="account_request_rejected">服务器没有接受这次请求，也没说明原因。检查一下填的内容再试。</string>
-    <string name="account_signed_in">已登录：%1$s</string>
-    <string name="account_signing_in">正在登录…</string>
-    <string name="account_empty">请填写邮箱（或用户名）和密码。</string>
-    <string name="account_credentials_error">邮箱/用户名或密码不对。</string>
-    <string name="account_rate_limit">操作太频繁了，请等 1 分钟左右再试。</string>
-    <string name="account_storage_error">本机没能保存登录状态（可能存储空间不足），请重试。</string>
+    <string name="account_mail_failed">The verification email could not be sent. Your account was not created; the email and username remain available. Try again later.</string>
+    <string name="account_request_rejected">The server rejected the request without a reason. Check your details and try again.</string>
+    <string name="account_signed_in">Signed in as %1$s</string>
+    <string name="account_signing_in">Signing in…</string>
+    <string name="account_empty">Enter your email or username and password.</string>
+    <string name="account_credentials_error">Incorrect email, username or password.</string>
+    <string name="account_rate_limit">Too many requests. Wait about a minute and try again.</string>
+    <string name="account_storage_error">Your sign-in could not be saved on this device. Check available storage and try again.</string>
 
     <!-- ============ 忘记密码（`password/forgot` + `password/reset`）============
          这一屏是给「已经登不进来、正在着急」的人看的，所以每一句都要回答
@@ -123,69 +154,69 @@
 
     <!-- STAGE_RESET 头一行：「验证码已发往 <邮箱>」。邮箱是空的（用用户名登录的用户
          根本没填邮箱）时不显示空地址，让下面这句告诉他回哪儿填。 -->
-    <string name="account_reset_email_unknown">验证码会发到你的注册邮箱</string>
+    <string name="account_reset_email_unknown">The code will be sent to your registered email</string>
     <!-- 没邮箱时的提示语。只填了用户名登录的用户会走到这儿——他不知道我们要邮箱。 -->
-    <string name="account_reset_need_email">找回密码要用注册时的邮箱，请返回上一层把它填进「邮箱」那一栏，再点「忘记密码？」。</string>
+    <string name="account_reset_need_email">To reset your password, go back and enter your registered email in the Email field, then tap Forgot password?</string>
     <!-- 发出去之后的诚实说明。服务端**不告诉我们这个邮箱注册过没有**（防枚举），
          所以只能说「如果注册过」——说成「已发往你的账号」会把没注册过的用户骗去干等。
          地址本身显示在上面那行「验证码已发往 …」里，这里不再重复一遍。 -->
-    <string name="account_reset_code_sent">如果这个邮箱注册过，验证码已经在路上了：去收件箱找 6 位数字（也看看垃圾邮件）。收不到就点下面「重发验证码」。</string>
-    <string name="account_reset_hint">验证码会发到你的注册邮箱。填邮件里的 6 位验证码，再设一个新密码——重设成功后所有设备都要用新密码重新登录。</string>
-    <string name="account_reset_code">邮件里的 6 位验证码</string>
-    <string name="account_new_password">新密码（至少 8 位）</string>
-    <string name="account_new_password_confirm">再输一次新密码</string>
-    <string name="account_reset_submit">重设密码</string>
-    <string name="account_resetting">正在重设密码…</string>
+    <string name="account_reset_code_sent">If this email is registered, a 6-digit code is on its way. Check your inbox and spam. If it has not arrived, tap Resend code.</string>
+    <string name="account_reset_hint">Enter the 6-digit code sent to your registered email and choose a new password. After the reset, all devices must sign in again.</string>
+    <string name="account_reset_code">6-digit code from your email</string>
+    <string name="account_new_password">New password (at least 8 characters)</string>
+    <string name="account_new_password_confirm">Confirm new password</string>
+    <string name="account_reset_submit">Reset password</string>
+    <string name="account_resetting">Resetting password…</string>
     <!-- 重设成功、正在用新密码自动登录。**必须说清「所有设备」**：用户手上的平板和
          另一台手机都已经被服务端登出了，不说他会以为是掉线。 -->
-    <string name="account_reset_done">密码已重设，所有设备上的登录都失效了，正在用新密码登录…</string>
+    <string name="account_reset_done">Password reset. All devices have been signed out. Signing in with your new password…</string>
     <!-- 重设成功但自动登录失败（网络断在中间）。这时候**密码已经改了**，
          所以第一句必须是这个事实，第二句才是「用新密码登一次」。 -->
-    <string name="account_reset_sign_in_required">密码已经改好了，但自动登录没成功。请用**新密码**登录一次（其它设备上的登录已经失效）。</string>
-    <string name="account_reset_failed">没能重设密码，请稍后再试。</string>
+    <string name="account_reset_sign_in_required">Password reset, but automatic sign-in failed. Sign in with your new password. Other devices have been signed out.</string>
+    <string name="account_reset_failed">Your password could not be reset. Try again later.</string>
     <!-- 重设成功但自动登录失败时，后面跟的那句「具体为什么失败」（网络/服务器…）。 -->
-    <string name="account_reset_sign_in_required_reason">密码已经改好了，但自动登录没成功（%1$s）。请用**新密码**登录一次——其它设备上的登录已经失效了。</string>
+    <string name="account_reset_sign_in_required_reason">Password reset, but automatic sign-in failed (%1$s). Sign in with your new password. Other devices have been signed out.</string>
     <!-- 「返回登录」是忘记密码那屏的退路。**不能说「返回修改」**：那会让人以为
          要回去改邮箱，而这一屏多数人只是改了主意。 -->
-    <string name="account_back_to_login">返回登录</string>
+    <string name="account_back_to_login">Back to sign in</string>
     <!-- 503：服务端压根发不出信。忘了密码的人这时候最需要知道「不是你的账号有问题」。 -->
-    <string name="account_reset_mail_not_configured">服务器还没配好发信服务，现在发不出验证码，所以没法重设密码。你的密码没有被改动。可以过一会儿再试，或联系管理员。</string>
-    <string name="account_reset_mail_failed">重设密码的邮件没能发出去（服务器发信失败）。你的密码没有被改动，稍后再试一次。</string>
+    <string name="account_reset_mail_not_configured">Email delivery is not configured, so a reset code cannot be sent. Your password has not changed. Try later or contact an administrator.</string>
+    <string name="account_reset_mail_failed">The reset email could not be sent. Your password has not changed. Try again later.</string>
 
     <!-- ============ 已登录时「修改密码」（`password/change`）============ -->
 
-    <string name="account_current_password">当前密码</string>
-    <string name="account_current_password_empty">请先填写当前密码。</string>
+    <string name="account_current_password">Current password</string>
+    <string name="account_current_password_empty">Enter your current password.</string>
     <!-- 401 CREDENTIALS 在**改密码**语境下的那句话。和 account_credentials_error
          （「邮箱/用户名或密码不对。」）必须分开：用户是登录着进来的，账号一定是对的，
          说成「账号或密码不对」会让他以为账号出了问题。 -->
-    <string name="account_current_password_wrong">当前密码不对：重新输一遍。（其它设备上的登录仍然有效。）</string>
+    <string name="account_current_password_wrong">Incorrect current password. Try again. Other devices are still signed in.</string>
     <!-- 密码上限来自契约（服务端 8~200 位）。超长时必须说上限，说「至少 8 位」
          会把一个填了 201 位的用户指向完全相反的方向。 -->
-    <string name="account_password_long">密码最多 200 位。</string>
+    <string name="account_password_long">Passwords can contain up to 200 characters.</string>
     <!-- 两次不一致。**这是唯一能在本地判出来的重设/改密码失败**，其余都要问服务端。 -->
-    <string name="account_password_mismatch">两次输入的密码不一样，重新确认一下。</string>
-    <string name="account_change_hint">改密码后，**其它设备**上的登录会失效，需要重新登录；这台设备不受影响。</string>
+    <string name="account_password_mismatch">The passwords do not match. Check your confirmation.</string>
+    <string name="account_change_hint">Changing your password signs out other devices. This device stays signed in.</string>
     <!-- 已登录时上面那两栏（邮箱/用户名）是只读的展示值，加一个小标题说清它们是账号。 -->
-    <string name="account_change_identity">当前账号</string>
-    <string name="account_change_submit">保存新密码</string>
-    <string name="account_changing">正在修改密码…</string>
+    <string name="account_change_identity">Current account</string>
+    <string name="account_change_submit">Save new password</string>
+    <string name="account_changing">Changing password…</string>
     <!-- 成功提示。`otherSessionsRevoked` 是服务端告诉我们踢掉了几台设备。 -->
-    <string name="account_change_done">密码已修改，其他设备的登录已失效（这台设备不受影响）。</string>
-    <string name="account_change_done_count">密码已修改，其他设备上的 %1$d 个登录已失效（这台设备不受影响）。</string>
-    <string name="account_change_failed">没能修改密码，请稍后再试。</string>
+    <string name="account_change_done">Password changed. Other devices have been signed out. This device stays signed in.</string>
+    <string name="account_change_done_count">Password changed. %1$d other sessions were signed out. This device stays signed in.</string>
+    <string name="account_change_failed">Your password could not be changed. Try again later.</string>
     <!-- 401 但服务端**没说是哪一步错了**（错误体空/不是 JSON）。契约里改密码的 401 有两种：
          当前密码不对（带 code）和会话无效。没有 code 的那种只能按后者说，而且说得留余地
          ——猜错时用户看到的是一句「可能」，不会把他锁在错误的方向上。 -->
-    <string name="account_change_session_expired">登录状态可能已经失效了，密码没有被改动。请重新登录后再改密码。</string>
-    <string name="account_change_back">返回账号</string>
-    <string name="forum_test_enter">免账号测试</string>
-    <string name="forum_test_badge">测试区 · 帖子不进入正式论坛</string>
-    <string name="forum_test_explanation">无需注册或登录。测试身份有效期为 24 小时，可以测试新闻、图文发帖、点赞和评论。</string>
-    <string name="forum_test_identity">论坛测试身份：%1$s</string>
-    <string name="forum_test_leave">退出测试模式</string>
-    <string name="forum_test_unavailable">测试区暂时不可用，请稍后重试。</string>
+    <string name="account_change_session_expired">Your session may have expired. Your password has not changed. Sign in again before changing it.</string>
+    <string name="account_change_back">Back to account</string>
+    <string name="forum_test_enter">Try without an account</string>
+    <string name="forum_test_badge">Test mode · Posts stay in the test area</string>
+    <string name="forum_test_explanation">No registration or sign-in needed. Your test identity lasts 24 hours. Try news, posts with photos, likes and comments.</string>
+    <string name="forum_test_identity">Forum test identity: %1$s</string>
+    <string name="forum_test_leave">Leave test mode</string>
+    <string name="forum_test_unavailable">The test area is unavailable. Try again later.</string>
 
     <!-- 「我的」页：只有账号状态（登录/未登录 + 账号名 + 论坛测试身份）。 -->
-    <string name="my_page_signed_out">未登录账号</string>
+    <string name="my_page_signed_out">Not signed in</string>
 </resources>

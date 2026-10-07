@@ -20,10 +20,12 @@ public class ForumViewModel extends ViewModel {
     }
     public final Feed<NewsArticle> news = new Feed<>();
     public final Feed<ForumPost> posts = new Feed<>();
+    public final Feed<ForumTrending> trending = new Feed<>();
+    public String query = "";
     public final MutableLiveData<Integer> changes = new MutableLiveData<>(0);
     private final MediatorLiveData<Object> requests = new MediatorLiveData<>();
     public int selectedTab;
-    public final android.os.Parcelable[] scrollStates = new android.os.Parcelable[2];
+    public final android.os.Parcelable[] scrollStates = new android.os.Parcelable[3];
     private ForumFeedRepository repository;
     private final Supplier<ForumFeedRepository> provider;
     private String identity;
@@ -39,16 +41,41 @@ public class ForumViewModel extends ViewModel {
         ForumFeedRepository current = provider.get();
         if (current != repository || !Objects.equals(identity, current.sessionIdentity())) {
             repository = current; identity = current.sessionIdentity();
-            clear(news); clear(posts); liking.clear();
+            clear(news); clear(posts); clear(trending); liking.clear();
             Arrays.fill(scrollStates, null); notifyChange();
         }
         ensureLoaded();
     }
     private void clear(Feed<?> feed) { feed.generation++; feed.items.clear(); feed.cursor = null; feed.error = null; feed.loading = false; feed.loaded = false; }
-    public void ensureLoaded() { if (!(selectedTab == 0 ? news.loaded || news.loading : posts.loaded || posts.loading)) load(true); }
+    public Feed<?> active() { return selectedTab == 0 ? news : selectedTab == 1 ? posts : trending; }
+    public void ensureLoaded() { if (!active().loaded && !active().loading) load(true); }
+    public void search(String text) {
+        String next = text.trim().replaceAll("\\s+", " ");
+        if (!Objects.equals(query, next)) {
+            query = next; clear(news); clear(posts);
+            scrollStates[0] = null; scrollStates[1] = null;
+        }
+        if (selectedTab == 2) selectedTab = 0;
+        notifyChange(); ensureLoaded();
+    }
     public void load(boolean refresh) {
-        if (selectedTab == 0) load(news, refresh, c -> repository.news(c), a -> a.id);
-        else load(posts, refresh, c -> repository.posts(c), a -> a.id);
+        final String requestedQuery = query;
+        if (selectedTab == 0) load(news, refresh, c -> repository.news(c, requestedQuery), a -> a.id);
+        else if (selectedTab == 1) load(posts, refresh, c -> repository.posts(c, requestedQuery), a -> a.id);
+        else loadTrending();
+    }
+    private void loadTrending() {
+        if (trending.loading) return;
+        int generation = ++trending.generation;
+        trending.loading = true; trending.error = null; notifyChange();
+        watch(repository.trending(), result -> {
+            if (generation != trending.generation) return;
+            trending.loading = false;
+            if (result.status == ForumResult.Status.SUCCESS && result.data.topics != null && result.data.posts != null) {
+                trending.items.clear(); trending.items.add(result.data); trending.loaded = true;
+            } else trending.error = result.code == null ? "BAD_RESPONSE" : result.code;
+            notifyChange();
+        });
     }
     private interface Fetch<T> { LiveData<ForumResult<ForumPage<T>>> fetch(String cursor); }
     private interface Id<T> { String id(T item); }
@@ -73,21 +100,40 @@ public class ForumViewModel extends ViewModel {
     public void toggleLike(ForumPost post) {
         if (!liking.add(post.id)) return;
         int generation = posts.generation;
+        int trendingGeneration = trending.generation;
+        boolean fromTrending = selectedTab == 2;
         notifyChange();
         watch(repository.like(post.id, !post.likedByMe), result -> {
             liking.remove(post.id);
-            if (generation != posts.generation) return;
-            if (result.status == ForumResult.Status.SUCCESS) replace(result.data);
-            else posts.error = result.code;
+            if (generation != posts.generation && trendingGeneration != trending.generation) return;
+            if (result.status == ForumResult.Status.SUCCESS) {
+                if (generation == posts.generation) replacePost(posts.items, result.data);
+                if (trendingGeneration == trending.generation) replaceTrending(result.data);
+            } else if (fromTrending && trendingGeneration == trending.generation) trending.error = result.code;
+            else if (!fromTrending && generation == posts.generation) posts.error = result.code;
             notifyChange();
         });
     }
     public boolean isLiking(String id) { return liking.contains(id); }
     public void replace(ForumPost post) {
-        for (int i = 0; i < posts.items.size(); i++) if (Objects.equals(post.id, posts.items.get(i).id)) posts.items.set(i, post);
+        replacePost(posts.items, post); replaceTrending(post);
         notifyChange();
     }
+    private void replacePost(List<ForumPost> items, ForumPost post) {
+        for (int i = 0; i < items.size(); i++) if (Objects.equals(post.id, items.get(i).id)) items.set(i, post);
+    }
+    private void replaceTrending(ForumPost post) {
+        for (ForumTrending result : trending.items) {
+            replacePost(result.posts, post);
+            result.posts.removeIf(p -> p.likeCount + 2 * p.commentCount == 0);
+            result.posts.sort(Comparator.comparingLong((ForumPost p) -> p.likeCount + 2 * p.commentCount).reversed()
+                    .thenComparing(Comparator.comparingLong((ForumPost p) -> p.createdAtEpochMillis).reversed())
+                    .thenComparing(p -> p.id, Comparator.reverseOrder()));
+        }
+    }
     public void published(ForumPost post) {
+        query = ""; clear(news); clear(posts); clear(trending);
+        Arrays.fill(scrollStates, null);
         selectedTab = 1;
         posts.generation++; posts.loading = false; posts.error = null;
         posts.items.removeIf(p -> Objects.equals(p.id, post.id)); posts.items.add(0, post);

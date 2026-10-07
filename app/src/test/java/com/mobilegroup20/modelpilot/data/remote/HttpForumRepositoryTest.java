@@ -52,6 +52,17 @@ public class HttpForumRepositoryTest {
         assertNotNull(server.takeRequest(3, TimeUnit.SECONDS)); session.id = "account-b"; session.token = "token-b";
         assertEquals("SESSION_CHANGED", await(request).code);
     }
+    @Test public void searchEncodesQueryAndTrendingUsesSameSession() throws Exception {
+        server.enqueue(json("{\"items\":[],\"nextCursor\":null}"));
+        await(repository.news(null, "智能体 & Claude"));
+        RecordedRequest search = server.takeRequest();
+        assertEquals("智能体 & Claude", search.getRequestUrl().queryParameter("q"));
+        server.enqueue(json("{\"windowDays\":7,\"topics\":[{\"name\":\"Claude\",\"query\":\"claude\",\"rank\":1,\"articleCount\":3,\"sourceCount\":2}],\"posts\":[]}"));
+        ForumTrending result = await(repository.trending()).data;
+        assertEquals(3, result.topics.get(0).articleCount);
+        RecordedRequest trending = server.takeRequest(); assertEquals("/api/forum/trending", trending.getPath());
+        assertEquals("Bearer token-a", trending.getHeader("Authorization"));
+    }
     @Test public void expiredSessionAndMissingConfigurationAreNotEmptySuccesses() throws Exception {
         server.enqueue(new MockResponse().setResponseCode(401)); assertEquals("UNAUTHORIZED", await(repository.posts(null)).code);
         assertEquals("NOT_CONFIGURED", await(new HttpForumRepository("", session).news(null)).code);

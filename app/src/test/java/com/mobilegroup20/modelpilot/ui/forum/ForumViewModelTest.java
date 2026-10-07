@@ -58,17 +58,55 @@ public class ForumViewModelTest {
         repository.postRequests.get(1).setValue(ForumResult.success(page(null, post("created"), post("older"))));
         assertEquals(2, model.posts.items.size());
     }
+    @Test public void changingSearchRejectsOldResultsAndRestartsPagination() {
+        model.selectedTab = 1; model.search(" Claude ");
+        assertEquals("Claude", repository.queries.get(0));
+        model.search("Gemini");
+        repository.postRequests.get(0).setValue(ForumResult.success(page("old-cursor", post("stale"))));
+        assertTrue(model.posts.items.isEmpty());
+        repository.postRequests.get(1).setValue(ForumResult.success(page("new-cursor", post("current"))));
+        model.load(false);
+        assertEquals("new-cursor", repository.cursors.get(2)); assertEquals("Gemini", repository.queries.get(2));
+        model.selectedTab = 0; model.ensureLoaded();
+        assertEquals("Gemini", repository.newsQueries.get(0));
+        model.search(""); assertEquals("", repository.newsQueries.get(1));
+    }
+    @Test public void trendingHasIndependentCacheAndTopicSearchSelectsNews() {
+        model.selectedTab = 2; model.ensureLoaded();
+        ForumTrending response = new ForumTrending(); response.windowDays = 7;
+        repository.trendRequests.get(0).setValue(ForumResult.success(response));
+        model.ensureLoaded(); assertEquals(1, repository.trendRequests.size());
+        model.search("agent"); assertEquals(0, model.selectedTab);
+        assertEquals("agent", repository.newsQueries.get(0));
+        assertEquals(1, model.trending.items.size());
+        model.selectedTab = 2; model.load(true);
+        repository.identity = "other-account"; model.syncSession();
+        repository.trendRequests.get(1).setValue(ForumResult.success(response));
+        assertTrue(model.trending.items.isEmpty());
+    }
+    @Test public void successfulPublishExitsSearchSoNewPostIsVisible() {
+        model.selectedTab = 1; model.search("missing"); model.published(post("created"));
+        assertEquals("", model.query);
+        assertEquals("", repository.queries.get(1));
+        assertEquals("created", model.posts.items.get(0).id);
+    }
     private static final class FakeRepository implements ForumFeedRepository {
         String identity = "account-a";
         List<String> cursors = new ArrayList<>();
+        List<String> queries = new ArrayList<>(), newsQueries = new ArrayList<>();
+        List<MutableLiveData<ForumResult<ForumTrending>>> trendRequests = new ArrayList<>();
         List<MutableLiveData<ForumResult<ForumPage<ForumPost>>>> postRequests = new ArrayList<>();
         List<MutableLiveData<ForumResult<ForumPage<NewsArticle>>>> newsRequests = new ArrayList<>();
         public String sessionIdentity() { return identity; }
-        public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor) {
-            cursors.add(cursor); MutableLiveData<ForumResult<ForumPage<ForumPost>>> data = new MutableLiveData<>(ForumResult.loading()); postRequests.add(data); return data;
+        public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor, String query) {
+            cursors.add(cursor); queries.add(query); MutableLiveData<ForumResult<ForumPage<ForumPost>>> data = new MutableLiveData<>(ForumResult.loading()); postRequests.add(data); return data;
         }
-        public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor) {
+        public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor, String query) {
+            newsQueries.add(query);
             MutableLiveData<ForumResult<ForumPage<NewsArticle>>> data = new MutableLiveData<>(ForumResult.loading()); newsRequests.add(data); return data;
+        }
+        public LiveData<ForumResult<ForumTrending>> trending() {
+            MutableLiveData<ForumResult<ForumTrending>> data = new MutableLiveData<>(ForumResult.loading()); trendRequests.add(data); return data;
         }
         public LiveData<ForumResult<ForumPost>> post(String id) { throw new UnsupportedOperationException(); }
         public LiveData<ForumResult<ForumPage<ForumReply>>> replies(String id, String cursor) { throw new UnsupportedOperationException(); }

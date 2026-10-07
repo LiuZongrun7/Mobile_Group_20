@@ -51,8 +51,9 @@ public final class HttpForumRepository implements ForumFeedRepository, ForumRepo
         });
         return result;
     }
-    public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor) { return request(a -> api.posts(a, cursor, 20)); }
-    public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor) { return request(a -> api.news(a, cursor, 20)); }
+    public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor, String query) { return request(a -> api.posts(a, cursor, 20, query)); }
+    public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor, String query) { return request(a -> api.news(a, cursor, 20, query)); }
+    public LiveData<ForumResult<ForumTrending>> trending() { return request(a -> api.trending(a)); }
     public LiveData<ForumResult<ForumPost>> post(String id) { return request(a -> api.post(a, id)); }
     public LiveData<ForumResult<ForumPage<ForumReply>>> replies(String id, String cursor) { return request(a -> api.replies(a, id, cursor, 20)); }
     public LiveData<ForumResult<ForumImage>> uploadImage(byte[] bytes, String mimeType) {

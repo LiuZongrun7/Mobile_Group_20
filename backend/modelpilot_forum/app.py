@@ -26,6 +26,7 @@ from .mailer import DEFAULT_HOST, DEFAULT_PORT, Mailer
 from .agent_routes import build_agent_router
 from .schema import drop_obsolete_tables
 from .test_sessions import ForumAuth
+from .discovery import news_topics, search_kind, search_query
 from .store import (Store, decode_cursor, news_json, now_ms, official_post, official_posts,
                     page, rate_limit, reply_json)
 
@@ -317,20 +318,55 @@ def create_app(settings=None, verifier=None, day_provider=None, mailer=None):
         return {"status": "ok"}
 
     @app.get("/api/forum/posts")
-    def posts(user: User, cursor: str | None = None, limit: Limit = 20):
-        position = decode_cursor(cursor, "posts")
-        where, parameters = ("", []) if position is None else ("WHERE (created,id)<(?,?)", list(position))
+    def posts(user: User, cursor: str | None = None, limit: Limit = 20,
+              q: Annotated[str, Query(max_length=100)] = ""):
+        query = search_query(q)
+        kind = search_kind("posts", query)
+        position = decode_cursor(cursor, kind)
+        filters, parameters = [], []
+        if query:
+            filters.append("(instr(lower(title),?)>0 OR instr(lower(body),?)>0 OR instr(lower(author_name),?)>0)")
+            parameters += [query] * 3
+        if position is not None:
+            filters.append("(created,id)<(?,?)")
+            parameters += list(position)
+        where = "WHERE " + " AND ".join(filters) if filters else ""
         with store.connect() as db:
             rows = db.execute(f"SELECT * FROM posts {where} ORDER BY created DESC,id DESC LIMIT ?", parameters + [limit + 1]).fetchall()
-            return page(rows, limit, "posts", lambda row: store.post(db, row["id"], user.uid, origin))
+            return page(rows, limit, kind, lambda row: store.post(db, row["id"], user.uid, origin))
 
     @app.get("/api/forum/news")
-    def news(user: User, cursor: str | None = None, limit: Limit = 20):
-        position = decode_cursor(cursor, "news")
-        where, parameters = ("", []) if position is None else ("WHERE (published,id)<(?,?)", list(position))
+    def news(user: User, cursor: str | None = None, limit: Limit = 20,
+             q: Annotated[str, Query(max_length=100)] = ""):
+        query = search_query(q)
+        kind = search_kind("news", query)
+        position = decode_cursor(cursor, kind)
+        filters, parameters = [], []
+        if query:
+            filters.append("(instr(lower(title),?)>0 OR instr(lower(summary),?)>0 OR instr(lower(source_name),?)>0)")
+            parameters += [query] * 3
+        if position is not None:
+            filters.append("(published,id)<(?,?)")
+            parameters += list(position)
+        where = "WHERE " + " AND ".join(filters) if filters else ""
         with store.news_connect(settings.news_database) as db:
             rows = db.execute(f"SELECT * FROM news {where} ORDER BY published DESC,id DESC LIMIT ?", parameters + [limit + 1]).fetchall()
-            return page(rows, limit, "news", news_json, "published")
+            return page(rows, limit, kind, news_json, "published")
+
+    @app.get("/api/forum/trending")
+    def trending(user: User):
+        as_of = now_ms()
+        cutoff = as_of - 7 * 86_400_000
+        with store.news_connect(settings.news_database) as db:
+            articles = db.execute("SELECT title,source_name,published FROM news WHERE published BETWEEN ? AND ?",
+                                  (cutoff, as_of)).fetchall()
+        with store.connect() as db:
+            rows = db.execute("""SELECT p.id, COUNT(DISTINCT l.uid)+COUNT(DISTINCT r.id)*2 AS score
+                FROM posts p LEFT JOIN likes l ON l.post_id=p.id LEFT JOIN replies r ON r.post_id=p.id
+                WHERE p.created BETWEEN ? AND ? GROUP BY p.id HAVING score>0
+                ORDER BY score DESC,p.created DESC,p.id DESC LIMIT 10""", (cutoff, as_of)).fetchall()
+            hot_posts = [store.post(db, row["id"], user.uid, origin) for row in rows]
+        return {"windowDays": 7, "asOfEpochMillis": as_of, "topics": news_topics(articles), "posts": hot_posts}
 
     @app.post("/api/forum/images", status_code=201)
     def upload(user: User, image: Annotated[UploadFile, File()]):

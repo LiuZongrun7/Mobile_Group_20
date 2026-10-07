@@ -14,6 +14,24 @@
     <TextView android:id="@+id/forum_test_badge" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:paddingHorizontal="20dp" android:paddingVertical="6dp" android:background="#E8DEF8"
         android:text="@string/forum_test_badge" android:textAppearance="?attr/textAppearanceLabelLarge" android:visibility="gone" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="16dp" android:paddingTop="8dp">
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/forum_search_input"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:hint="@string/forum_search_hint" app:endIconMode="clear_text" app:endIconContentDescription="@string/forum_clear_search">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/forum_search"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="text" android:maxLines="1" android:maxLength="100"
+                android:imeOptions="actionSearch" android:textSize="14sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/forum_search_button"
+            style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
+            android:layout_height="48dp" android:text="@string/forum_search_action" />
+    </LinearLayout>
+    <TextView android:id="@+id/forum_search_summary" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:paddingHorizontal="20dp" android:paddingTop="6dp"
+        android:textAppearance="?attr/textAppearanceBodySmall" android:accessibilityLiveRegion="polite" android:visibility="gone" />
     <com.google.android.material.tabs.TabLayout android:id="@+id/forum_tabs"
         android:layout_width="match_parent" android:layout_height="48dp" app:tabMode="fixed" />
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/forum_refresh"

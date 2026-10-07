@@ -213,14 +213,37 @@ sudo systemctl start modelpilot-news
 sudo systemctl start modelpilot-backup
 
 # 证书续期演练，不替换生产证书
-sudo /opt/modelpilot/certbot-venv/bin/certbot renew \
+sudo /opt/modelpilot/certbot-venv/bin/python3 /opt/modelpilot/certbot-venv/bin/certbot renew \
   --cert-name tokentrail-ip --dry-run --no-random-sleep-on-renew \
   --run-deploy-hooks --deploy-hook '/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx'
 ```
 
 更新代码只覆盖 `/opt/modelpilot/backend` 和 `/opt/modelpilot/tools/news`，随后重启 `modelpilot-forum`。不要覆盖 `/var/lib/modelpilot-forum`。更新 Nginx 前运行 `nginx -t`。`install-server.sh` 为首次安装脚本；它安装 HTTP 配置，HTTPS 启用使用 `enable-https.sh`，日常更新无需重复执行首次安装。
 
+### HTTPS 连接失败排查（2026-10-07）
+
+本次 App 登录显示“无法连接”的原因是 IP 证书过期。项目目录改名后，虚拟环境里的
+`bin/certbot` 首行仍指向 `/opt/tokentrail/certbot-venv/bin/python3`，导致续期服务连续
+报 `203/EXEC`。续期配置 `/etc/letsencrypt/renewal/tokentrail-ip.conf` 的 `webroot_path`
+及 `webroot_map` 也仍指向已经不存在的 `/var/lib/tokentrail-acme`。
+
+续期服务和上面的维护命令现已显式调用当前虚拟环境的 Python。迁移目录时，还需将
+已有证书续期配置中的两处 webroot 与 Nginx 的 `/var/lib/modelpilot-acme` 保持一致；
+证书名称 `tokentrail-ip` 保留原值，避免创建另一套证书。
+修改前备份续期配置，修改后执行 `sudo systemctl start modelpilot-certbot.service`，
+再用上述 `--dry-run` 命令验证下一次续期。对公网运行
+`curl --fail https://43.140.212.47/forum-health` 检查证书和服务，不跳过证书验证。
+
 备份恢复：先停止论坛和新闻任务，保存当前数据目录，再将选定备份的 `modelpilot.sqlite3` 和 `media/` 恢复到数据目录，移走旧的 `modelpilot.sqlite3-wal`、`modelpilot.sqlite3-shm`，修复属主为 `tokentrail:tokentrail`，最后启动服务并检查健康状态。恢复会回到备份时刻，不能直接覆盖运行中的数据库。
+
+### 搜索与 Trending 上线（2026-10-07）
+
+`forum/news` 和 `forum/posts` 新增 `q`，`forum/trending` 返回近 7 天新闻热词和
+真实互动的热门讨论，契约和统计口径见 `docs/FORUM_API.md`。
+新代码先在隔离测试区验证，再重启正式服务。公网测试用临时测试身份验证了
+`agent` 搜索的 46 条结果、3 页无重复、无结果提示和真实热词榜，结束后撤销该身份。
+更新无需数据库迁移。原 `app.py` 备份为
+`/var/backups/modelpilot-discovery-20261007.Hovisb/app.py`；`discovery.py` 为本次新增模块。
 
 ## 本地验证
 
@@ -232,11 +255,12 @@ Python 3.10+（本机是 3.14，也可）：
 python3 -m venv /tmp/modelpilot-forum-venv
 /tmp/modelpilot-forum-venv/bin/pip install -r backend/requirements-test.txt
 
-(cd backend && /tmp/modelpilot-forum-venv/bin/python -m pytest -q tests)     # 76 个
+(cd backend && /tmp/modelpilot-forum-venv/bin/python -m pytest -q tests)
 ```
 
 测试文件与功能的对应：`test_accounts.py`（账号与会话）、`test_forum.py`（帖子 / 图片 /
-幂等 / 分页）、`test_official.py`（官方帖 = 新闻）、`test_agent.py`（智能体、工具循环、
+幂等 / 分页）、`test_discovery.py`（完整列表搜索、关键词游标、真实热度、只读新闻快照）、
+`test_official.py`（官方帖 = 新闻）、`test_agent.py`（智能体、工具循环、
 限流、独立账本）、`test_schema.py`（废弃表真的被删掉、「一天」的口径）、
 `test_test_sessions.py`（测试身份）。
 

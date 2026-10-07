@@ -259,16 +259,16 @@
     <string name="chat_stop">Stop</string>
     <!-- ============ 附件（这一版只收图片） ============ -->
     <!-- 1 文件名 2 大小（KB）。点一下取消，所以文案里写了"点一下"。 -->
-    <string name="chat_attach_chip">📎 %1$s · %2$d KB（点一下取消）</string>
+    <string name="chat_attach_chip">📎 %1$s · %2$d KB (tap to remove)</string>
     <!-- 气泡里附件那一行。**缩略图还没做**（见 ChatConversationFragment 的注释）。 -->
-    <string name="chat_attach_line">📎 附件：%1$s · %2$d KB</string>
+    <string name="chat_attach_line">📎 Attachment: %1$s · %2$d KB</string>
     <string name="chat_attach_image_cd">Attached image</string>
     <string name="chat_attach_only_images">Only images can be attached for now. PDF text extraction is not built yet.</string>
     <string name="chat_attach_unreadable">Could not read that file.</string>
     <!-- 上限说清楚是几 MB，而不是只说"太大了"。 -->
     <string name="chat_attach_too_large">That file is too large to attach (limit %1$d MB).</string>
     <!-- PDF：正文在**本机**抽出来，文件不上传（大纲 §4-4/§7.2）。 -->
-    <string name="chat_attach_chip_pdf">📄 %1$s · 已在本机提取 %2$d 字（点一下取消）</string>
+    <string name="chat_attach_chip_pdf">📄 %1$s · %2$d characters extracted on this device (tap to remove)</string>
     <string name="chat_attach_extracting">Extracting the PDF text on this phone…</string>
     <!-- 扫描件没有文字层；OCR 按大纲明确不做，所以照实说边界在哪。 -->
     <string name="chat_attach_pdf_scanned">No text layer in that PDF (it looks scanned). OCR is not supported yet.</string>

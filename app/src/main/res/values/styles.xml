@@ -11,6 +11,10 @@
     <style name="ForumButtonTheme">
         <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
     </style>
+    <style name="NewsThumbnailShape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">6dp</item>
+    </style>
 
     <!-- Base application theme.
          Material3 ships its own full colour palette (colorPrimary, colorSecondary,

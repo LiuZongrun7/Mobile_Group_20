@@ -1,9 +1,7 @@
 package com.mobilegroup20.modelpilot.ui.forum;
 
-import android.app.Activity;
-import android.content.*;
+import android.content.Context;
 import android.graphics.Color;
-import android.net.Uri;
 import android.text.TextUtils;
 import android.view.*;
 import android.widget.*;
@@ -15,6 +13,7 @@ import com.mobilegroup20.modelpilot.R;
 import com.mobilegroup20.modelpilot.contract.model.*;
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 /** Small shared presentation helpers. Repository implementations never depend on this class. */
 final class ForumViews {
@@ -38,7 +37,7 @@ final class ForumViews {
         MaterialButton button = new MaterialButton(new androidx.appcompat.view.ContextThemeWrapper(c, R.style.ForumButtonTheme));
         button.setText(label); button.setMinWidth(0); return button;
     }
-    static String date(long epoch) { return epoch > 0 ? DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(new Date(epoch)) : ""; }
+    static String date(long epoch) { return epoch > 0 ? DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.ENGLISH).format(new Date(epoch)) : ""; }
     static String safe(String text) { return text == null ? "" : text; }
     static String author(Context c, ForumPost p) { return TextUtils.isEmpty(p.authorName) ? c.getString(R.string.forum_unknown_author) : p.authorName; }
     static MaterialCardView card(Context c, LinearLayout content) {
@@ -76,15 +75,6 @@ final class ForumViews {
         if (window != null) window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         Glide.with(view).load(image).error(android.R.drawable.ic_menu_report_image).into(view);
         view.setOnClickListener(v -> dialog.dismiss());
-    }
-    static void openOriginal(Context c, String url) {
-        try {
-            Uri uri = Uri.parse(safe(url));
-            if (!"https".equals(uri.getScheme()) && !"http".equals(uri.getScheme())) {
-                Toast.makeText(c, R.string.forum_bad_link, Toast.LENGTH_SHORT).show(); return;
-            }
-            c.startActivity(new Intent(Intent.ACTION_VIEW, uri));
-        } catch (ActivityNotFoundException e) { Toast.makeText(c, R.string.forum_no_browser, Toast.LENGTH_SHORT).show(); }
     }
     static String error(Context c, String code) {
         int message;

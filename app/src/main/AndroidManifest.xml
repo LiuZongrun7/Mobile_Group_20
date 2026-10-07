@@ -26,6 +26,9 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".ui.forum.NewsReaderActivity" android:exported="false"
+            android:theme="@style/ForumTheme" />
+
         <!-- 「打开附件原文件」用的出口（`ui/chat/ChatConversationFragment.viewFile`）。
              图片的字节就存在对话库里（data URL），要交给系统图片查看器就得先写成一个
              文件；而 Android 7 起 `file://` 的 uri 不能直接发给别的 App

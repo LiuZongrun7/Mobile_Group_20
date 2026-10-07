@@ -1,9 +1,10 @@
 [Unit]
-Description=Renew TokenTrail HTTPS IP certificate
+Description=Renew ModelPilot HTTPS IP certificate
 After=network-online.target nginx.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/modelpilot/certbot-venv/bin/certbot renew --cert-name tokentrail-ip --quiet --no-random-sleep-on-renew --deploy-hook "/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx"
+# Invoke Python explicitly: a moved venv's certbot launcher can retain the old interpreter path.
+ExecStart=/opt/modelpilot/certbot-venv/bin/python3 /opt/modelpilot/certbot-venv/bin/certbot renew --cert-name tokentrail-ip --quiet --no-random-sleep-on-renew --deploy-hook "/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx"
 TimeoutStartSec=180

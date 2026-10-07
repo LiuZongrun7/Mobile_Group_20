@@ -72,7 +72,7 @@ def main():
     staging = store.directory / "news-staging.json"
     sources = json.loads((source_dir / "sources.json").read_text())["sources"]
     previous = json.loads(staging.read_text()).get("items", []) if staging.exists() else []
-    document = collector.collect(sources, previous)
+    document = collector.collect(sources, previous, fetch_image=collector.fetch_article_image)
     collector.atomic_write(staging, document)
     import_articles(store, document)
     export_news(store)

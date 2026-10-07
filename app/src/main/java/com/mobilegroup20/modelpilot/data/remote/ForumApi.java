@@ -9,8 +9,9 @@ import retrofit2.http.*;
 
 /** All routes are relative to the team's API base URL. */
 public interface ForumApi {
-    @GET("forum/posts") Call<ForumPage<ForumPost>> posts(@Header("Authorization") String auth, @Query("cursor") String cursor, @Query("limit") int limit);
-    @GET("forum/news") Call<ForumPage<NewsArticle>> news(@Header("Authorization") String auth, @Query("cursor") String cursor, @Query("limit") int limit);
+    @GET("forum/posts") Call<ForumPage<ForumPost>> posts(@Header("Authorization") String auth, @Query("cursor") String cursor, @Query("limit") int limit, @Query("q") String query);
+    @GET("forum/news") Call<ForumPage<NewsArticle>> news(@Header("Authorization") String auth, @Query("cursor") String cursor, @Query("limit") int limit, @Query("q") String query);
+    @GET("forum/trending") Call<ForumTrending> trending(@Header("Authorization") String auth);
     @GET("forum/posts/{id}") Call<ForumPost> post(@Header("Authorization") String auth, @Path("id") String id);
     @GET("forum/posts/{id}/replies") Call<ForumPage<ForumReply>> replies(@Header("Authorization") String auth, @Path("id") String id, @Query("cursor") String cursor, @Query("limit") int limit);
     @Multipart @POST("forum/images") Call<ForumImage> upload(@Header("Authorization") String auth, @Part MultipartBody.Part image);

@@ -55,8 +55,9 @@ public class PostDetailViewModelTest {
         public LiveData<ForumResult<ForumReply>> reply(String id, String body, String key) {
             this.key = key; sent = new MutableLiveData<>(ForumResult.loading()); return sent;
         }
-        public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor) { throw new UnsupportedOperationException(); }
-        public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor) { throw new UnsupportedOperationException(); }
+        public LiveData<ForumResult<ForumPage<ForumPost>>> posts(String cursor, String query) { throw new UnsupportedOperationException(); }
+        public LiveData<ForumResult<ForumPage<NewsArticle>>> news(String cursor, String query) { throw new UnsupportedOperationException(); }
+        public LiveData<ForumResult<ForumTrending>> trending() { throw new UnsupportedOperationException(); }
         public LiveData<ForumResult<ForumImage>> uploadImage(byte[] bytes, String mime) { throw new UnsupportedOperationException(); }
         public LiveData<ForumResult<ForumPost>> publish(PostDraft draft, String key) { throw new UnsupportedOperationException(); }
         public LiveData<ForumResult<ForumPost>> like(String id, boolean liked) { throw new UnsupportedOperationException(); }
