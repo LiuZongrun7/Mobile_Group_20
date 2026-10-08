@@ -78,6 +78,7 @@ public final class ModelSheetFragment extends BottomSheetDialogFragment {
 
         binding.modelTask.setText(taskLabel(task));
         binding.modelClose.setOnClickListener(v -> dismiss());
+        binding.modelPreferences.setOnClickListener(v -> showPreferences());
         binding.modelNote.setText(R.string.chat_model_note);
 
         boolean anyChoice = false;
@@ -124,7 +125,17 @@ public final class ModelSheetFragment extends BottomSheetDialogFragment {
         ItemModelChoiceBinding row = ItemModelChoiceBinding.inflate(getLayoutInflater(), parent,
                 false);
         row.modelTitle.setText(choice.title);
-        row.modelSubtitle.setText(choice.subtitle);
+        String subtitle = choice.subtitle;
+        com.mobilegroup20.modelpilot.chat.ModelSpec pricedModel =
+                RepositoryProvider.providers().model(choice.providerId, choice.modelId);
+        if (pricedModel != null && pricedModel.priced()) {
+            int marker = subtitle.indexOf(" · Input $");
+            if (marker >= 0) subtitle = subtitle.substring(0, marker)
+                    + " · Input " + com.mobilegroup20.modelpilot.data.Currency.format(requireContext(), pricedModel.inputMicros)
+                    + " / Output " + com.mobilegroup20.modelpilot.data.Currency.format(requireContext(), pricedModel.outputMicros)
+                    + " per 1M";
+        }
+        row.modelSubtitle.setText(subtitle);
 
         boolean isAuto = kind == ModelChoices.Group.Kind.AUTO;
         boolean selected = isAuto
@@ -170,6 +181,57 @@ public final class ModelSheetFragment extends BottomSheetDialogFragment {
     }
 
     /** 任务胶囊上的那行字。1 任务名 2 补充说明。 */
+    private void showPreferences() {
+        final android.content.Context app = requireContext().getApplicationContext();
+        com.mobilegroup20.modelpilot.chat.AutoRouter.Preference current =
+                com.mobilegroup20.modelpilot.data.RoutingPreferences.preference(app);
+        String[] labels = getResources().getStringArray(R.array.route_preference_options);
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.route_preferences)
+                .setSingleChoiceItems(labels, current.ordinal(), (dialog, which) -> {
+                    dialog.dismiss();
+                    com.mobilegroup20.modelpilot.chat.AutoRouter.Preference mode =
+                            com.mobilegroup20.modelpilot.chat.AutoRouter.Preference.values()[which];
+                    if (mode == com.mobilegroup20.modelpilot.chat.AutoRouter.Preference.PREFERRED_PROVIDER) {
+                        choosePreferredProvider();
+                    } else {
+                        com.mobilegroup20.modelpilot.data.RoutingPreferences.save(app, mode,
+                                com.mobilegroup20.modelpilot.data.RoutingPreferences.preferredProvider(app));
+                        android.widget.Toast.makeText(app, R.string.route_preference_saved,
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    private void choosePreferredProvider() {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (com.mobilegroup20.modelpilot.chat.ProviderSpec provider
+                : RepositoryProvider.providers().providers()) {
+            String key = ProviderKeys.apiKey(requireContext(), provider.providerId);
+            if (key != null && !key.trim().isEmpty()) {
+                ids.add(provider.providerId);
+                names.add(provider.displayName);
+            }
+        }
+        if (ids.isEmpty()) {
+            android.widget.Toast.makeText(requireContext(), R.string.chat_model_no_keys,
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        String selected = com.mobilegroup20.modelpilot.data.RoutingPreferences.preferredProvider(requireContext());
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.route_preferred_provider)
+                .setSingleChoiceItems(names.toArray(new String[0]), ids.indexOf(selected), (dialog, which) -> {
+                    com.mobilegroup20.modelpilot.data.RoutingPreferences.save(requireContext(),
+                            com.mobilegroup20.modelpilot.chat.AutoRouter.Preference.PREFERRED_PROVIDER, ids.get(which));
+                    dialog.dismiss();
+                    android.widget.Toast.makeText(requireContext(), R.string.route_preference_saved,
+                            android.widget.Toast.LENGTH_SHORT).show();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
     private String taskLabel(TaskKind task) {
         switch (task) {
             case IMAGE:

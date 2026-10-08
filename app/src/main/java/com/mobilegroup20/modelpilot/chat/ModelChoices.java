@@ -102,8 +102,8 @@ public final class ModelChoices {
         }
         out.append(model.contextLimit / 1000).append("K context");
         if (model.priced()) {
-            out.append(String.format(java.util.Locale.US, " · ¥%.2f/1M",
-                    model.roughPriceMicrosPer1M() / 1_000_000.0 * 7.2));
+            out.append(String.format(java.util.Locale.US, " · Input $%.4f / Output $%.4f per 1M",
+                    model.inputMicros / 1_000_000.0, model.outputMicros / 1_000_000.0));
         } else {
             out.append(" · 价格未知");
         }

@@ -208,6 +208,7 @@ public final class ChatConversationViewModel extends ViewModel {
     private final MutableLiveData<String> noProject = new MutableLiveData<>(null);
     private final LiveData<ChatEntity> chat;
     private final LiveData<List<MessageEntity>> messages;
+    private final LiveData<List<MemoryEntity>> chooserMemories;
 
     public ChatConversationViewModel(String chatId, Context context) {
         this.chatId = chatId;
@@ -217,6 +218,7 @@ public final class ChatConversationViewModel extends ViewModel {
         this.ledger = RepositoryProvider.ledger();
         this.chat = dao.chatLive(chatId);
         this.messages = dao.messagesLive(chatId);
+        this.chooserMemories = dao.memoriesLive(chatId);
     }
 
     public LiveData<ChatEntity> chat() {
@@ -256,7 +258,7 @@ public final class ChatConversationViewModel extends ViewModel {
      * 会一直影响后面每一轮，而他现在连看都看不到。
      */
     public LiveData<List<MemoryEntity>> memories() {
-        return dao.memoriesLive(chatId);
+        return chooserMemories;
     }
 
     /** 用户改了摘要。**下一次发送会重新从库里读**，所以缓存自然失效（见 loadEngine）。 */
@@ -292,6 +294,23 @@ public final class ChatConversationViewModel extends ViewModel {
             dao.deleteMemories(chatId);
             dao.deleteChat(chatId);
         });
+    }
+
+    /** Non-blocking chooser snapshot; authoritative checks still run on IO before each request. */
+    public TaskKind currentTask(TaskKind pending) {
+        java.util.List<CanonicalMessage> snapshot = new java.util.ArrayList<>();
+        List<MessageEntity> values = messages.getValue();
+        if (values != null) for (MessageEntity value : values) snapshot.add(toCanonical(value));
+        java.util.List<Memory> retainedMemories = new java.util.ArrayList<>();
+        List<MemoryEntity> saved = chooserMemories.getValue();
+        if (saved != null) for (MemoryEntity value : saved) retainedMemories.add(new Memory(
+                value.id, value.chatId, value.fromMessageId, value.toMessageId, value.summary,
+                value.madeByProvider, value.madeByModel, value.createdAtEpochMillis,
+                value.tokensIn, value.tokensOut));
+        TaskKind history = com.mobilegroup20.modelpilot.chat.TaskRequirements.forMessages(
+                com.mobilegroup20.modelpilot.chat.TaskRequirements.retained(snapshot, retainedMemories));
+        return pending == TaskKind.IMAGE || history == TaskKind.IMAGE ? TaskKind.IMAGE
+                : pending == TaskKind.PDF || history == TaskKind.PDF ? TaskKind.PDF : TaskKind.TEXT;
     }
 
     public String chatId() {
@@ -370,6 +389,14 @@ public final class ChatConversationViewModel extends ViewModel {
             ContextEngine engine = loadEngine();
 
             // 3) 木桶效应。压一次（如果压成了）会**单独记一行账**，和回答共用 taskId。
+            // Do not charge for compression before rejecting an incompatible manual model.
+            if (manualModelId != null) {
+                ModelSpec selected = registry.model(manualProviderId, manualModelId);
+                if (selected != null && !selected.supports(engine.requiredTask())) {
+                    fail(R.string.chat_error_task_unsupported);
+                    return;
+                }
+            }
             boolean compressed = compressIfNeeded(engine, taskId);
 
             // 4) 选模型。
@@ -384,15 +411,29 @@ public final class ChatConversationViewModel extends ViewModel {
                 reason = null;
             } else {
                 AutoRouter.Decision decision =
-                        new AutoRouter(registry).choose(enabledProviders(), TaskKind.TEXT);
+                        new AutoRouter(registry).choose(enabledProviders(),
+                                new AutoRouter.Request(engine.requiredTask(), engine.currentTokens(),
+                                        1024, ContextEngine.RESERVE_FOR_OUTPUT,
+                                        com.mobilegroup20.modelpilot.data.RoutingPreferences.preference(context),
+                                        com.mobilegroup20.modelpilot.data.RoutingPreferences.preferredProvider(context)),
+                                new AutoRouter.ContextFit() {
+                                    @Override public long inputTokens(ModelSpec candidate) {
+                                        return engine.render(candidate.providerId, candidate.modelId).estimatedTokens;
+                                    }
+                                    @Override public long usableTokens(ModelSpec candidate) {
+                                        return engine.usableTokens(candidate.contextLimit);
+                                    }
+                                });
                 if (!decision.available()) {
-                    fail(R.string.chat_error_no_key);
+                    fail(R.string.chat_error_no_route);
                     return;
                 }
                 providerId = decision.providerId;
                 modelId = decision.modelId;
                 route = UsageRecorder.Route.AUTO;
-                reason = decision.reason;
+                reason = decision.reason + (decision.estimatedCostMicros == null ? ""
+                        : " 本次参考费用估算：" + com.mobilegroup20.modelpilot.data.Currency.format(
+                                context, decision.estimatedCostMicros) + "。");
             }
             ProviderSpec provider = registry.provider(providerId);
             ModelSpec model = registry.model(providerId, modelId);
@@ -411,6 +452,11 @@ public final class ChatConversationViewModel extends ViewModel {
             RenderedContext rendered;
             try {
                 rendered = engine.renderFitting(providerId, modelId, false);
+                // renderFitting(false) returns the full payload even when too large; check explicitly.
+                if (rendered.estimatedTokens > engine.usableTokens(model.contextLimit)) {
+                    fail(R.string.chat_error_context);
+                    return;
+                }
             } catch (RuntimeException unusable) {
                 fail(R.string.chat_error_context);
                 return;

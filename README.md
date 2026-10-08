@@ -27,7 +27,9 @@
 
 服务端（`backend/`）现在只有三样东西：**账号**（`/api/account/*`）、**论坛与新闻**（`/api/forum/*`）、**应用内智能体**（`/api/agent/ask|status`），外加一个不需要身份的 `GET /health`。契约见 [docs/SERVER_API.md](docs/SERVER_API.md)。
 
-> **原来的「API 中转」和整条「记账链」都已删除（2026-09-30，两刀）。** 第一刀删的是「用户把自己上游的 API key 填进来、我们把 cc-switch 的请求替他转发上去并顺手记用量」那一层——新方向（ModelPilot 大纲）改成**用户在 App 里提问、后端用我们自己的模型连接调用**，所以转发这条路没有了：**用户不再需要交任何 key 给我们**，relay key（`tt_`）不再签发也不再认，身份只有账号 token（`tt_app_`）一种。第二刀删的是**用量 / 预算 / 价目 / 赛季四组接口**（`/api/relay/usage*`、`/budgets*`、`/pricing*`、`/season*`）连同它们的表（`relay_usage`、`season_balances`、`season_settlements`、`budgets`、`pricing_rates`）、后端模块和 Android 侧客户端（`ServerApi`、`HttpBudgetRepository` 等）。**删的理由是记账链没有生产者也没有消费者**——空转的接口比没有接口更糟，会让人以为账已经在记了；Insights 要等「用户提问 → 后端调模型 → 记账」那条新路写出来之后**重新设计**。智能体现在挂在 `/api/agent/*`（原来是 `/api/relay/agent/*`），只保留两个只读工具，`/status` 也不再报金额（改成 `"costReporting": "unavailable"`）。**服务端的 Python 包、systemd 服务名、部署路径、库文件名和 env 变量前缀（`FORUM_*` → `MODELPILOT_*`）也在同一轮改成了 ModelPilot。**
+当前 Android 主对话链路已改为**手机直连用户配置的 Provider API**：API key 留在本机，对话、摘要记忆和用量账本使用本地 Room 保存；登录账号用于论坛，不自动云同步聊天数据。`/api/agent/*` 仍是可选的服务端论坛助手，和手机主聊天是两条不同的链路。原 relay、服务端预算/价目/赛季接口已删除。
+
+截至 2026-10-08，Auto 已支持任务能力、上下文容量、本次输入输出费用估算，以及成本/上下文/平台偏好；手动选择不会被自动替换。剩余预算硬限制、质量/速度学习和完整工具工作流仍未实现。实现范围、测试和真机验收步骤见 [本次进度说明](docs/PROGRESS_2026-10-08.md)。
 
 ## 目录结构
 

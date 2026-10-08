@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="route_preferences">Auto preferences · cost / context / provider</string>
+    <string name="route_preferred_provider">Preferred provider (Auto only)</string>
+    <string name="route_preference_saved">Saved. Applies to the next Auto message.</string>
+    <string name="chat_error_task_unsupported">This model cannot handle the images or attachments in this conversation. Choose a compatible model or Auto.</string>
+    <string name="chat_error_no_route">No configured model fits this task and context. Check your API keys, choose a compatible model, or shorten the conversation.</string>
+    <string-array name="route_preference_options">
+        <item>Lowest estimated cost</item>
+        <item>Larger context capacity</item>
+        <item>Preferred provider, with compatible fallback</item>
+    </string-array>
+</resources>

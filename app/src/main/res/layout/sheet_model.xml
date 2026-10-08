@@ -97,6 +97,14 @@
                 android:layout_marginTop="12dp"
                 android:orientation="vertical" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/model_preferences"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="start|center_vertical"
+                android:text="@string/route_preferences" />
+
             <TextView
                 android:id="@+id/model_manual_label"
                 android:layout_width="match_parent"

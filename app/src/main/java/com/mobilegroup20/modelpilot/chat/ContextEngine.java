@@ -247,9 +247,16 @@ public final class ContextEngine {
             return 0;
         }
         if (node instanceof String) {
-            return ((String) node).length();
+            String value = (String) node;
+            // Image billing depends on resolution and provider. Base64 length is not a token count.
+            // Reserve an approximate 1,024 tokens per image; returned usage remains authoritative.
+            return value.startsWith("data:image/") ? 4096 : value.length();
         }
         if (node instanceof Map) {
+            Map<String, Object> fields = (Map<String, Object>) node;
+            // Anthropic carries raw base64 under source.data instead of a data URL.
+            if ("base64".equals(fields.get("type")) && fields.get("media_type") instanceof String
+                    && ((String) fields.get("media_type")).startsWith("image/")) return 4096;
             int total = 0;
             for (Object value : ((Map<String, Object>) node).values()) {
                 total += countChars(value);
@@ -312,6 +319,11 @@ public final class ContextEngine {
      * <p>**必须和 {@link #renderAll} 用同一份 {@link #activeMessages()}**：不然压缩完
      * 阈值判断还在按"没压之前"算，会一遍遍要求压，而每次压完 token 数都不变。
      */
+    /** Capability requirements after compressed history has been replaced by textual memory. */
+    public TaskKind requiredTask() {
+        return TaskRequirements.forMessages(activeMessages());
+    }
+
     public int currentTokens() {
         ContextRenderer.RenderedPayload payload =
                 new OpenAiCompatibleRenderer().render(activeMessages(), memories);

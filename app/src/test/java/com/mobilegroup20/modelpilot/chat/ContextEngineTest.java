@@ -274,7 +274,7 @@ public class ContextEngineTest {
                 Arrays.asList(ProviderRegistry.DEEPSEEK, ProviderRegistry.OPENAI), TaskKind.TEXT);
 
         assertEquals(ProviderRegistry.DEEPSEEK, decision.providerId);
-        assertTrue("理由要能被人读懂：" + decision.reason, decision.reason.contains("最便宜"));
+        assertTrue("理由要能被人读懂：" + decision.reason, decision.reason.contains("估算成本排序"));
         assertTrue(decision.reason.contains("文本任务"));
     }
 
@@ -286,13 +286,13 @@ public class ContextEngineTest {
 
         assertEquals(ProviderRegistry.OPENAI, decision.providerId);
         assertTrue("要说清为什么排除了它：" + decision.excluded,
-                decision.excluded.toString().contains("不支持看图"));
+                decision.excluded.toString().contains("不支持图片"));
     }
 
     @Test public void auto_says_what_to_do_when_nothing_is_configured() {
         AutoRouter.Decision decision = new AutoRouter(registry())
                 .choose(Collections.<String>emptyList(), TaskKind.TEXT);
         assertFalse(decision.available());
-        assertTrue("空候选要给下一步动作：" + decision.reason, decision.reason.contains("填"));
+        assertTrue("空候选要给下一步动作：" + decision.reason, decision.reason.contains("检查密钥"));
     }
 }

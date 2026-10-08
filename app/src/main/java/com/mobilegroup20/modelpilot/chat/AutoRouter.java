@@ -1,130 +1,200 @@
 package com.mobilegroup20.modelpilot.chat;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-/**
- * Auto：**第一版只做"用户配了 key 的模型里，能力满足且最便宜的那个"**。
- *
- * <p>为什么先这么简单：大纲要的 Auto 是"按任务需求、模型能力、预算和偏好选"，
- * 但那需要先有可信的能力表与价格（正在补），也需要真实使用数据来验证选得对不对。
- * 先上一条**能被解释清楚**的规则，比先上一套说不清为什么的黑盒更有用——
- * 设计稿里那个 `Details` 要显示的就是这个 `reason`，它必须是人能读懂、能反驳的一句话。
- *
- * <p>两条不能违反的规矩（大纲 §6 "Explainable Auto"）：
- *
- * 1. **手动选的模型永远不会被悄悄替换**：手动模式下这里根本不参与。
- * 2. **能力不满足就不出现在候选里**，而不是"选它然后失败"——设计稿里那些置灰的
- *    "Unavailable for this task" 就是这条规矩的界面表现。
+/** Explainable routing. Capabilities and context fit are hard constraints; preferences rank survivors.
+ * Estimates are pre-call scenarios, never billed usage, and do not assume a cache hit.
  */
 public final class AutoRouter {
+    public static final String POLICY_VERSION = "task-context-cost-preference-v2";
+    public enum Preference { LOWEST_COST, LARGE_CONTEXT, PREFERRED_PROVIDER }
 
-    /** 一次选型的结果：选了谁、为什么、以及被排除的都有谁。 */
+    /** Separate output estimate (for ranking) from reserved output capacity (for context fit). */
+    public static final class Request {
+        public final TaskKind task;
+        public final long inputTokens;
+        public final long outputTokens;
+        public final int reserveOutput;
+        public final Preference preference;
+        public final String preferredProviderId;
+
+        public Request(TaskKind task, long inputTokens, long outputTokens, int reserveOutput,
+                       Preference preference, String preferredProviderId) {
+            if (task == null || preference == null || inputTokens < 0 || outputTokens < 0
+                    || reserveOutput < 0) {
+                throw new IllegalArgumentException("Invalid routing request");
+            }
+            this.task = task;
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+            this.reserveOutput = reserveOutput;
+            this.preference = preference;
+            this.preferredProviderId = preferredProviderId;
+        }
+    }
+
+    /** The caller can supply the rendered token count and the engine's actual safety allowance. */
+    public interface ContextFit {
+        long inputTokens(ModelSpec model);
+        long usableTokens(ModelSpec model);
+    }
+
+    public static final class Candidate {
+        public final String providerId;
+        public final String modelId;
+        public final long inputTokens;
+        public final Long estimatedCostMicros;
+        private final ModelSpec model;
+
+        private Candidate(ModelSpec model, long inputTokens, Long estimate) {
+            this.model = model;
+            this.providerId = model.providerId;
+            this.modelId = model.modelId;
+            this.inputTokens = inputTokens;
+            this.estimatedCostMicros = estimate;
+        }
+    }
+
     public static final class Decision {
         public final String providerId;
         public final String modelId;
         public final String reason;
         public final List<String> excluded;
+        /** Ranked, compatible candidates, useful for inspection and future UI expansion. */
+        public final List<Candidate> candidates;
+        public final Long estimatedCostMicros;
 
-        Decision(String providerId, String modelId, String reason, List<String> excluded) {
-            this.providerId = providerId;
-            this.modelId = modelId;
+        private Decision(Candidate selected, String reason, List<String> excluded,
+                         List<Candidate> candidates) {
+            providerId = selected == null ? null : selected.providerId;
+            modelId = selected == null ? null : selected.modelId;
+            estimatedCostMicros = selected == null ? null : selected.estimatedCostMicros;
             this.reason = reason;
-            this.excluded = excluded;
+            this.excluded = Collections.unmodifiableList(new ArrayList<>(excluded));
+            this.candidates = Collections.unmodifiableList(new ArrayList<>(candidates));
         }
 
-        public boolean available() {
-            return providerId != null;
-        }
+        public boolean available() { return providerId != null; }
     }
-
-    /**
-     * 这一版路由规则的版本号，写进账本。
-     *
-     * <p>规则一改（比如以后把延迟、预算、用户偏好也算进去），老记录必须能看出
-     * "当时是按哪版选的"——否则"Auto 怎么挑了这么个模型"只能靠猜。
-     */
-    public static final String POLICY_VERSION = "capability-then-price-v1";
 
     private final ProviderRegistry registry;
+    public AutoRouter(ProviderRegistry registry) { this.registry = registry; }
 
-    public AutoRouter(ProviderRegistry registry) {
-        this.registry = registry;
+    /** Backward-compatible default for compression: ordinary text with equal input/output estimates. */
+    public Decision choose(List<String> enabled, TaskKind task) {
+        return choose(enabled, new Request(task, 1024, 1024, ContextEngine.RESERVE_FOR_OUTPUT,
+                Preference.LOWEST_COST, null));
     }
 
-    /**
-     * 选一个模型。
-     *
-     * @param enabledProviderIds 用户配了 key 的 provider
-     * @param task               这次要干什么（决定能力要求）
-     */
-    public Decision choose(List<String> enabledProviderIds, TaskKind task) {
-        List<String> excluded = new ArrayList<>();
-        ModelSpec best = null;
-        String bestProvider = null;
-        boolean bestPriced = false;
+    public Decision choose(List<String> enabled, Request request) {
+        return choose(enabled, request, new ContextFit() {
+            public long inputTokens(ModelSpec model) { return request.inputTokens; }
+            public long usableTokens(ModelSpec model) {
+                return (long) (model.contextLimit * 0.8) - request.reserveOutput;
+            }
+        });
+    }
 
+    public Decision choose(List<String> enabled, Request request, ContextFit fit) {
+        List<String> excluded = new ArrayList<>();
+        List<Candidate> candidates = new ArrayList<>();
         for (ProviderSpec provider : registry.providers()) {
-            if (!enabledProviderIds.contains(provider.providerId)) {
-                excluded.add(provider.displayName + "：没有配 key");
+            if (!enabled.contains(provider.providerId)) {
+                excluded.add(provider.displayName + "：未配置密钥");
                 continue;
             }
             for (ModelSpec model : provider.models) {
-                if (!model.supports(task)) {
-                    // **能力不够是硬条件**：不是"贵一点也能用"，是根本吃不下这个任务。
-                    excluded.add(model.displayName + "：不支持" + describe(task));
+                if (!model.supports(request.task)) {
+                    excluded.add(model.displayName + "：不支持" + describe(request.task));
                     continue;
                 }
-                if (isBetter(model, best)) {
-                    best = model;
-                    bestProvider = provider.providerId;
-                    bestPriced = model.priced();
+                long input = fit.inputTokens(model);
+                long usable = fit.usableTokens(model);
+                if (input < 0 || usable < 0 || input > usable) {
+                    excluded.add(model.displayName + "：上下文容量不足（估算输入 " + input
+                            + "，可用 " + usable + " token）");
+                    continue;
                 }
+                candidates.add(new Candidate(model, input, estimateCost(model, input, request.outputTokens)));
             }
         }
-
-        if (best == null) {
-            return new Decision(null, null,
-                    "没有可用的模型：先去「我的 → 模型与密钥」里填一家 provider 的 key", excluded);
+        candidates.sort((a, b) -> compare(a, b, request));
+        if (candidates.isEmpty()) {
+            return new Decision(null, "没有满足任务与上下文容量的模型；请检查密钥、模型能力或缩短上下文。",
+                    excluded, candidates);
         }
-        String price = bestPriced
-                ? String.format(java.util.Locale.US, "参考价约 %.2f 元/百万 token",
-                        best.roughPriceMicrosPer1M() / 1_000_000.0 * 7.2)
-                : "价格未知（官方定价页没查到，不编数字）";
-        return new Decision(bestProvider, best.modelId,
-                "Auto 选了 " + best.displayName + "：" + describe(task) + "、"
-                        + (bestPriced ? "已配置的模型里最便宜" : "已配置的模型里唯一能满足能力要求的")
-                        + "；" + price, excluded);
+        Candidate best = candidates.get(0);
+        String policy;
+        switch (request.preference) {
+            case LARGE_CONTEXT:
+                policy = "优先较大的上下文容量，容量相同时比较估算成本";
+                break;
+            case PREFERRED_PROVIDER:
+                policy = best.providerId.equals(request.preferredProviderId)
+                        ? "优先使用你偏好的平台，再比较估算成本"
+                        : "偏好平台未配置或不能满足当前任务，回退到其他可用平台";
+                break;
+            default:
+                policy = "按本次输入与预计回答的估算成本排序，未知价格排在已知价格之后";
+        }
+        String reason = "Auto 选了 " + best.model.displayName + "：" + describe(request.task)
+                + "；" + policy + "。估算输入 " + best.inputTokens + " token，预计回答 "
+                + request.outputTokens + " token；不假设缓存命中，实际用量以平台返回为准。";
+        if (request.task == TaskKind.IMAGE) {
+            reason += " 图片按粗略预留量估算，分辨率和平台会影响实际 token 与费用。";
+        }
+        if (best.estimatedCostMicros == null) {
+            reason += " 价格未知，不代表免费。";
+        }
+        return new Decision(best, reason, excluded, candidates);
     }
 
-    /**
-     * 谁更该被选：**先比"知不知道价"**，再比价格。
-     *
-     * <p>为什么价格未知的排在后面：把它当"最便宜"会让 Auto 常态化地选一个我们
-     * 连报价都没有的模型，用户看到的就是"钱不知道花到哪去了"。宁可先选知道价的，
-     * 并在 `reason` 里写清楚"价格未知"。
-     */
-    private static boolean isBetter(ModelSpec candidate, ModelSpec current) {
-        if (current == null) {
-            return true;
+    private static int compare(Candidate a, Candidate b, Request request) {
+        if (request.preference == Preference.PREFERRED_PROVIDER) {
+            boolean ap = a.providerId.equals(request.preferredProviderId);
+            boolean bp = b.providerId.equals(request.preferredProviderId);
+            if (ap != bp) return ap ? -1 : 1;
         }
-        boolean candidatePriced = candidate.priced();
-        boolean currentPriced = current.priced();
-        if (candidatePriced != currentPriced) {
-            return candidatePriced;
+        if (request.preference == Preference.LARGE_CONTEXT) {
+            int context = Integer.compare(b.model.contextLimit, a.model.contextLimit);
+            if (context != 0) return context;
         }
-        if (!candidatePriced) {
-            return candidate.contextLimit > current.contextLimit;
+        if ((a.estimatedCostMicros == null) != (b.estimatedCostMicros == null)) {
+            return a.estimatedCostMicros == null ? 1 : -1;
         }
-        return candidate.roughPriceMicrosPer1M() < current.roughPriceMicrosPer1M();
+        if (a.estimatedCostMicros != null) {
+            int cost = Long.compare(a.estimatedCostMicros, b.estimatedCostMicros);
+            if (cost != 0) return cost;
+        }
+        int context = Integer.compare(b.model.contextLimit, a.model.contextLimit);
+        if (context != 0) return context;
+        return (a.providerId + "/" + a.modelId).compareTo(b.providerId + "/" + b.modelId);
+    }
+
+    /** Ceiling rounding avoids treating a small positive estimated charge as free. Overflow = unknown. */
+    public static Long estimateCost(ModelSpec model, long input, long output) {
+        if (!model.priced() || input < 0 || output < 0 || model.inputMicros < 0 || model.outputMicros < 0) {
+            return null;
+        }
+        try {
+            return BigDecimal.valueOf(model.inputMicros).multiply(BigDecimal.valueOf(input))
+                    .add(BigDecimal.valueOf(model.outputMicros).multiply(BigDecimal.valueOf(output)))
+                    .divide(BigDecimal.valueOf(1_000_000), 0, RoundingMode.CEILING).longValueExact();
+        } catch (ArithmeticException overflow) {
+            return null;
+        }
     }
 
     private static String describe(TaskKind task) {
         switch (task) {
-            case IMAGE: return "看图/图片任务";
-            case PDF: return "PDF 任务";
+            case IMAGE: return "图片任务";
+            case PDF: return "原生 PDF 任务";
             case TOOLS: return "工具调用";
-            default: return "文本任务";
+            default: return "文本任务（包括已提取正文的 PDF）";
         }
     }
 }

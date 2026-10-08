@@ -153,6 +153,7 @@ public final class ChatConversationFragment extends Fragment {
         model.chat().observe(getViewLifecycleOwner(), this::renderHeader);
         model.projectName().observe(getViewLifecycleOwner(), this::renderProject);
         renderAttachmentChip();
+        model.memories().observe(getViewLifecycleOwner(), ignored -> { });
         model.messages().observe(getViewLifecycleOwner(), messages -> {
             // 库里的消息变了（新消息落库）：这时候必须整块重建——
             // 正在流式回来的那一行由 renderSendState 自己维护，见它的注释。
@@ -929,7 +930,14 @@ public final class ChatConversationFragment extends Fragment {
 
     private void openModelSheet() {
         ModelSheetFragment.show(getChildFragmentManager(), manualProviderId, manualModelId,
-                TaskKind.TEXT);
+                chooserTask());
+    }
+
+    private TaskKind chooserTask() {
+        TaskKind pending = com.mobilegroup20.modelpilot.chat.TaskRequirements.forAttachments(
+                pendingAttachment == null ? Collections.emptyList() : Collections.singletonList(pendingAttachment));
+        if (pending == TaskKind.IMAGE) return pending;
+        return model.currentTask(pending);
     }
 
     private void renderChip() {
