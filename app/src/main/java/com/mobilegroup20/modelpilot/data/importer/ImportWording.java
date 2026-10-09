@@ -73,11 +73,14 @@ public final class ImportWording {
     public static String factsLine(ImportFacts facts) {
         boolean noVersion = facts.appVersion.isEmpty();
         boolean noTime = facts.generatedAtEpochMillis <= 0L;
+        if (noVersion && noTime && !facts.app.isEmpty() && !ImportFacts.APP.equals(facts.app)) {
+            return "Source: " + facts.app + " · Export version and time are not provided.";
+        }
         if (noVersion && noTime) {
             return "This file doesn't say which version of the app exported it.";
         }
         StringBuilder out = new StringBuilder("Exported by ")
-                .append(ImportFacts.APP);
+                .append(facts.app.isEmpty() ? ImportFacts.APP : facts.app);
         if (!noVersion) {
             out.append(' ').append(facts.appVersion);
         }

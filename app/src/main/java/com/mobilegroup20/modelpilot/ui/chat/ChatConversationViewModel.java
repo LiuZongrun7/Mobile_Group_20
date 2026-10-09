@@ -202,6 +202,8 @@ public final class ChatConversationViewModel extends ViewModel {
     /** 正在跑的那次流式调用；用户离开页面时取消它（取消之后不再有回调，也不花钱）。 */
     private final AtomicReference<Call> inflight = new AtomicReference<>();
     private final AtomicBoolean busy = new AtomicBoolean();
+    private final AtomicReference<com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer> activeDisplay =
+            new AtomicReference<>();
 
     private final MutableLiveData<SendState> send = new MutableLiveData<>(SendState.idle());
     /** 散聊用：一条值恒为 null 的 LiveData（`switchMap` 不能返回 null）。 */
@@ -353,6 +355,8 @@ public final class ChatConversationViewModel extends ViewModel {
      * 所以**已经收到的字不会落库**——半句回答存进去，下次打开会以为模型就答了这么多。
      */
     public void cancel() {
+        com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer display = activeDisplay.getAndSet(null);
+        if (display != null) display.discard();
         Call call = inflight.getAndSet(null);
         if (call != null) {
             call.cancel();
@@ -466,13 +470,19 @@ public final class ChatConversationViewModel extends ViewModel {
                     null, false, compressed, sentAtMillis));
 
             String assistantId = UUID.randomUUID().toString();
-            StringBuilder answer = new StringBuilder();
+            com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer answer =
+                    new com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer();
+            activeDisplay.set(answer);
             Call call = ProviderClient.stream(provider, model, apiKey, rendered,
                     new ProviderClient.Listener() {
                         @Override public void onDelta(String text) {
-                            answer.append(text);
-                            main.post(() -> withCurrent(providerId, modelId, reason, route,
-                                    compressed, state -> state.streaming(answer.toString())));
+                            if (answer.append(text)) main.postDelayed(() -> {
+                                String snapshot = answer.poll();
+                                if (snapshot != null && activeDisplay.get() == answer) {
+                                    withCurrent(providerId, modelId, reason, route,
+                                            compressed, state -> state.streaming(snapshot));
+                                }
+                            }, com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer.UI_INTERVAL_MS);
                         }
 
                         @Override public void onUsage(
@@ -490,9 +500,12 @@ public final class ChatConversationViewModel extends ViewModel {
                         }
 
                         @Override public void onDone() {
-                            io.execute(() -> saveAnswer(assistantId, answer.toString(), providerId,
+                            String finalText = answer.finish();
+                            if (finalText == null) return;
+                            io.execute(() -> saveAnswer(assistantId, finalText, providerId,
                                     modelId, route, taskId));
                             main.post(() -> {
+                                if (!activeDisplay.compareAndSet(answer, null)) return;
                                 SendState value = send.getValue();
                                 // settled() 而不是 idle()：留住 compressed / 路由信息，
                                 // 否则压缩提示在回答到达的瞬间就没了（见 settled 的注释）。
@@ -505,12 +518,15 @@ public final class ChatConversationViewModel extends ViewModel {
 
                         @Override public void onError(Throwable failure) {
                             // **已经吐出来的字不撤回**（用户看到的字是真的），但要落库并标成不完整。
-                            io.execute(() -> saveAnswer(assistantId, answer.toString(), providerId,
+                            String partial = answer.finish();
+                            if (partial == null) return;
+                            io.execute(() -> saveAnswer(assistantId, partial, providerId,
                                     modelId, route, taskId));
                             main.post(() -> {
+                                if (!activeDisplay.compareAndSet(answer, null)) return;
                                 String message = message(failure);
                                 withCurrent(providerId, modelId, reason, route, compressed,
-                                        state -> state.failed(message));
+                                        state -> state.streaming(partial).failed(message));
                                 busy.set(false);
                             });
                         }
@@ -568,6 +584,11 @@ public final class ChatConversationViewModel extends ViewModel {
         // 「我的」页临时调小，好让压缩在真机上真的发生一次（见那个类的注释）。
         ContextEngine engine = new ContextEngine(registry, chatId, enabledProviders(),
                 EngineTuning.reserveForOutput(context), EngineTuning.compressHeadroom(context));
+        ChatEntity currentChat = dao.chat(chatId);
+        if (currentChat != null && currentChat.projectId != null && !currentChat.projectId.isEmpty()) {
+            com.mobilegroup20.modelpilot.chat.local.ProjectEntity project = dao.project(currentChat.projectId);
+            if (project != null) engine.setProjectInstructions(project.instructions);
+        }
         for (MemoryEntity memory : dao.memories(chatId)) {
             engine.applyCompression(memory.fromMessageId, memory.toMessageId, memory.summary,
                     memory.madeByProvider, memory.madeByModel, memory.tokensIn, memory.tokensOut,
@@ -771,6 +792,8 @@ public final class ChatConversationViewModel extends ViewModel {
 
     @Override
     protected void onCleared() {
+        com.mobilegroup20.modelpilot.chat.StreamSnapshotBuffer display = activeDisplay.getAndSet(null);
+        if (display != null) display.discard();
         Call call = inflight.getAndSet(null);
         if (call != null) {
             call.cancel();

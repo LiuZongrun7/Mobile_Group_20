@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/pydantic/pydantic-ai",
+  "commit": "36529f3a8ebc5a5675129fe6262223b9da0815ec",
+  "license": "MIT",
+  "files": {
+    "chat_app.py": {
+      "upstream_path": "examples/pydantic_ai_examples/chat_app.py",
+      "git_blob_sha1": "1108f4cd9fed3c380e2d2a312f8b892455d4cb22",
+      "sha256": "a96d28555f49c678cbd4a3ac2fab7473236b0fae7222167ff240d77edf2fba30"
+    },
+    "LICENSE": {
+      "upstream_path": "LICENSE",
+      "git_blob_sha1": "1bf1f55e6d1736b499ded961ec6b94bfebb17aec",
+      "sha256": "bc0e89738f36944c8106e1947c3d69631f9c33b8f1bcb60ec4f89d677d2dfcf4"
+    }
+  },
+  "typescript_reference": "https://github.com/pydantic/pydantic-ai/blob/main/examples/pydantic_ai_examples/chat_app.ts",
+  "typescript_note": "Read upstream browser source as a design reference; not vendored or claimed to be pinned to this commit."
+}

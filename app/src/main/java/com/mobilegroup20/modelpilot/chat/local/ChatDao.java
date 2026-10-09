@@ -32,6 +32,12 @@ public interface ChatDao {
     @Query("SELECT name FROM project WHERE id = :id")
     LiveData<String> projectName(String id);
 
+    @Query("SELECT * FROM project WHERE id = :id")
+    LiveData<ProjectEntity> projectLive(String id);
+
+    @Query("UPDATE project SET instructions = :instructions, updated_at_epoch_millis = :at WHERE id = :id")
+    int updateProjectInstructions(String id, String instructions, long at);
+
     // ---- 对话 ----------------------------------------------------------
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

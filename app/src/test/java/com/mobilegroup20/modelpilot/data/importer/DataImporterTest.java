@@ -33,6 +33,23 @@ public class DataImporterTest {
     /** 2026-10-06 15:30（北京时间）。 */
     private static final long AT = 1_791_271_800_000L;
 
+    @Test
+    public void pydanticTranscriptUsesTheExistingImportPipelineAndReimportIsIdempotent() throws Exception {
+        byte[] bytes = ("{\"role\":\"user\",\"timestamp\":\"2026-10-09T08:00:00Z\",\"content\":\"Keep 42 unchanged\"}\n"
+                + "{\"role\":\"model\",\"timestamp\":\"2026-10-09T08:00:01Z\",\"content\":\"42\"}\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        ImportBundle bundle = ExportFileReader.read(bytes, "chat.ndjson");
+        FakeTarget target = new FakeTarget();
+        DataImporter importer = importer(target);
+        ImportSummary first = importer.apply(bundle, MergePolicy.ADD_ONLY);
+        assertEquals(1, first.conversationsAdded); assertEquals(2, first.messagesWritten);
+        assertEquals(2, target.messages.size()); assertEquals(0, first.usageWritten);
+        assertTrue(ImportWording.factsLine(bundle.facts).contains("Pydantic AI"));
+        ImportSummary second = importer.apply(bundle, MergePolicy.ADD_ONLY);
+        assertEquals(0, second.messagesWritten); assertEquals(1, second.conversationsSkipped);
+        assertEquals(2, target.messages.size());
+    }
+
     // ==================== 默认：只加本机没有的 ====================
 
     @Test

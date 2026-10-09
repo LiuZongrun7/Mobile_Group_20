@@ -1,0 +1,8 @@
+<resources>
+    <string name="project_instructions_title">Project instructions</string>
+    <string name="project_instructions_hint">Example: Answer in Chinese and preserve all numbers.</string>
+    <string name="project_instructions_note">Applies to future requests in this project, across models. Stays separate from compressed history. Other projects and chats are unaffected. Clear the text to remove.</string>
+    <string name="project_instructions_too_long">Use 4,096 characters or fewer.</string>
+    <string name="project_instructions_missing">This project no longer exists.</string>
+    <string name="project_instructions_save_failed">Could not save instructions. Please try again.</string>
+</resources>

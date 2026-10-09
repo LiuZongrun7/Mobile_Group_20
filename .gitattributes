@@ -1,0 +1,3 @@
+# Keep byte-verified upstream snapshots and license portable on Windows.
+third_party/pydantic-ai-chat/* text eol=lf
+app/src/main/assets/licenses/pydantic-ai-chat.txt text eol=lf

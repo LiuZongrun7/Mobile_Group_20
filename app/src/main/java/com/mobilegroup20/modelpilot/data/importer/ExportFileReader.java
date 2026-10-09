@@ -48,6 +48,9 @@ public final class ExportFileReader {
                     name + " is empty.");
         }
         boolean zip = looksLikeZip(bytes);
+        if (!zip && PydanticChatImport.recognizes(bytes)) {
+            return PydanticChatImport.parse(bytes);
+        }
         if (!zip && !looksLikeJson(bytes)) {
             throw new ImportFileException(ImportFileException.Reason.NOT_OUR_FILE,
                     name + " is not a ModelPilot export. Pick the .json file or the .zip "

@@ -10,6 +10,16 @@
 
 ---
 
+## 当前 ModelPilot 的代码适配（2026-10-09）
+
+本次确实适配了报告列出的 **Pydantic AI chat app example**（MIT）：NDJSON 消息映射、累计快照去重，以及流式输出合并更新模式。Java 实现已接入 Android 的导入和聊天链路；没有引入整个 Python 服务或 Pydantic AI 运行时。原版 `chat_app.py` 和完整 LICENSE 保存在 `third_party/pydantic-ai-chat/`，固定提交和校验值见 `SOURCE.json`，APK 包含许可证。
+
+仓库：https://github.com/pydantic/pydantic-ai
+对应代码、具体修改、未复用部分与手机验收：[PYDANTIC_REUSE.md](PYDANTIC_REUSE.md)。新增“项目指令”是本项目代码，单独说明，不算上游复用。
+
+下文保留原有依赖与历史调研记录，不能将“候选”或“参考”项目全部宣传为已复用。
+
+
 ## 1. 已经引进工程的（会进 APK）
 
 | 库 | 依赖坐标 | 版本 | 许可证 | 谁在用 | 为什么引它 |

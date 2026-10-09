@@ -251,6 +251,8 @@ public final class ChatHomeFragment extends Fragment {
         header.projectCount.setText(kids.isEmpty() ? "" : String.valueOf(kids.size()));
         header.projectIcon.setColorFilter(ProjectColors.folder(requireContext(), project.colorIndex));
         header.projectAddChat.setOnClickListener(v -> startChatIn(project.id));
+        header.projectSettings.setOnClickListener(v ->
+                ProjectInstructionsDialog.open(getChildFragmentManager(), project.id));
         boolean isCollapsed = collapsed.contains(project.id);
         header.projectChevron.setRotation(isCollapsed ? -90f : 0f);
         header.projectChevron.setContentDescription(getString(

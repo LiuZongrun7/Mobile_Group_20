@@ -69,6 +69,26 @@ public final class ContextEngine {
         this.compressHeadroom = compressHeadroom;
     }
 
+    private String projectInstructions = "";
+
+    /** Explicit project settings, not content inferred from an imported file or model response. */
+    public void setProjectInstructions(String instructions) {
+        String next = instructions == null ? "" : instructions.trim();
+        if (!projectInstructions.equals(next)) {
+            projectInstructions = next;
+            invalidate();
+        }
+    }
+
+    private List<CanonicalMessage> withInstructions(List<CanonicalMessage> source) {
+        if (projectInstructions.isEmpty()) return source;
+        List<CanonicalMessage> request = new ArrayList<>();
+        request.add(new CanonicalMessage("project-instructions", CanonicalMessage.Role.SYSTEM,
+                projectInstructions, null, null, null, 0));
+        request.addAll(source);
+        return request;
+    }
+
     public String chatId() {
         return chatId;
     }
@@ -159,7 +179,7 @@ public final class ContextEngine {
 
         List<CanonicalMessage> usable = activeMessages();
         String truncatedFrom = null;
-        ContextRenderer.RenderedPayload payload = renderer.render(usable, memories);
+        ContextRenderer.RenderedPayload payload = renderer.render(withInstructions(usable), memories);
         int tokens = estimate(payload);
         int usableTokens = usableTokens(limit);
         while (truncate && tokens > usableTokens && usable.size() > 1) {
@@ -167,7 +187,7 @@ public final class ContextEngine {
             int cut = nextTurnBoundary(usable, 0);
             truncatedFrom = usable.get(0).id;
             usable = new ArrayList<>(usable.subList(cut, usable.size()));
-            payload = renderer.render(usable, memories);
+            payload = renderer.render(withInstructions(usable), memories);
             tokens = estimate(payload);
         }
         return new RenderedContext(providerId, modelId, payload, tokens, limit,
@@ -326,7 +346,7 @@ public final class ContextEngine {
 
     public int currentTokens() {
         ContextRenderer.RenderedPayload payload =
-                new OpenAiCompatibleRenderer().render(activeMessages(), memories);
+                new OpenAiCompatibleRenderer().render(withInstructions(activeMessages()), memories);
         return estimate(payload);
     }
 

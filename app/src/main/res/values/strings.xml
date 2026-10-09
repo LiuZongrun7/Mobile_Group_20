@@ -351,7 +351,7 @@
          文案与 export_* 同一套口径：英文、句子短、把"我们故意没做什么"明说出来。 -->
     <string name="import_entry">Import data</string>
     <string name="import_title">Import data</string>
-    <string name="import_intro">Pick a file that Export data produced. Everything is read on this phone and written to this phone\'s own database — nothing is uploaded.</string>
+    <string name="import_intro">Choose a ModelPilot export or a Pydantic AI chat transcript (.ndjson / .txt). Everything is read on this phone and written to this phone\'s own database — nothing is uploaded.</string>
     <string name="import_section_file">FILE</string>
     <string name="import_pick">Choose file…</string>
     <string name="import_section_what">WHAT WILL HAPPEN</string>
