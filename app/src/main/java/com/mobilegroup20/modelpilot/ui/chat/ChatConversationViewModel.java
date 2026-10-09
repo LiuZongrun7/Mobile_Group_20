@@ -556,8 +556,9 @@ public final class ChatConversationViewModel extends ViewModel {
      */
     private void saveAnswer(String assistantId, String text, String providerId, String modelId,
                             UsageRecorder.Route route, String taskId) {
+        MessageEntity answer = null;
         if (!text.isEmpty()) {
-            MessageEntity answer = new MessageEntity();
+            answer = new MessageEntity();
             answer.id = assistantId;
             answer.chatId = chatId;
             answer.role = CanonicalMessage.Role.ASSISTANT.name();
@@ -571,11 +572,11 @@ public final class ChatConversationViewModel extends ViewModel {
             answer.tokensIn = lastInputTokens;
             answer.tokensOut = lastOutputTokens;
             answer.createdAtEpochMillis = System.currentTimeMillis();
-            dao.upsertMessage(answer);
+
         }
         // 首页那枚 `Last · <模型>` 徽章读的就是这两个字段：**到这一刻才有资格写**
         // （真的答过了），而不是用户选模型的时候。
-        dao.touchChat(chatId, providerId, modelId, System.currentTimeMillis());
+        dao.completeReply(chatId, answer, providerId, modelId, System.currentTimeMillis());
     }
 
     /** 读整条对话（记忆 + 消息）并重建引擎。 */
@@ -584,17 +585,14 @@ public final class ChatConversationViewModel extends ViewModel {
         // 「我的」页临时调小，好让压缩在真机上真的发生一次（见那个类的注释）。
         ContextEngine engine = new ContextEngine(registry, chatId, enabledProviders(),
                 EngineTuning.reserveForOutput(context), EngineTuning.compressHeadroom(context));
-        ChatEntity currentChat = dao.chat(chatId);
-        if (currentChat != null && currentChat.projectId != null && !currentChat.projectId.isEmpty()) {
-            com.mobilegroup20.modelpilot.chat.local.ProjectEntity project = dao.project(currentChat.projectId);
-            if (project != null) engine.setProjectInstructions(project.instructions);
-        }
-        for (MemoryEntity memory : dao.memories(chatId)) {
+        com.mobilegroup20.modelpilot.chat.local.ChatHistorySnapshot history = dao.readHistory(chatId);
+        if (history.project != null) engine.setProjectInstructions(history.project.instructions);
+        for (MemoryEntity memory : history.memories) {
             engine.applyCompression(memory.fromMessageId, memory.toMessageId, memory.summary,
                     memory.madeByProvider, memory.madeByModel, memory.tokensIn, memory.tokensOut,
                     memory.createdAtEpochMillis);
         }
-        for (MessageEntity message : dao.messages(chatId)) {
+        for (MessageEntity message : history.messages) {
             engine.append(toCanonical(message));
         }
         return engine;

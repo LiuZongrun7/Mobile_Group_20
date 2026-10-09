@@ -212,3 +212,5 @@ public static final boolean USE_STUBS = true;
 | 游戏（刘宗润） | **已整块移出本工程**（2026-09-30），代码/贴图/美术规格在同级 `../../TokenTrail_Game/`；上面与游戏有关的几行保留为移出前的记录。**agent 仍然有效**，而且已经搬到服务端：`backend/modelpilot_forum/agent.py` + `/api/agent/ask`（见 [`SERVER_API.md`](SERVER_API.md)）|
 
 具体的下一步见 [`TASKS.md`](TASKS.md)。
+
+开源复用与阶段提交材料：[详细技术报告](OPEN_SOURCE_TECHNICAL_REPORT.md) · [分工与后续计划](TEAM_DELIVERY_PLAN.md) · [2026-10-09 进度](PROGRESS_2026-10-09.md)。

@@ -962,6 +962,7 @@ public final class ChatConversationFragment extends Fragment {
                 getString(R.string.chat_menu_memory),
                 getString(R.string.chat_menu_rename),
                 getString(R.string.chat_menu_delete),
+                getString(R.string.transcript_title),
         };
         new AlertDialog.Builder(requireContext())
                 .setItems(items, (dialog, which) -> {
@@ -972,6 +973,9 @@ public final class ChatConversationFragment extends Fragment {
                         case 1:
                             ProjectNameDialog.show(getChildFragmentManager(),
                                     R.string.chat_rename_title, currentTitle());
+                            break;
+                        case 3:
+                            ChatTranscriptExportDialog.open(getChildFragmentManager(), model.chatId());
                             break;
                         default:
                             confirmDelete();

@@ -31,6 +31,7 @@ public final class ExportArtifact {
      */
     public String mimeType() {
         String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.endsWith(".ndjson")) return "text/plain";
         if (lower.endsWith(".json")) {
             return "application/json";
         }

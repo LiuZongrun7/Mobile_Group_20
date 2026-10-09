@@ -15,5 +15,27 @@
     }
   },
   "typescript_reference": "https://github.com/pydantic/pydantic-ai/blob/main/examples/pydantic_ai_examples/chat_app.ts",
-  "typescript_note": "Read upstream browser source as a design reference; not vendored or claimed to be pinned to this commit."
+  "typescript_note": "Read upstream browser source as a design reference; not vendored or claimed to be pinned to this commit.",
+  "adaptations": [
+    {
+      "path": "tools/pydantic_chat_bridge.py",
+      "kind": "Python Database and message mapping source adaptation"
+    },
+    {
+      "path": "app/src/main/java/com/mobilegroup20/modelpilot/data/importer/PydanticChatImport.java",
+      "kind": "Java message mapping and snapshot deduplication adaptation"
+    },
+    {
+      "path": "app/src/main/java/com/mobilegroup20/modelpilot/data/export/PydanticTranscriptWriter.java",
+      "kind": "Java to_chat_message and GET /chat serialization adaptation"
+    },
+    {
+      "path": "app/src/main/java/com/mobilegroup20/modelpilot/chat/local/ChatDao.java",
+      "kind": "Room structural adaptation of history load and append boundaries, with original transaction extensions"
+    },
+    {
+      "path": "app/src/main/java/com/mobilegroup20/modelpilot/chat/StreamSnapshotBuffer.java",
+      "kind": "Cumulative streaming snapshot and update coalescing adaptation"
+    }
+  ]
 }

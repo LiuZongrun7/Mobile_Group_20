@@ -1,0 +1,9 @@
+<resources>
+    <string name="transcript_title">Export text transcript</string>
+    <string name="transcript_note">Save this conversation in the Pydantic AI example format. Text only: attachments, tools, model identity, project instructions, memories and usage are omitted. Typed chat text is included as written. This is not a full backup. Choose Me → Export data for full JSON.</string>
+    <string name="transcript_save">Save transcript</string>
+    <string name="transcript_working">Preparing saved messages…</string>
+    <string name="transcript_saved">Transcript saved. You can import it from Me → Import data.</string>
+    <string name="transcript_cancelled">Save cancelled. Your conversation is unchanged.</string>
+    <string name="transcript_failed">Could not save the transcript. For missing timestamps or non-text roles, use Me → Export data → JSON. You can also retry saving.</string>
+</resources>

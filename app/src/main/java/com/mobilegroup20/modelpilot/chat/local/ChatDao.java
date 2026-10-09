@@ -5,6 +5,7 @@ import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Transaction;
 
 import java.util.List;
 
@@ -16,6 +17,32 @@ import java.util.List;
  */
 @Dao
 public interface ChatDao {
+
+    /** Adapted history boundary from Pydantic AI Database.get_messages.
+     * One Room transaction prevents edits/deletion interleaving the separate queries.
+     */
+    @Transaction
+    default ChatHistorySnapshot readHistory(String chatId) {
+        ChatEntity value = chat(chatId);
+        if (value == null) throw new IllegalStateException("This conversation no longer exists.");
+        ProjectEntity owner = value.projectId == null || value.projectId.isEmpty()
+                ? null : project(value.projectId);
+        return new ChatHistorySnapshot(value, owner, messages(chatId), memories(chatId));
+    }
+
+    /** Extension of upstream Database.add_messages: reply and last-model badge commit together.
+     * A deleted chat is never resurrected by a late model callback.
+     */
+    @Transaction
+    default boolean completeReply(String chatId, MessageEntity answer, String providerId, String modelId, long at) {
+        if (chat(chatId) == null) return false;
+        if (answer != null) {
+            if (!chatId.equals(answer.chatId)) throw new IllegalArgumentException("Reply belongs to another conversation.");
+            upsertMessage(answer);
+        }
+        touchChat(chatId, providerId, modelId, at);
+        return true;
+    }
 
     // ---- 项目 ----------------------------------------------------------
 
