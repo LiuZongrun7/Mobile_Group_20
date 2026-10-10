@@ -1,0 +1,15 @@
+<resources>
+    <string name="history_search_title">Search conversations</string>
+    <string name="history_search_note">Search saved titles, project names and message text on this phone. Works offline and makes no AI requests. Attachments and memory summaries are not searched.</string>
+    <string name="history_search_hint">Words or a phrase…</string>
+    <string name="history_search_project">Filter search by project</string>
+    <string name="history_search_results">Matching conversations</string>
+    <string name="history_search_all">All projects</string>
+    <string name="history_search_unfiled">Unfiled chats</string>
+    <string name="history_search_prompt">Enter a phrase to find a saved conversation.</string>
+    <string name="history_search_working">Searching this phone…</string>
+    <string name="history_search_empty">No matching conversations. Try a shorter phrase or another project.</string>
+    <string name="history_search_count">%1$d matching conversations</string>
+    <string name="history_search_capped">Showing the 50 most recent matches. Refine the phrase or project to find older results.</string>
+    <string name="history_search_title_match">Matched the conversation title or project name.</string>
+</resources>

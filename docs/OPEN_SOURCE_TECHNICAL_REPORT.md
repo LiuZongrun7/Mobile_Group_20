@@ -244,3 +244,9 @@ python -m unittest discover -s tools/tests -p test_pydantic_chat_bridge.py -v
 ```
 
 本轮 5 项真实 Room 测试通过的依据是 AndroidJUnitRunner 实际输出 `OK (5 tests)`，不是仅编译测试 APK；不能把所有历史单测算成本轮新增。上游 MIT 原文和源码校验见 third_party；本文的图/代码定位可用于老师追问时逐项打开证明。
+
+## 2026-10-10：在历史基础上增加搜索
+
+本轮新增 Android 原生离线聊天搜索，利用此前适配的历史持久化基础，通过 Room 参数查询搜索标题、项目名称及 USER/ASSISTANT 文本，展示匹配片段并复用现有对话导航。搜索是本组项目的原创增强，所选 Pydantic AI 示例不提供这个 Android 搜索模块。没有增加新的第三方依赖，也不把使用 Room 等同于复制上游业务代码。
+
+新增价值是重新找到过去的任务并继续同一上下文。实际验证为 323 项 JVM 测试通过（本轮新增 5 项）、10 项真实 Room 搜索测试通过，以及打开搜索、空结果和旋转状态保留的 UI 冒烟检查。历史日期的测试数字保持历史口径。完整模块、流程图、实现片段、真实截图、测试限制和 SQLite/增量编译问题见 [PROGRESS_2026-10-10.md](PROGRESS_2026-10-10.md)。

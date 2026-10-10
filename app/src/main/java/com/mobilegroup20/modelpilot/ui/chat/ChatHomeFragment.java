@@ -91,7 +91,7 @@ public final class ChatHomeFragment extends Fragment {
         }
         renderHeader();
         binding.chatSend.setOnClickListener(v -> send());
-        binding.chatSearch.setOnClickListener(v -> pending("Search"));
+        binding.chatSearch.setOnClickListener(v -> ChatSearchSheet.open(getChildFragmentManager()));
         binding.chatAvatar.setOnClickListener(v -> openAccount());
         binding.chatAttach.setOnClickListener(v -> pending("Attachments"));
         binding.chatModelChip.setOnClickListener(v -> openModelSheet());
@@ -117,6 +117,12 @@ public final class ChatHomeFragment extends Fragment {
                     model.selectModel(result.getString(ModelSheetFragment.BUNDLE_PROVIDER),
                             result.getString(ModelSheetFragment.BUNDLE_MODEL));
                     renderInputChips();
+                });
+
+        getChildFragmentManager().setFragmentResultListener(ChatSearchSheet.RESULT_KEY,
+                getViewLifecycleOwner(), (key, result) -> {
+                    String chatId = result.getString(ChatSearchSheet.CHAT_ID);
+                    if (chatId != null && !chatId.isEmpty()) openChat(chatId);
                 });
 
         // 两份数据分开观察、合起来渲染：Room 的 LiveData 各自在自己的查询上失效，

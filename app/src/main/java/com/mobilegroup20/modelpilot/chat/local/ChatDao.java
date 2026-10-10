@@ -44,6 +44,28 @@ public interface ChatDao {
         return true;
     }
 
+    String SEARCH_QUERY =
+            "SELECT c.id AS chatId, c.title AS title, p.name AS projectName, "
+            + "c.updated_at_epoch_millis AS updatedAt, "
+            + "(SELECT substr(m.text, max(1, instr(lower(m.text), lower(:needle))-60), 240) "
+            + "FROM message m WHERE m.chat_id=c.id AND m.role IN ('USER','ASSISTANT') "
+            + "AND m.text LIKE :pattern ESCAPE '!' "
+            + "ORDER BY m.created_at_epoch_millis DESC, m.rowid DESC LIMIT 1) AS preview "
+            + "FROM chat c LEFT JOIN project p ON p.id=c.project_id "
+            + "WHERE :needle <> '' AND "
+            + "(:projectId IS NULL OR (:projectId='' AND (c.project_id IS NULL OR c.project_id='')) "
+            + "OR (:projectId<>'' AND c.project_id=:projectId)) "
+            + "AND (c.title LIKE :pattern ESCAPE '!' OR p.name LIKE :pattern ESCAPE '!' "
+            + "OR EXISTS (SELECT 1 FROM message m WHERE m.chat_id=c.id "
+            + "AND m.role IN ('USER','ASSISTANT') AND m.text LIKE :pattern ESCAPE '!')) "
+            + "ORDER BY c.updated_at_epoch_millis DESC, c.id ASC LIMIT :limit";
+
+    @Query(SEARCH_QUERY)
+    LiveData<List<ChatSearchResult>> searchHistoryLive(String needle, String pattern, String projectId, int limit);
+
+    @Query(SEARCH_QUERY)
+    List<ChatSearchResult> searchHistory(String needle, String pattern, String projectId, int limit);
+
     // ---- 项目 ----------------------------------------------------------
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

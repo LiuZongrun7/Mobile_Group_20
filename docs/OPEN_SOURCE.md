@@ -146,3 +146,7 @@ grep -rniE "copyright|licensed under|SPDX" app/src/main/java
    **依赖坐标里的 `com.github.*` 前缀就是 JitPack 的标志**；
 4. 在 §1 那张表加一行，写清楚**谁在用、为什么引它**；
 5. 跑一次 `./gradlew assembleDebug` 和 `./gradlew testDebugUnitTest`，两个都要过。
+
+## 2026-10-10 搜索增强的来源边界
+
+ChatSearchQuery、ChatSearchSheet、ChatSearchViewModel、ChatSearchResult 和 DAO 搜索查询属于 ModelPilot 原创增强，继续使用既有 Room/AndroidX 依赖。它建立在已适配的聊天历史存储上，不是 Pydantic AI 的搜索源码，也没有新增开源依赖。此前直接改编/跨语言适配的来源和许可证仍见 [PYDANTIC_REUSE.md](PYDANTIC_REUSE.md)。实现、截图和执行结果见 [PROGRESS_2026-10-10.md](PROGRESS_2026-10-10.md)。

@@ -48,3 +48,5 @@ tools/                       现有项目工具
 `docs/modelpilot-outline/` 与 `docs/modelpilot-ui/` 是当前方案的正式入口。旧 TokenTrail 文档保留供历史对照，Android 包名和已有工程结构暂不随产品更名调整。设计图中的模型标志、配图出处及第三方许可证见 [素材来源](docs/modelpilot-ui/SOURCES.md) 和 [licenses](docs/modelpilot-ui/licenses/)。
 
 开源复用与阶段提交材料：[详细技术报告](docs/OPEN_SOURCE_TECHNICAL_REPORT.md) · [分工与后续计划](docs/TEAM_DELIVERY_PLAN.md) · [2026-10-09 进度](docs/PROGRESS_2026-10-09.md)。
+
+2026-10-10 新增：Chat 首页离线历史搜索，支持标题/消息/项目关键词、项目筛选、匹配片段和进入原对话。实现与真实设备验证见 [搜索进度说明](docs/PROGRESS_2026-10-10.md)。
